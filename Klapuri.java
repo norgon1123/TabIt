@@ -1,0 +1,241 @@
+/*
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+ N.B.  the above text was copied from http://www.gnu.org/licenses/gpl.html
+ unmodified. I have not attached a copy of the GNU license to the source...
+
+ Copyright (C) 2011-2012 Timo Rantalainen
+ */
+package timo.tuner.Analysis;
+
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import timo.tuner.ui.*;
+import java.text.DecimalFormat;
+
+public class Klapuri {
+
+    public double[] whitened;
+    public double[] gammaCoeff;
+    public Vector<Double> f0s;
+    PolyphonicPitchDetection mainProgram;
+    int harmonics = 20;
+    int surroundingBins = 1;
+    double alpha = 52.0; //Hz
+    double beta = 320.0; //Hz
+    double dee = 0.89;
+    public int[] string;
+    public String[][] notePosition;
+    public HashMap<String, String> detectedF0s;
+
+    public Klapuri(double[] data, double max, PolyphonicPitchDetection mainProgram) {
+        //whitened = (double[]) data.clone();
+        this.mainProgram = mainProgram;
+        this.detectedF0s = mainProgram.detectedF0s;
+        this.notePosition = mainProgram.fretNotes;
+        /*Whiten the data*/
+        whitened = whiten(data, mainProgram);
+        f0s = detectF0s(whitened, mainProgram);
+    }
+
+    Vector<Double> detectF0s(double[] whitened, PolyphonicPitchDetection mainProgram) {
+        Vector<Double> F0s = new Vector<Double>();
+        Vector<Double> S = new Vector<Double>();
+        S.add(0.0);
+        //Begin extracting F0s
+        double smax = 0;
+        int index = 0;
+        int detectedF0s = 0;
+        //F0 detection
+        double[] resultsk = new double[mainProgram.freq.length];
+        double[] salience;
+        double summa;
+        while (S.lastElement() >= smax) {
+            //System.out.print(S.lastElement() + "\n");
+            //Calculating the salience function (the hard way...)
+            salience = new double[mainProgram.f0cands.length];
+            double salmax = 0;
+
+            for (int i = 0; i < mainProgram.f0index.length; ++i) {
+                summa = 0;
+                for (int j = 0; j < mainProgram.f0index[i].size(); ++j) {
+                    //summa +=(mainProgram.samplingRate*mainProgram.freq[mainProgram.f0index[i].get(j)]+alpha)/((j+1)*mainProgram.samplingRate*mainProgram.freq[mainProgram.f0index[i].get(j)]+beta)*whitened[mainProgram.f0index[i].get(j)];
+                    summa += (mainProgram.freq[mainProgram.f0index[i].get(j)] + alpha) / ((j + 1) * mainProgram.freq[mainProgram.f0index[i].get(j)] + beta) * whitened[mainProgram.f0index[i].get(j)]; //removed sampligRate from num and den
+                    //System.out.print(j + "\n");
+                }
+                //System.out.print(summa + "\n");
+                salience[i] = summa;
+                //System.out.print(salience[i] + " " + salmax + "\n");
+                if (salience[i] > salmax) {
+                    index = i;
+                    salmax = salience[i];
+                    //System.out.print(index + "\nnew index!\n");
+                }
+            }
+
+            //System.out.print(index + "\n");
+            //Salience calculated
+            ++detectedF0s;
+            F0s.add(mainProgram.f0cands[index]); //First F0
+            //System.out.print(F0s + "\n");
+
+            /*Replace this with using f0cands indices at some point!*/
+            //Frequency cancellation
+            //System.out.println("To cancellation "+mainProgram.f0index[index].size()+" "+mainProgram.f0indHarm[index].size());
+            int[] tempCancelled = new int[resultsk.length];
+            for (int j = 0; j < mainProgram.f0index[index].size(); ++j) {
+                /*Suppress the surrounding bins as well*/
+                for (int i = -1; i <= 1; ++i) {
+                    if (tempCancelled[mainProgram.f0index[index].get(j) + i] == 0 && mainProgram.f0index[index].get(j) + i < resultsk.length) {
+                        //System.out.println(mainProgram.f0index[index].get(j)+" "+mainProgram.freq[mainProgram.f0index[index].get(j)]);
+                        resultsk[mainProgram.f0index[index].get(j) + i] = resultsk[mainProgram.f0index[index].get(j) + i]
+                                + (mainProgram.samplingRate * mainProgram.freq[mainProgram.f0index[index].get(j) + i] + alpha)
+                                / (((double) mainProgram.f0indHarm[index].get(j))
+                                * mainProgram.samplingRate * mainProgram.freq[mainProgram.f0index[index].get(j) + i] + beta)
+                                * whitened[mainProgram.f0index[index].get(j) + i];
+                        if (whitened[mainProgram.f0index[index].get(j) + i] - resultsk[mainProgram.f0index[index].get(j) + i] > 0) {
+                            whitened[mainProgram.f0index[index].get(j) + i]
+                                    = whitened[mainProgram.f0index[index].get(j) + i]
+                                    - resultsk[mainProgram.f0index[index].get(j) + i] * dee;
+                        } else {
+                            whitened[mainProgram.f0index[index].get(j) + i] = 0;
+                        }
+                        tempCancelled[mainProgram.f0index[index].get(j) + i] = 1;
+                    }
+
+                }
+
+            }
+            //System.out.println("Cancellation done");
+            //Frequency cancellation done
+            //Polyphony estimation
+            if (S.size() < detectedF0s) {
+                S.add(0.0);
+            }
+            summa = 0;
+            for (int i = 0; i < resultsk.length; ++i) {
+                summa += resultsk[i];
+            }
+            S.set(S.size() - 1, summa / Math.pow(detectedF0s, 0.7));
+            if (S.lastElement() > smax) {
+                smax = S.lastElement();
+            }
+            //Polyphony estimated
+        } //end while
+        //The last F0 is extra...
+        //System.out.println("Remove extra");
+        if (F0s.size() > 1) {
+            F0s.remove(F0s.size() - 1);
+        }
+
+        String[] tones = new String[F0s.size()];
+        //tones = notes(F0s);
+        /*
+        for (int i = 0; i < tones.length; i++) {
+            if (tones[i] == null) {
+                System.out.print("It's fucking null!");
+                continue;
+            } else {
+                System.out.print(tones[i] + " ");
+            }
+        }
+        System.out.print("\n");
+        */
+        //System.out.print("Mother fuck to me\n");
+        //System.out.print("The fucking lenght of tones: " + tones.length + "\n");
+        //string = Functions.getTab(notePosition, tones);
+        //System.out.print("Mother fuck to you\n");
+        //System.out.print(string[0] + "\n");
+        
+        return F0s; //Frequencies on chart
+    }
+
+    double[] whiten(double[] dataIn, PolyphonicPitchDetection mainProgram) {
+        double[] whitened = new double[dataIn.length];
+
+        /*Calculate signal energies in filter windows??*/
+        Vector<Double> gammab = new Vector<Double>();
+        Vector<Double> stdb = new Vector<Double>();
+
+        int kk;
+        /*The filter bank Hb could be pre-calculated, to be implemented...*/
+        for (int i = 0; i < mainProgram.Hb.length; ++i) {
+            double tempSum = 0;
+            for (int j = 0; j < mainProgram.Hb[i].size(); ++j) {
+                tempSum += mainProgram.Hb[i].get(j) * Math.pow(dataIn[mainProgram.hbIndices[i].get(j)], 2.0);
+            }
+            stdb.add(Math.sqrt(tempSum / ((double) dataIn.length)));
+            gammab.add(Math.pow(stdb.lastElement(), 0.33 - 1.0));
+        }
+
+        //Interpolate gammab...
+        gammaCoeff = new double[dataIn.length];
+
+        kk = 0;
+        while (mainProgram.freq[kk] < mainProgram.cb[1]) {	//Search for the first frequency..
+            gammaCoeff[kk] = gammab.get(0);
+            ++kk;
+        }
+        double whitemax = 0;
+        for (int i = 0; i < gammab.size() - 1; ++i) {
+            int init = ind(mainProgram.freq, mainProgram.cb[i + 1]);
+            int end = ind(mainProgram.freq, mainProgram.cb[i + 2]);
+            while (kk < end) {
+                gammaCoeff[kk] = gammab.get(i) + (gammab.get(i + 1) - gammab.get(i)) * Math.abs((double) (kk - init)) / ((double) (end - init));
+                ++kk;
+            }
+        }
+        /*Fill in the rest of the whitened with the last gammab*/
+        while (kk < whitened.length) {
+            gammaCoeff[kk] = gammab.get(gammab.size() - 1);
+            ++kk;
+        }
+        /*whiten the signal*/
+        for (int i = 0; i < whitened.length; ++i) {
+            whitened[i] = dataIn[i] * gammaCoeff[i];
+            if (whitened[i] < 0.00001) {
+                whitened[i] = 0.0;
+            }
+            //System.out.print(whitened[i] + "\n");
+        }
+        return whitened;
+    }
+
+    public static int ind(double[] arr, double a) {
+        int b = 0;
+        while (arr[b] < a) {
+            ++b;
+        }
+        return b;
+    }
+
+    public String[] notes(Vector<Double> F0s) {
+        String[] tones = new String[F0s.size()];
+        DecimalFormat formatter = new DecimalFormat("#0");
+        int count = 0;
+        for (int i = 0; i < F0s.size(); i++) {
+            if (!detectedF0s.containsKey(formatter.format(F0s.get(i)))) {
+                System.out.print("Shit doesn't exist\n");
+                continue;                
+            } else {
+                //System.out.print(formatter.format(F0s.get(i)) + "\n");
+                tones[count] = detectedF0s.get(formatter.format(F0s.get(i)));
+                count++;
+                //System.out.print(tones[i] + "\n");
+            }
+        }
+        return tones;
+    }
+}
