@@ -22,7 +22,7 @@ package timo.tuner.DrawImage;
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
-import java.util.Vector;
+import java.util.*;
 import java.awt.BasicStroke;
 import java.awt.image.*;
 import java.awt.image.WritableRaster;
@@ -85,10 +85,17 @@ public class DrawImage extends JPanel{
 		g2.setColor(new Color(255,255,255));
 		g2.setFont(new Font("Helvetica",Font.PLAIN,24));
 		f0s = "";
+                //Object[] test = F0s.toArray();
+                //Arrays.sort(test);
+                //F0s.toArray(test);
+                Collections.sort(F0s);
 		if (F0s.size() > 0){
 			for (int i = 0; i<F0s.size();++i){
 				f0s += "F"+i+" "+dfo.format(F0s.get(i))+" ";
 			}
+                    //for(int i=0; i<test.length; ++i){
+                    //    f0s += "F"+i+" "+dfo.format(test[i])+" ";
+                    //}
 		}
 
 		//g2.drawString(dfo.format(number),(int) (imageSize.width/2),(int) (imageSize.height/2));
