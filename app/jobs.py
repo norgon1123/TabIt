@@ -1,0 +1,110 @@
+"""In-process background analysis jobs and the chart seeding that follows."""
+
+from __future__ import annotations
+
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.audio.analyzer import Analyzer, AnalysisResult, LibrosaAnalyzer
+from app.config import get_settings
+from app.db import SessionLocal
+from app.models import Analysis, ChordChart, ChordSegment, Recording
+from app.music_theory import key_prefers_flats, pitch_class_to_note, tonic_for_pitch_class
+
+logger = logging.getLogger(__name__)
+
+
+def analyze_recording(db: Session, recording_id: str, analyzer: Analyzer) -> None:
+    """Run analysis for one recording, persist results, and seed its chart."""
+    analysis = db.execute(
+        select(Analysis).where(Analysis.recording_id == recording_id)
+    ).scalar_one_or_none()
+    recording = db.get(Recording, recording_id)
+    if analysis is None or recording is None:
+        logger.warning("analyze_recording: no analysis/recording for %s", recording_id)
+        return
+
+    analysis.status = "running"
+    analysis.error = None
+    db.commit()
+
+    try:
+        result = analyzer.analyze(recording.stored_path)
+        _write_result(analysis, result)
+        _seed_chart(db, recording, result)
+        analysis.status = "done"
+        db.commit()
+    except Exception as exc:  # any analysis/seeding/commit failure -> FAILED with message
+        db.rollback()
+        analysis.status = "failed"
+        analysis.error = str(exc)[:1000]
+        db.commit()
+        logger.exception("analysis failed for recording %s", recording_id)
+        return
+
+
+def _write_result(analysis: Analysis, result: AnalysisResult) -> None:
+    analysis.bpm = result.bpm
+    analysis.detected_key_tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
+    analysis.detected_key_mode = result.key_mode
+    analysis.engine_version = result.engine_version
+
+
+def _seed_chart(db: Session, recording: Recording, result: AnalysisResult) -> None:
+    existing = db.execute(
+        select(ChordChart).where(ChordChart.recording_id == recording.id)
+    ).scalar_one_or_none()
+    if existing is not None:
+        db.delete(existing)
+        db.flush()
+
+    tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
+    prefer_flats = key_prefers_flats(tonic, result.key_mode)
+    chart = ChordChart(recording_id=recording.id, key_tonic=tonic, key_mode=result.key_mode)
+    db.add(chart)
+    db.flush()
+    for segment in result.segments:
+        db.add(
+            ChordSegment(
+                chart_id=chart.id,
+                start_time=segment.start_time,
+                end_time=segment.end_time,
+                chord_root=pitch_class_to_note(segment.root_pc, prefer_flats=prefer_flats),
+                chord_quality=segment.quality.value,
+            )
+        )
+
+
+class JobDispatcher:
+    """Runs analysis on worker threads, each with its own DB session."""
+
+    def __init__(self, max_workers: int, analyzer: Analyzer) -> None:
+        self._pool = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="analysis"
+        )
+        self._analyzer = analyzer
+
+    def dispatch(self, recording_id: str) -> None:
+        self._pool.submit(self._run, recording_id)
+
+    def _run(self, recording_id: str) -> None:
+        db = SessionLocal()
+        try:
+            analyze_recording(db, recording_id, self._analyzer)
+        finally:
+            db.close()
+
+    def shutdown(self) -> None:
+        self._pool.shutdown(wait=False, cancel_futures=True)
+
+
+@lru_cache
+def get_job_dispatcher() -> JobDispatcher:
+    settings = get_settings()
+    return JobDispatcher(
+        settings.analysis_max_workers, LibrosaAnalyzer(settings.analysis_sample_rate)
+    )

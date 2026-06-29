@@ -1,0 +1,72 @@
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class Credentials(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=8, max_length=256)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    username: str
+
+
+class AnalysisOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    status: str
+    bpm: float | None
+    detected_key_tonic: str | None
+    detected_key_mode: str | None
+    engine_version: str | None
+    error: str | None
+
+
+class RecordingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    original_filename: str
+    format: str
+    duration_seconds: float | None
+    status: str
+    analysis: AnalysisOut | None = None
+
+
+class ChartCreate(BaseModel):
+    key_tonic: str = Field(pattern="^[A-G][b#]?$")
+    key_mode: str = Field(pattern="^(major|minor)$")
+
+
+class SegmentCreate(BaseModel):
+    start_time: float = Field(ge=0)
+    end_time: float = Field(gt=0)
+    chord_root: str = Field(pattern="^[A-G][b#]?$")
+    chord_quality: str = Field(pattern="^(maj|min|dom7|maj7|min7)$")
+
+
+class SegmentUpdate(BaseModel):
+    start_time: float | None = Field(default=None, ge=0)
+    end_time: float | None = Field(default=None, gt=0)
+    chord_root: str | None = Field(default=None, pattern="^[A-G][b#]?$")
+    chord_quality: str | None = Field(default=None, pattern="^(maj|min|dom7|maj7|min7)$")
+
+
+class SegmentOut(BaseModel):
+    id: str
+    start_time: float
+    end_time: float
+    chord_root: str
+    chord_quality: str
+    roman_numeral: str
+
+
+class ChartOut(BaseModel):
+    id: str
+    recording_id: str
+    key_tonic: str
+    key_mode: str
+    segments: list[SegmentOut]
+
+
+class TransposeRequest(BaseModel):
+    semitones: int = Field(ge=-11, le=11)
