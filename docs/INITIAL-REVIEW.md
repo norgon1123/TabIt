@@ -72,7 +72,7 @@ real use; **Low** = polish.
 
 | # | Sev | Area | Finding |
 |---|-----|------|---------|
-| 1 | High | Repo hygiene | `tabit.db` (the SQLite database) and `tabit.egg-info/` are committed to git, and there is **no root `.gitignore`**. The DB will leak local data, cause merge conflicts, and drift from schema. Build artifacts should not be tracked. |
+| 1 | High | Repo hygiene | `tabit.db` (the SQLite database) and `tabit.egg-info/` were committed to git with no root `.gitignore`. The DB leaks local data, causes merge conflicts, and drifts from schema; build artifacts should not be tracked. **Addressed on this branch:** a root `.gitignore` was added and both were untracked via `git rm --cached`. Remaining recommendation is just to keep them out of git. |
 | 2 | High | Auth | **Open registration with no gating and no rate limiting.** The design mentions a config-seeded admin user, but no admin seed nor a toggle to disable open registration exists. `/register` and `/login` have no brute-force protection — a problem for an internet-exposed service. |
 | 3 | High | Uploads | **No upload size limit.** `upload_recording` does `file.file.read()`, loading the entire upload into memory. An internet-exposed endpoint with no cap is a memory-exhaustion / DoS vector. |
 | 4 | High | Pipeline | **End-to-end analysis is unverified.** `ffmpeg` is absent here, so the decode path and its 3 tests are skipped — the app has never analyzed a real file. `main.py` only *logs* a startup error; uploads are still accepted and silently fail analysis. |
@@ -88,9 +88,10 @@ real use; **Low** = polish.
 
 ## Recommended next steps
 
-1. **Repo hygiene (quick win):** add a root `.gitignore` (`tabit.db`, `*.egg-info/`,
-   `.venv/`, `__pycache__/`, `.pytest_cache/`, `frontend/dist/`, `.DS_Store`,
-   `.idea/`), then `git rm --cached tabit.db tabit.egg-info -r`.
+1. **Repo hygiene — done on this branch.** A root `.gitignore` (`tabit.db`,
+   `*.egg-info/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `frontend/dist/`,
+   `.DS_Store`, `.idea/`) was added and `tabit.db` + `tabit.egg-info/` were
+   untracked via `git rm --cached`. Just keep them out of git going forward.
 2. **Install `ffmpeg` and run the full pipeline on a real voice memo** end-to-end.
    This is the single highest-value verification still outstanding. Consider making
    missing `ffmpeg` a hard startup failure (or rejecting uploads) rather than a log line.
