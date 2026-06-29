@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Database (local SQLite)
+tabit.db
+
+# Frontend build output
+frontend/dist/
+
+# OS / editor
+.DS_Store
+.idea/
