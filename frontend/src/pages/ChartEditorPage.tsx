@@ -27,7 +27,6 @@ export default function ChartEditorPage() {
     updateSegment,
     deleteSegment,
     transpose,
-    reorder,
   } = useChart(id);
 
   const recording = recordingQuery.data;
@@ -42,8 +41,6 @@ export default function ChartEditorPage() {
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
-
-  const reorderSegments = (orderedIds: string[]) => reorder(orderedIds);
 
   if (recordingQuery.isLoading || chartLoading) return <p className="muted container">Loading…</p>;
 
@@ -85,7 +82,6 @@ export default function ChartEditorPage() {
               onSelect={setSelectedId}
               onSeek={seek}
               onResizeCommit={applyResize}
-              onReorder={reorderSegments}
             />
           </div>
 

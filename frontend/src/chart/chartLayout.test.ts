@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { boundaryUpdates, chordsPerLine, groupIntoLines, reorderIds } from "./chartLayout";
+import { boundaryUpdates, chordsPerLine, groupIntoLines } from "./chartLayout";
 import { roundCs, formatTimeCs, clampBoundary } from "./timeMath";
 
 describe("chordsPerLine", () => {
@@ -28,22 +28,6 @@ describe("groupIntoLines (round 2 #3)", () => {
   });
   test("empty input yields no lines", () => {
     expect(groupIntoLines([], 4)).toEqual([]);
-  });
-});
-
-describe("reorderIds (round 2 #4)", () => {
-  const ids = ["a", "b", "c", "d"];
-  test("moves an item later, pushing the rest left", () => {
-    expect(reorderIds(ids, "a", 3)).toEqual(["b", "c", "a", "d"]);
-  });
-  test("moves an item earlier, pushing the rest right", () => {
-    expect(reorderIds(ids, "d", 1)).toEqual(["a", "d", "b", "c"]);
-  });
-  test("inserting at its own gap is a no-op order", () => {
-    expect(reorderIds(ids, "b", 1)).toEqual(["a", "b", "c", "d"]);
-  });
-  test("clamps an out-of-range gap to the end", () => {
-    expect(reorderIds(ids, "a", 99)).toEqual(["b", "c", "d", "a"]);
   });
 });
 

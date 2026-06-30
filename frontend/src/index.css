@@ -22,21 +22,5 @@ a { color: var(--accent); }
 .card { background: var(--panel); border: 1px solid #2c313a; border-radius: 12px; padding: 12px; }
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
-/* Round 2 #4: insertion preview between chord cells while dragging. */
-.drop-indicator {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--accent);
-  z-index: 2;
-  pointer-events: none;
-  animation: drop-pulse 0.7s ease-in-out infinite;
-}
-@keyframes drop-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent); }
-  50% { opacity: 0.35; box-shadow: 0 0 10px var(--accent); }
-}
 
 @media (max-width: 600px) { .container { padding: 12px; } }
