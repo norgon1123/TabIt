@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { boundaryUpdates, groupIntoLines } from "./chartLayout";
+import { boundaryUpdates, groupIntoLines, redistributeLength } from "./chartLayout";
 import { roundCs, formatTimeCs, clampBoundary } from "./timeMath";
 
 const seg = (b: number) => ({ start_beat: 0, end_beat: b });
@@ -69,5 +69,52 @@ describe("boundaryUpdates (beat domain)", () => {
   });
   test("no movement yields no patches", () => {
     expect(boundaryUpdates(L, R, 2, 2)).toEqual([]);
+  });
+});
+
+const span = (s: number, e: number) => ({ start_beat: s, end_beat: e });
+const lens = (w: { start_beat: number; end_beat: number }[]) =>
+  w.map((x) => x.end_beat - x.start_beat);
+const contiguous = (w: { start_beat: number; end_beat: number }[]) =>
+  w.every((x, i) => i === 0 || Math.abs(x.start_beat - w[i - 1].end_beat) < 1e-9);
+
+describe("redistributeLength", () => {
+  const ABC = () => [span(0, 4), span(4, 8), span(8, 12)];
+
+  test("growing an interior chord shrinks the next, total + later chords unchanged", () => {
+    const out = redistributeLength(ABC(), 0, 6, 20);
+    expect(lens(out)).toEqual([6, 2, 4]); // B gives 2 to A; C untouched
+    expect(out[2].end_beat).toBe(12); // total conserved
+    expect(contiguous(out)).toBe(true);
+  });
+
+  test("growing past the next chord's slack ripples into the chord after", () => {
+    const out = redistributeLength([span(0, 4), span(4, 5), span(5, 9)], 0, 8, 20);
+    expect(lens(out)).toEqual([8, 0.5, 0.5]); // B floored at 0.5, rest taken from C
+    expect(out[2].end_beat).toBe(9); // total conserved
+    expect(contiguous(out)).toBe(true);
+  });
+
+  test("growth is capped at the followers' available slack", () => {
+    const out = redistributeLength(ABC(), 0, 20, 20);
+    expect(lens(out)).toEqual([11, 0.5, 0.5]); // 7 beats of slack max
+    expect(out[2].end_beat).toBe(12);
+  });
+
+  test("shrinking an interior chord gives beats to the next, total conserved", () => {
+    const out = redistributeLength(ABC(), 0, 2, 20);
+    expect(lens(out)).toEqual([2, 6, 4]);
+    expect(out[2].end_beat).toBe(12);
+    expect(contiguous(out)).toBe(true);
+  });
+
+  test("growing the last chord is clamped at maxTotalBeats", () => {
+    const out = redistributeLength(ABC(), 2, 20, 14);
+    expect(out[2].end_beat).toBe(14); // clamped to the grid
+  });
+
+  test("snaps the requested length to the nearest half-beat", () => {
+    const out = redistributeLength(ABC(), 0, 5.3, 20); // 5.3 -> 5.5
+    expect(lens(out)[0]).toBe(5.5);
   });
 });
