@@ -11,9 +11,9 @@ describe("beatMath", () => {
     expect(clampBeatBoundary(3.9, 0, 4)).toBe(3.5);
     expect(clampBeatBoundary(2.24, 0, 4)).toBe(2);
   });
-  it("renders one slash per beat after the first, half-beat as a tick", () => {
-    expect(beatSlashMarks(4)).toBe("╱ ╱ ╱");
-    expect(beatSlashMarks(1)).toBe("");
-    expect(beatSlashMarks(2.5)).toBe("╱ ·");
+  it("renders one slash per whole beat, half-beat as a tick", () => {
+    expect(beatSlashMarks(4)).toBe("╱ ╱ ╱ ╱");
+    expect(beatSlashMarks(1)).toBe("╱");
+    expect(beatSlashMarks(2.5)).toBe("╱ ╱ ·");
   });
 });
