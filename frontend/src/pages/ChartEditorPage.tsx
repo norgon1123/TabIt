@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import type { RecordingOut } from "../api/types";
 import { useChart } from "../chart/useChart";
 import { useMediaClock } from "../chart/useMediaClock";
+import { totalBeats } from "../chart/beatGrid";
 import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 // import ScrubBar from "../chart/ScrubBar"; // disabled with the scrub-bar block below
 import SegmentEditor from "../chart/SegmentEditor";
@@ -28,6 +29,7 @@ export default function ChartEditorPage() {
     addSegment,
     updateSegment,
     deleteSegment,
+    resizeSegments,
     transpose,
     updateSettings,
   } = useChart(id);
@@ -132,6 +134,9 @@ export default function ChartEditorPage() {
             {selectedId && chart.segments.find((s) => s.id === selectedId) && (
               <SegmentEditor
                 segment={chart.segments.find((s) => s.id === selectedId)!}
+                allSegments={chart.segments}
+                maxTotalBeats={totalBeats(chart.beat_times, analysis?.bpm ?? null, duration)}
+                onResize={(windows) => resizeSegments(windows)}
                 onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
                 onDelete={() => {
                   deleteSegment(selectedId);
