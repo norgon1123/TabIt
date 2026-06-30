@@ -87,6 +87,7 @@ export default function ScrubBar({ currentTime, duration, playing, rate, onSeek 
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown}
       style={{ position: "relative", height: 14, cursor: "pointer", touchAction: "none" }}
     >

@@ -42,6 +42,28 @@ test("reflects the current fraction on the fill when paused", () => {
   expect(fill.style.transform).toBe("scaleX(0.5)");
 });
 
+test("arms a compositor transition toward the end while playing", () => {
+  // Flush requestAnimationFrame synchronously so the arming runs deterministically.
+  const rafSpy = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+  try {
+    const { container } = render(
+      <ScrubBar currentTime={5} duration={10} playing={true} rate={1} onSeek={() => {}} />,
+    );
+    const fill = container.querySelector(".scrub-fill") as HTMLElement;
+    const knob = container.querySelector(".scrub-knob") as HTMLElement;
+    expect(fill.style.transition).toContain("transform");
+    expect(fill.style.transform).toBe("scaleX(1)");
+    expect(knob.style.left).toBe("100%");
+  } finally {
+    rafSpy.mockRestore();
+  }
+});
+
 test("ignores seeks before duration is known", () => {
   const onSeek = vi.fn();
   render(<ScrubBar currentTime={0} duration={0} playing={false} rate={1} onSeek={onSeek} />);
