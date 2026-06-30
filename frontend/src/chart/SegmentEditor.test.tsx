@@ -14,6 +14,21 @@ describe("SegmentEditor beats", () => {
     const beats = screen.getByLabelText(/beats/i) as HTMLInputElement;
     fireEvent.change(beats, { target: { value: "2" } });
     fireEvent.click(screen.getByText("Save"));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ end_beat: 2 }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ end_beat: 2, chord_root: "C", chord_quality: "maj" }));
+  });
+
+  it("calls onDelete when Delete button is clicked", () => {
+    const onDelete = vi.fn();
+    render(<SegmentEditor segment={seg} onSave={vi.fn()} onDelete={onDelete} busy={false} />);
+    fireEvent.click(screen.getByText("Delete"));
+    expect(onDelete).toHaveBeenCalled();
+  });
+
+  it("displays error message when onSave rejects", async () => {
+    const onSave = vi.fn().mockRejectedValue({ detail: "nope" });
+    render(<SegmentEditor segment={seg} onSave={onSave} onDelete={() => {}} busy={false} />);
+    fireEvent.click(screen.getByText("Save"));
+    const error = await screen.findByText("nope");
+    expect(error).toBeInTheDocument();
   });
 });
