@@ -11,7 +11,6 @@ from app.schemas import (
     ChartOut,
     SegmentCreate,
     SegmentOut,
-    SegmentReorder,
     SegmentUpdate,
     TransposeRequest,
 )
@@ -169,36 +168,6 @@ def delete_segment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
     db.delete(seg)
     db.commit()
-
-
-@router.post("/charts/{chart_id}/reorder", response_model=ChartOut)
-def reorder_segments(
-    chart_id: str,
-    payload: SegmentReorder,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> ChartOut:
-    chart = _owned_chart(db, user, chart_id)
-    by_id = {s.id: s for s in chart.segments}
-    if set(payload.segment_ids) != set(by_id) or len(payload.segment_ids) != len(by_id):
-        raise HTTPException(
-            status_code=422, detail="segment_ids must be a permutation of the chart's segments"
-        )
-    # Lay the chords back-to-back in the requested order, each keeping its own duration,
-    # anchored at the earliest existing start so the chart never grows past the audio.
-    cursor = min((s.start_time for s in chart.segments), default=0.0)
-    duration = chart.recording.duration_seconds
-    for seg_id in payload.segment_ids:
-        seg = by_id[seg_id]
-        length = seg.end_time - seg.start_time
-        seg.start_time = cursor
-        seg.end_time = cursor + length
-        cursor = seg.end_time
-    if duration is not None and cursor > duration:
-        raise HTTPException(status_code=422, detail="reordered segments exceed recording duration")
-    db.commit()
-    db.refresh(chart)
-    return _chart_out(chart)
 
 
 @router.post("/charts/{chart_id}/transpose", response_model=ChartOut)

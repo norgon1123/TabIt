@@ -78,9 +78,3 @@ class ChartOut(BaseModel):
 
 class TransposeRequest(BaseModel):
     semitones: int = Field(ge=-11, le=11)
-
-
-class SegmentReorder(BaseModel):
-    # Round 2 #4: the new left-to-right order of every segment in the chart. Times are
-    # recomputed server-side so each chord keeps its duration and segments stay contiguous.
-    segment_ids: list[str] = Field(min_length=1)
