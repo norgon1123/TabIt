@@ -1,33 +1,22 @@
-import { describe, expect, test } from "vitest";
-import { boundaryUpdates, chordsPerLine, groupIntoLines, reorderIds } from "./chartLayout";
+import { describe, expect, it, test } from "vitest";
+import { boundaryUpdates, groupIntoLines, reorderIds } from "./chartLayout";
 import { roundCs, formatTimeCs, clampBoundary } from "./timeMath";
 
-describe("chordsPerLine", () => {
-  test("scales with BPM between 4 and 16", () => {
-    expect(chordsPerLine(60)).toBe(4);
-    expect(chordsPerLine(120)).toBe(8);
-    expect(chordsPerLine(240)).toBe(16);
-  });
-  test("clamps extremes", () => {
-    expect(chordsPerLine(20)).toBe(4); // floor
-    expect(chordsPerLine(400)).toBe(16); // ceiling
-  });
-  test("falls back to 8 when BPM is missing or invalid", () => {
-    expect(chordsPerLine(null)).toBe(8);
-    expect(chordsPerLine(0)).toBe(8);
-    expect(chordsPerLine(undefined)).toBe(8);
-  });
-});
+const seg = (b: number) => ({ start_beat: 0, end_beat: b });
 
-describe("groupIntoLines (round 2 #3)", () => {
-  test("chunks into lines of perLine, last line may be shorter", () => {
-    expect(groupIntoLines([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
-  });
-  test("never produces a zero-length chunk", () => {
-    expect(groupIntoLines([1, 2], 0)).toEqual([[1], [2]]);
+describe("groupIntoLines (beat-aware)", () => {
+  test("wraps segments into whole-measure lines by beat count", () => {
+    // beatsPerLine = 8 (e.g. 2 measures of 4). Three 4-beat chords -> [2,1].
+    const lines = groupIntoLines([seg(4), seg(4), seg(4)], 8);
+    expect(lines.map((l) => l.length)).toEqual([2, 1]);
   });
   test("empty input yields no lines", () => {
     expect(groupIntoLines([], 4)).toEqual([]);
+  });
+  test("caps minimum beatsPerLine at 1", () => {
+    const items = [seg(1), seg(1)];
+    const lines = groupIntoLines(items, 0);
+    expect(lines.map((l) => l.length)).toEqual([1, 1]);
   });
 });
 
@@ -66,24 +55,24 @@ describe("clampBoundary (#2)", () => {
   });
 });
 
-describe("boundaryUpdates (#2)", () => {
+describe("boundaryUpdates (beat domain)", () => {
   const L = { id: "s1" };
   const R = { id: "s2" };
   test("growing the boundary patches the shrinking neighbour first", () => {
     expect(boundaryUpdates(L, R, 2, 3)).toEqual([
-      { id: "s2", patch: { start_time: 3 } },
-      { id: "s1", patch: { end_time: 3 } },
+      { id: "s2", patch: { start_beat: 3 } },
+      { id: "s1", patch: { end_beat: 3 } },
     ]);
   });
   test("shrinking the boundary patches the left segment first", () => {
     expect(boundaryUpdates(L, R, 2, 1)).toEqual([
-      { id: "s1", patch: { end_time: 1 } },
-      { id: "s2", patch: { start_time: 1 } },
+      { id: "s1", patch: { end_beat: 1 } },
+      { id: "s2", patch: { start_beat: 1 } },
     ]);
   });
   test("edge segments produce a single patch", () => {
-    expect(boundaryUpdates(undefined, R, 0, 0.5)).toEqual([{ id: "s2", patch: { start_time: 0.5 } }]);
-    expect(boundaryUpdates(L, undefined, 4, 3.5)).toEqual([{ id: "s1", patch: { end_time: 3.5 } }]);
+    expect(boundaryUpdates(undefined, R, 0, 0.5)).toEqual([{ id: "s2", patch: { start_beat: 0.5 } }]);
+    expect(boundaryUpdates(L, undefined, 4, 3.5)).toEqual([{ id: "s1", patch: { end_beat: 3.5 } }]);
   });
   test("no movement yields no patches", () => {
     expect(boundaryUpdates(L, R, 2, 2)).toEqual([]);
