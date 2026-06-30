@@ -1,19 +1,20 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RecordingOut } from "../api/types";
 import { useChart } from "../chart/useChart";
+import { useMediaClock } from "../chart/useMediaClock";
 import Timeline, { type SegmentUpdate } from "../chart/Timeline";
+import ScrubBar from "../chart/ScrubBar";
 import SegmentEditor from "../chart/SegmentEditor";
 import TransposeControl from "../chart/TransposeControl";
 
 export default function ChartEditorPage() {
   const { recordingId } = useParams<{ recordingId: string }>();
   const id = recordingId!;
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [currentTime, setCurrentTime] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const clock = useMediaClock();
 
   const recordingQuery = useQuery({
     queryKey: ["recording", id],
@@ -33,20 +34,15 @@ export default function ChartEditorPage() {
   const analysis = recording?.analysis ?? null;
   const duration = recording?.duration_seconds ?? 0;
 
-  const seek = (time: number) => {
-    if (audioRef.current) audioRef.current.currentTime = time;
-    setCurrentTime(time);
-  };
-
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
 
-  if (recordingQuery.isLoading || chartLoading) return <p className="muted container">Loading…</p>;
+  if (recordingQuery.isLoading || chartLoading) return <p className="muted container">Loading...</p>;
 
   return (
     <div className="container">
-      <p><Link to="/">← Library</Link></p>
+      <p><Link to="/">Back to Library</Link></p>
       <h1>{recording?.original_filename ?? "Chart"}</h1>
 
       {analysis?.status === "failed" && (
@@ -54,33 +50,44 @@ export default function ChartEditorPage() {
       )}
 
       {!chart && analysis?.status !== "failed" && (
-        <p className="muted">Analyzing… the chart will appear when analysis finishes.</p>
+        <p className="muted">Analyzing... the chart will appear when analysis finishes.</p>
       )}
 
       {chart && (
         <>
           <p className="muted">
-            {analysis?.bpm != null && <>{Math.round(analysis.bpm)} BPM · </>}
+            {analysis?.bpm != null && <>{Math.round(analysis.bpm)} BPM &middot; </>}
             Key: {chart.key_tonic} {chart.key_mode}
           </p>
 
           <audio
-            ref={audioRef}
+            ref={clock.ref}
             controls
             style={{ width: "100%" }}
             src={`/api/recordings/${id}/audio`}
-            onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           />
+
+          <div style={{ marginTop: 8 }}>
+            <ScrubBar
+              currentTime={clock.currentTime}
+              duration={clock.duration || duration}
+              playing={clock.playing}
+              rate={clock.rate}
+              onSeek={clock.seek}
+            />
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <Timeline
               segments={chart.segments}
               bpm={analysis?.bpm ?? null}
               duration={duration}
-              currentTime={currentTime}
+              currentTime={clock.currentTime}
+              playing={clock.playing}
+              rate={clock.rate}
               selectedId={selectedId}
               onSelect={setSelectedId}
-              onSeek={seek}
+              onSeek={clock.seek}
               onResizeCommit={applyResize}
             />
           </div>
