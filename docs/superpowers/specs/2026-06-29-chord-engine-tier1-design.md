@@ -127,6 +127,21 @@ Chordino's rich label set down to the 5 output qualities. It drops in behind
 post-processing. Native install and on-recording evaluation happen in the developer's
 environment, not CI.
 
+## Known limitation of the librosa engine (investigated 2026-06-29)
+
+On a real test recording (`audio/Simple I V IV I.m4a`, a G–D–C–G progression), the
+librosa `hmm-v3` engine misreads the opening **G as D** (and mislabels the silent intro
+as C#min7). Investigation found the cause is intrinsic: the opening chroma is *muddy* —
+every pitch class carries 0.7–1.0 energy, so G(1.00) and D(0.98) are near-tied and the
+plain-triad cosine scores collapse (Gmaj ≈ Dmaj ≈ 0.654), while higher-cardinality
+extended templates spuriously win individual frames. Per-frame contrast/whitening
+transforms (mean/median subtraction, power scaling) and a bass-register chroma all failed
+to recover the root without introducing new errors — the bass chroma showed G even during
+the D chord. The principled fix is NNLS note-salience chroma plus a trained decoder, which
+*is* Chordino. Rather than reimplement Chordino inside the fallback engine, **Chordino is
+now the default** (`analysis_engine="chordino"`, graceful fallback to librosa when the Vamp
+plugin is absent), and it reads this file correctly as G–D–C–G with the intro trimmed.
+
 ## Out of scope (Tier 1)
 
 - Expanding the stored `Quality` vocabulary (its own future phase).

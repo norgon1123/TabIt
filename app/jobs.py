@@ -110,18 +110,27 @@ class JobDispatcher:
         self._pool.shutdown(wait=False, cancel_futures=True)
 
 
-def _build_analyzer(settings) -> Analyzer:
-    if settings.analysis_engine == "chordino":
-        return ChordinoAnalyzer(
-            settings.analysis_sample_rate,
-            min_segment_seconds=settings.analysis_min_segment_seconds,
-        )
+def _build_librosa_analyzer(settings) -> Analyzer:
     return LibrosaAnalyzer(
         settings.analysis_sample_rate,
         min_segment_seconds=settings.analysis_min_segment_seconds,
         change_penalty=settings.analysis_change_penalty,
         use_hpss=settings.analysis_use_hpss,
     )
+
+
+def _build_analyzer(settings) -> Analyzer:
+    if settings.analysis_engine == "chordino":
+        try:
+            return ChordinoAnalyzer(
+                settings.analysis_sample_rate,
+                min_segment_seconds=settings.analysis_min_segment_seconds,
+            )
+        except RuntimeError as exc:
+            # The native Vamp plugin isn't available here; degrade to the built-in engine
+            # rather than failing analysis outright.
+            logger.warning("Chordino unavailable (%s); falling back to librosa engine", exc)
+    return _build_librosa_analyzer(settings)
 
 
 @lru_cache
