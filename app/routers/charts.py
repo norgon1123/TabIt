@@ -74,7 +74,7 @@ def _validate_segment_window(
     if start >= end:
         raise HTTPException(status_code=422, detail="start_beat must be before end_beat")
     grid, duration = _chart_grid(chart)
-    if end > total_beats(grid, duration) + 1e-6:
+    if duration and end > total_beats(grid, duration) + 1e-6:
         raise HTTPException(status_code=422, detail="end_beat exceeds the chart's beat grid")
     for other in chart.segments:
         if other.id == exclude_id:
@@ -206,7 +206,7 @@ def reorder_segments(
         seg.start_beat = cursor
         seg.end_beat = cursor + length
         cursor = seg.end_beat
-    if cursor > total_beats(grid, duration) + 1e-6:
+    if duration and cursor > total_beats(grid, duration) + 1e-6:
         raise HTTPException(status_code=422, detail="reordered segments exceed the beat grid")
     db.commit()
     db.refresh(chart)

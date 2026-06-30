@@ -163,7 +163,7 @@ export default function Timeline({
                   cursor: "pointer",
                   overflow: "hidden",
                   border: selected ? "2px solid var(--accent)" : "1px solid #2c313a",
-                  borderLeft: onMeasure ? "3px solid var(--accent)" : "1px solid #2c313a",
+                  borderLeft: onMeasure ? "3px solid var(--accent)" : selected ? "2px solid var(--accent)" : "1px solid #2c313a",
                   background: playing ? "#26303f" : "var(--panel)",
                 }}
               >

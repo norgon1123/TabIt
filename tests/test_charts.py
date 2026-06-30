@@ -169,3 +169,31 @@ def test_update_chart_settings(client, tmp_path, monkeypatch):
     body = resp.json()
     assert body["beats_per_measure"] == 3
     assert body["measure_offset"] == 1
+
+
+def test_add_segment_on_null_duration_chart(client, db_session, tmp_path, monkeypatch):
+    """Segments must be addable even when recording.duration_seconds is NULL (regression)."""
+    from sqlalchemy import select as sa_select
+
+    from app.models import Recording
+
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    rec_id = _upload(client)
+
+    # Simulate a recording whose duration is not yet known.
+    rec = db_session.execute(sa_select(Recording).where(Recording.id == rec_id)).scalar_one()
+    rec.duration_seconds = None
+    db_session.commit()
+
+    resp = client.post(
+        f"/api/recordings/{rec_id}/chart", json={"key_tonic": "C", "key_mode": "major"}
+    )
+    assert resp.status_code == 201
+    chart_id = resp.json()["id"]
+
+    resp = client.post(
+        f"/api/charts/{chart_id}/segments",
+        json={"start_beat": 0.0, "end_beat": 4.0, "chord_root": "C", "chord_quality": "maj"},
+    )
+    assert resp.status_code == 201

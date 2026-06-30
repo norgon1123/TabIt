@@ -94,5 +94,6 @@ def test_librosa_analyzer_returns_ascending_beat_times(tmp_path):
     _write_chord_song(path, [(0, 4, 7), (7, 11, 2)])  # C major, then G major
     from app.audio.analyzer import LibrosaAnalyzer
     result = LibrosaAnalyzer(sample_rate=22050).analyze(str(path))
+    assert len(result.beat_times) > 0
     assert result.beat_times == sorted(result.beat_times)
     assert all(t >= 0 for t in result.beat_times)
