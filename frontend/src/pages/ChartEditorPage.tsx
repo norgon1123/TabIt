@@ -11,6 +11,8 @@ import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 import SegmentEditor from "../chart/SegmentEditor";
 import TransposeControl from "../chart/TransposeControl";
 import TimeSignatureControl from "../chart/TimeSignatureControl";
+import { useReanalyze } from "../chart/useReanalyze";
+import Spinner from "../components/Spinner";
 
 export default function ChartEditorPage() {
   const { recordingId } = useParams<{ recordingId: string }>();
@@ -21,7 +23,17 @@ export default function ChartEditorPage() {
   const recordingQuery = useQuery({
     queryKey: ["recording", id],
     queryFn: () => api.get<RecordingOut>(`/api/recordings/${id}`),
+    refetchInterval: (query) => {
+      const s = query.state.data?.analysis?.status;
+      return s === "pending" || s === "running" ? 2000 : false;
+    },
   });
+
+  const recording = recordingQuery.data;
+  const analysis = recording?.analysis ?? null;
+  const duration = recording?.duration_seconds ?? 0;
+  const inProgress = analysis?.status === "pending" || analysis?.status === "running";
+
   const {
     chart,
     isLoading: chartLoading,
@@ -32,11 +44,9 @@ export default function ChartEditorPage() {
     resizeSegments,
     transpose,
     updateSettings,
-  } = useChart(id);
+  } = useChart(id, { poll: inProgress });
 
-  const recording = recordingQuery.data;
-  const analysis = recording?.analysis ?? null;
-  const duration = recording?.duration_seconds ?? 0;
+  const { reanalyze, isPending: reanalyzing } = useReanalyze(id);
 
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
@@ -47,7 +57,17 @@ export default function ChartEditorPage() {
   return (
     <div className="container">
       <p><Link to="/">&larr; Library</Link></p>
-      <h1>{recording?.original_filename ?? "Chart"}</h1>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <h1 style={{ margin: 0 }}>{recording?.original_filename ?? "Chart"}</h1>
+        <button onClick={() => reanalyze()} disabled={reanalyzing || inProgress}>
+          Re-analyze
+        </button>
+        {inProgress && (
+          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} className="muted">
+            <Spinner label="Analyzing" /> Analyzing&hellip;
+          </span>
+        )}
+      </div>
 
       {analysis?.status === "failed" && (
         <p className="error">Analysis failed: {analysis.error}</p>

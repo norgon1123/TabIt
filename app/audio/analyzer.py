@@ -40,12 +40,29 @@ class Analyzer(Protocol):
     def analyze(self, audio_path: str) -> AnalysisResult: ...
 
 
-def _trim_silence(y: np.ndarray, sr: int, top_db: float) -> tuple[np.ndarray, float]:
-    """Strip leading/trailing silence; return trimmed audio and the leading offset in seconds."""
-    trimmed, index = librosa.effects.trim(y, top_db=top_db)
+def _trim_silence(
+    y: np.ndarray, sr: int, top_db: float, min_content_seconds: float = 0.5
+) -> tuple[np.ndarray, float]:
+    """Strip leading/trailing silence, judging content by sustained dB level.
+
+    Splits the signal into non-silent intervals (anything within `top_db` of the peak)
+    rather than trimming from the first above-threshold frame. A brief loud transient at
+    the very start — a click or pop before the real silence — would otherwise anchor a
+    naive trim at t~=0; here any interval shorter than `min_content_seconds` is treated as
+    such a transient and ignored, so the audio is trimmed to span only the real content.
+    Returns the trimmed audio and the leading offset (in seconds) that was removed.
+    """
+    intervals = librosa.effects.split(y, top_db=top_db)
+    if len(intervals) == 0:
+        return y, 0.0
+    min_len = int(min_content_seconds * sr)
+    substantial = [iv for iv in intervals if iv[1] - iv[0] >= min_len]
+    chosen = substantial if substantial else intervals
+    start, end = int(chosen[0][0]), int(chosen[-1][1])
+    trimmed = y[start:end]
     if trimmed.size == 0:
         return y, 0.0
-    return trimmed, float(index[0]) / sr
+    return trimmed, start / sr
 
 
 def _chroma_features(y: np.ndarray, sr: int, hop_length: int, use_hpss: bool) -> np.ndarray:
@@ -65,6 +82,7 @@ class LibrosaAnalyzer:
         hop_length: int = 2048,
         min_segment_seconds: float = 0.75,  # round 2 #1: drop sub-0.75s false positives
         silence_top_db: float = 30.0,
+        silence_min_content_seconds: float = 0.5,  # ignore sub-0.5s edge transients
         change_penalty: float = 1.0,  # tier 1: Viterbi self-stay bias
         use_hpss: bool = True,  # tier 1: analyse the harmonic component
     ) -> None:
@@ -73,6 +91,7 @@ class LibrosaAnalyzer:
         self._hop = hop_length
         self._min_segment_seconds = min_segment_seconds
         self._silence_top_db = silence_top_db
+        self._silence_min_content_seconds = silence_min_content_seconds
         self._change_penalty = change_penalty
         self._use_hpss = use_hpss
 
@@ -84,7 +103,9 @@ class LibrosaAnalyzer:
         duration = float(len(y) / self._sr)
 
         # #5: ignore leading/trailing silence so the chart spans only the audible region.
-        y_trim, lead = _trim_silence(y, self._sr, self._silence_top_db)
+        y_trim, lead = _trim_silence(
+            y, self._sr, self._silence_top_db, self._silence_min_content_seconds
+        )
         trimmed_dur = float(len(y_trim) / self._sr)
 
         tempo, beat_frames = librosa.beat.beat_track(y=y_trim, sr=self._sr, units="time")
@@ -121,9 +142,17 @@ class ChordinoAnalyzer:
     still estimated with librosa. Requires the ``vamp`` module and the nnls-chroma plugin.
     """
 
-    def __init__(self, sample_rate: int = 22050, min_segment_seconds: float = 0.75) -> None:
+    def __init__(
+        self,
+        sample_rate: int = 22050,
+        min_segment_seconds: float = 0.75,
+        silence_top_db: float = 30.0,
+        silence_min_content_seconds: float = 0.5,
+    ) -> None:
         self._sr = sample_rate
         self._min_segment_seconds = min_segment_seconds
+        self._silence_top_db = silence_top_db
+        self._silence_min_content_seconds = silence_min_content_seconds
         try:
             import vamp
         except ImportError as exc:  # pragma: no cover - env-dependent
@@ -144,16 +173,24 @@ class ChordinoAnalyzer:
             raise RuntimeError("decoded audio is empty")
         duration = float(len(y) / self._sr)
 
-        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=self._sr, units="time")
-        bpm = float(np.atleast_1d(tempo)[0])
-        beat_times = [float(t) for t in np.atleast_1d(beat_frames)]
+        # Ignore leading/trailing silence so beats and chords span only the audible
+        # region; everything below is computed on the trimmed audio and shifted back.
+        y_trim, lead = _trim_silence(
+            y, self._sr, self._silence_top_db, self._silence_min_content_seconds
+        )
+        trimmed_dur = float(len(y_trim) / self._sr)
 
-        chroma = librosa.feature.chroma_cqt(y=y, sr=self._sr)
+        tempo, beat_frames = librosa.beat.beat_track(y=y_trim, sr=self._sr, units="time")
+        bpm = float(np.atleast_1d(tempo)[0])
+        beat_times = [float(t) + lead for t in np.atleast_1d(beat_frames)]
+
+        chroma = librosa.feature.chroma_cqt(y=y_trim, sr=self._sr)
         tonic_pc, mode = estimate_key(chroma.mean(axis=1))
 
-        result = vamp.collect(y, self._sr, _CHORDINO_PLUGIN)
+        result = vamp.collect(y_trim, self._sr, _CHORDINO_PLUGIN)
         entries = result.get("list", []) if isinstance(result, dict) else []
-        segments = chordino_segments(entries, duration, self._min_segment_seconds)
+        segments = chordino_segments(entries, trimmed_dur, self._min_segment_seconds)
+        segments = shift_segments(segments, lead)
         return AnalysisResult(
             bpm, tonic_pc, mode, duration, segments, CHORDINO_ENGINE_VERSION,
             beat_times=beat_times,

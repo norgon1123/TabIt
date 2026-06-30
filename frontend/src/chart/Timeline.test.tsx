@@ -68,5 +68,5 @@ it("renders slash marks for a 4-beat chord", () => {
   }];
   // Render Timeline with the new props (mirror the existing test's render call).
   renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
-  expect(screen.getByText(beatSlashMarks(4))).toBeInTheDocument(); // "╱ ╱ ╱"
+  expect(screen.getByText(beatSlashMarks(4))).toBeInTheDocument(); // "╱ ╱ ╱ ╱"
 });

@@ -6,7 +6,28 @@ from app.audio.decode import ffmpeg_available
 pytest.importorskip("librosa")
 pytestmark = pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg not installed")
 
-from app.audio.analyzer import AnalysisResult, LibrosaAnalyzer  # noqa: E402
+from app.audio.analyzer import AnalysisResult, LibrosaAnalyzer, _trim_silence  # noqa: E402
+
+
+def _tone(sr, seconds, hz=220.0, amp=0.3):
+    t = np.linspace(0.0, seconds, int(sr * seconds), endpoint=False)
+    return (amp * np.sin(2 * np.pi * hz * t)).astype(np.float32)
+
+
+def test_trim_silence_ignores_a_brief_leading_transient():
+    # A real file can open with a short loud click before the true silence, which
+    # anchors a naive first-frame trim at t~=0. Trimming must skip that transient and
+    # start at the music, judging content by sustained dB level, not the first blip.
+    sr = 22050
+    blip = _tone(sr, 0.2)  # 0.2s click at the very start
+    silence = np.zeros(int(sr * 1.0), dtype=np.float32)  # 1.0s of quiet
+    music = _tone(sr, 2.0)  # 2.0s of sustained content
+    y = np.concatenate([blip, silence, music])
+
+    trimmed, lead = _trim_silence(y, sr, top_db=30.0)
+
+    assert lead == pytest.approx(1.2, abs=0.15)  # past the blip + silence
+    assert len(trimmed) / sr == pytest.approx(2.0, abs=0.15)  # only the music survives
 
 
 def _chord_block(pcs, sr, seconds, base_hz=261.63):

@@ -4,6 +4,7 @@ import AnalysisStatusBadge from "../components/AnalysisStatusBadge";
 import UploadButton from "../library/UploadButton";
 import { useRecordings } from "../library/useRecordings";
 import { formatUploadedAt } from "../library/formatDate";
+import { filterAndSortRecordings, type SortDir } from "../library/filterSort";
 import type { RecordingOut } from "../api/types";
 
 function RecordingName({
@@ -74,6 +75,9 @@ function RecordingName({
 
 export default function LibraryPage() {
   const { recordings, isLoading, upload, remove, reanalyze, rename, isUploading } = useRecordings();
+  const [query, setQuery] = useState("");
+  const [sortDir, setSortDir] = useState<SortDir>("newest");
+  const visible = filterAndSortRecordings(recordings, query, sortDir);
 
   return (
     <div className="container">
@@ -82,11 +86,27 @@ export default function LibraryPage() {
         <UploadButton onUpload={upload} busy={isUploading} />
       </div>
 
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+        <input
+          type="search"
+          placeholder="Search recordings"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ flex: "1 1 200px" }}
+        />
+        <button onClick={() => setSortDir((d) => (d === "newest" ? "oldest" : "newest"))}>
+          {sortDir === "newest" ? "Newest first" : "Oldest first"}
+        </button>
+      </div>
+
       {isLoading && <p className="muted">Loading…</p>}
       {!isLoading && recordings.length === 0 && <p className="muted">No recordings yet. Upload one to start.</p>}
+      {!isLoading && recordings.length > 0 && visible.length === 0 && (
+        <p className="muted">No recordings match your search.</p>
+      )}
 
       <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 12 }}>
-        {recordings.map((r) => (
+        {visible.map((r) => (
           <li key={r.id} className="card">
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
