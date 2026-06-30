@@ -1,10 +1,79 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import AnalysisStatusBadge from "../components/AnalysisStatusBadge";
 import UploadButton from "../library/UploadButton";
 import { useRecordings } from "../library/useRecordings";
+import { formatUploadedAt } from "../library/formatDate";
+import type { RecordingOut } from "../api/types";
+
+function RecordingName({
+  recording,
+  onRename,
+}: {
+  recording: RecordingOut;
+  onRename: (name: string) => Promise<unknown>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(recording.original_filename);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === recording.original_filename) {
+      setEditing(false);
+      setName(recording.original_filename);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onRename(trimmed);
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <strong>{recording.original_filename}</strong>
+        <button
+          onClick={() => {
+            setName(recording.original_filename);
+            setEditing(true);
+          }}
+          style={{ padding: "2px 8px" }}
+        >
+          Rename
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <input
+        autoFocus
+        value={name}
+        disabled={busy}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+      <button className="primary" onClick={save} disabled={busy} style={{ padding: "2px 8px" }}>
+        Save
+      </button>
+      <button onClick={() => setEditing(false)} disabled={busy} style={{ padding: "2px 8px" }}>
+        Cancel
+      </button>
+    </div>
+  );
+}
 
 export default function LibraryPage() {
-  const { recordings, isLoading, upload, remove, reanalyze, isUploading } = useRecordings();
+  const { recordings, isLoading, upload, remove, reanalyze, rename, isUploading } = useRecordings();
 
   return (
     <div className="container">
@@ -21,7 +90,10 @@ export default function LibraryPage() {
           <li key={r.id} className="card">
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
-                <strong>{r.original_filename}</strong>
+                <RecordingName recording={r} onRename={(name) => rename(r.id, name)} />
+                <div className="muted" style={{ fontSize: "0.85em", marginTop: 4 }}>
+                  Uploaded {formatUploadedAt(r.created_at)}
+                </div>
                 <div><AnalysisStatusBadge analysis={r.analysis} /></div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

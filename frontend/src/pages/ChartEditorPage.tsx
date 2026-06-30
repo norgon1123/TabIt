@@ -19,8 +19,16 @@ export default function ChartEditorPage() {
     queryKey: ["recording", id],
     queryFn: () => api.get<RecordingOut>(`/api/recordings/${id}`),
   });
-  const { chart, isLoading: chartLoading, isMutating, addSegment, updateSegment, deleteSegment, transpose } =
-    useChart(id);
+  const {
+    chart,
+    isLoading: chartLoading,
+    isMutating,
+    addSegment,
+    updateSegment,
+    deleteSegment,
+    transpose,
+    reorder,
+  } = useChart(id);
 
   const recording = recordingQuery.data;
   const analysis = recording?.analysis ?? null;
@@ -35,14 +43,7 @@ export default function ChartEditorPage() {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
 
-  const swapSegments = async (aId: string, bId: string) => {
-    const segs = chart?.segments ?? [];
-    const a = segs.find((s) => s.id === aId);
-    const b = segs.find((s) => s.id === bId);
-    if (!a || !b) return;
-    await updateSegment(aId, { chord_root: b.chord_root, chord_quality: b.chord_quality });
-    await updateSegment(bId, { chord_root: a.chord_root, chord_quality: a.chord_quality });
-  };
+  const reorderSegments = (orderedIds: string[]) => reorder(orderedIds);
 
   if (recordingQuery.isLoading || chartLoading) return <p className="muted container">Loading…</p>;
 
@@ -84,7 +85,7 @@ export default function ChartEditorPage() {
               onSelect={setSelectedId}
               onSeek={seek}
               onResizeCommit={applyResize}
-              onSwap={swapSegments}
+              onReorder={reorderSegments}
             />
           </div>
 

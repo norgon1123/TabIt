@@ -23,6 +23,7 @@ export interface RecordingOut {
   format: string;
   duration_seconds: number | null;
   status: string;
+  created_at: string;
   analysis: AnalysisOut | null;
 }
 

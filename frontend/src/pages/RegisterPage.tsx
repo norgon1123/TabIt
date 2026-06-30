@@ -32,12 +32,13 @@ export default function RegisterPage() {
   return (
     <div className="container">
       <h1>Register</h1>
-      <form onSubmit={onSubmit} className="card">
-        <label>
+      <form onSubmit={onSubmit} className="card" style={{ display: "grid", gap: 12 }}>
+        {/* Round 2 #7: username and password each get their own row. */}
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Username
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
         </label>
-        <label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           Password
           <input
             type="password"

@@ -9,7 +9,7 @@ from app.db import get_db
 from app.deps import get_current_user, get_owned_recording
 from app.jobs import JobDispatcher, get_job_dispatcher
 from app.models import Analysis, Recording, User
-from app.schemas import AnalysisOut, RecordingOut
+from app.schemas import AnalysisOut, RecordingOut, RecordingUpdate
 from app.storage import delete_audio, save_audio
 
 router = APIRouter(prefix="/api/recordings", tags=["recordings"])
@@ -71,6 +71,20 @@ def get_recording(
     recording_id: str, db: DbSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> Recording:
     return get_owned_recording(db, user, recording_id)
+
+
+@router.patch("/{recording_id}", response_model=RecordingOut)
+def rename_recording(
+    recording_id: str,
+    payload: RecordingUpdate,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Recording:
+    rec = get_owned_recording(db, user, recording_id)
+    rec.original_filename = payload.original_filename
+    db.commit()
+    db.refresh(rec)
+    return rec
 
 
 @router.get("/{recording_id}/analysis", response_model=AnalysisOut)

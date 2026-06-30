@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { SegmentOut } from "../api/types";
 import type { SegmentPatch } from "./useChart";
 import { ROOTS, QUALITIES, QUALITY_LABELS } from "../api/music";
-import { roundMs } from "./timeMath";
+import { roundCs } from "./timeMath";
 
 interface Props {
   segment: SegmentOut;
@@ -32,8 +32,8 @@ export default function SegmentEditor({ segment, onSave, onDelete, busy }: Props
       await onSave({
         chord_root: root,
         chord_quality: quality,
-        start_time: roundMs(start),
-        end_time: roundMs(end),
+        start_time: roundCs(start),
+        end_time: roundCs(end),
       });
     } catch (err) {
       const detail = (err as { detail?: string }).detail;
@@ -62,11 +62,21 @@ export default function SegmentEditor({ segment, onSave, onDelete, busy }: Props
       </label>
       <label>
         Start (s)
-        <input type="number" step="0.001" value={start} onChange={(e) => setStart(Number(e.target.value))} />
+        <input
+          type="number"
+          step="0.01"
+          value={roundCs(start)}
+          onChange={(e) => setStart(Number(e.target.value))}
+        />
       </label>
       <label>
         End (s)
-        <input type="number" step="0.001" value={end} onChange={(e) => setEnd(Number(e.target.value))} />
+        <input
+          type="number"
+          step="0.01"
+          value={roundCs(end)}
+          onChange={(e) => setEnd(Number(e.target.value))}
+        />
       </label>
       {error && <p className="error">{error}</p>}
       <div style={{ display: "flex", gap: 8 }}>

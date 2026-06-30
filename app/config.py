@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False  # set True behind HTTPS in production
     analysis_sample_rate: int = 22050  # Hz; resample target for analysis
     analysis_max_workers: int = 1  # background analysis threads
+    # Round 2 #1: chord segments shorter than this are treated as false positives and
+    # absorbed into a neighbour. Easily tuned via TABIT_ANALYSIS_MIN_SEGMENT_SECONDS.
+    analysis_min_segment_seconds: float = 0.75
 
 
 @lru_cache

@@ -114,5 +114,9 @@ class JobDispatcher:
 def get_job_dispatcher() -> JobDispatcher:
     settings = get_settings()
     return JobDispatcher(
-        settings.analysis_max_workers, LibrosaAnalyzer(settings.analysis_sample_rate)
+        settings.analysis_max_workers,
+        LibrosaAnalyzer(
+            settings.analysis_sample_rate,
+            min_segment_seconds=settings.analysis_min_segment_seconds,
+        ),
     )

@@ -51,12 +51,21 @@ test("renders resize handles on each edge when resizable (#2)", () => {
   expect(screen.getByLabelText("Resize end of C")).toBeInTheDocument();
 });
 
-test("dropping one chord onto another swaps them (#9)", () => {
-  const onSwap = vi.fn();
-  const { container } = renderTimeline({ onSwap });
-  const cellС = container.querySelector('[data-segment-id="s1"]')!;
-  const cellG = container.querySelector('[data-segment-id="s2"]')!;
-  fireEvent.dragStart(cellС);
+test("dragging a chord past another reorders by insert (round 2 #4)", () => {
+  const onReorder = vi.fn();
+  const { container } = renderTimeline({ onReorder });
+  const cellC = container.querySelector('[data-segment-id="s1"]')!;
+  const cellG = container.querySelector('[data-segment-id="s2"]') as HTMLElement;
+  fireEvent.dragStart(cellC);
+  // A real MouseEvent carries clientX (fireEvent.dragOver drops it); past the midpoint → after s2.
+  fireEvent(cellG, new MouseEvent("dragover", { bubbles: true, clientX: 80 }));
   fireEvent.drop(cellG);
-  expect(onSwap).toHaveBeenCalledWith("s1", "s2");
+  expect(onReorder).toHaveBeenCalledWith(["s2", "s1"]);
+});
+
+test("shows a progress bar across the chord under the playhead (round 2 #2)", () => {
+  const { container } = renderTimeline({ currentTime: 3 }); // halfway through s2 [2,4)
+  const bar = container.querySelector('[data-segment-id="s2"] .chord-progress') as HTMLElement;
+  expect(bar).toBeInTheDocument();
+  expect(bar.style.width).toBe("50%");
 });

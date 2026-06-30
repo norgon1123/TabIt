@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { boundaryUpdates, chordsPerLine } from "./chartLayout";
-import { roundMs, formatTimeMs, clampBoundary } from "./timeMath";
+import { boundaryUpdates, chordsPerLine, groupIntoLines, reorderIds } from "./chartLayout";
+import { roundCs, formatTimeCs, clampBoundary } from "./timeMath";
 
 describe("chordsPerLine", () => {
   test("scales with BPM between 4 and 16", () => {
@@ -19,14 +19,42 @@ describe("chordsPerLine", () => {
   });
 });
 
-describe("millisecond rule (#7)", () => {
-  test("roundMs quantizes to 3 decimals", () => {
-    expect(roundMs(1.23456)).toBe(1.235);
-    expect(roundMs(2)).toBe(2);
+describe("groupIntoLines (round 2 #3)", () => {
+  test("chunks into lines of perLine, last line may be shorter", () => {
+    expect(groupIntoLines([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
   });
-  test("formatTimeMs shows m:ss.mmm", () => {
-    expect(formatTimeMs(2.5)).toBe("0:02.500");
-    expect(formatTimeMs(65.25)).toBe("1:05.250");
+  test("never produces a zero-length chunk", () => {
+    expect(groupIntoLines([1, 2], 0)).toEqual([[1], [2]]);
+  });
+  test("empty input yields no lines", () => {
+    expect(groupIntoLines([], 4)).toEqual([]);
+  });
+});
+
+describe("reorderIds (round 2 #4)", () => {
+  const ids = ["a", "b", "c", "d"];
+  test("moves an item later, pushing the rest left", () => {
+    expect(reorderIds(ids, "a", 3)).toEqual(["b", "c", "a", "d"]);
+  });
+  test("moves an item earlier, pushing the rest right", () => {
+    expect(reorderIds(ids, "d", 1)).toEqual(["a", "d", "b", "c"]);
+  });
+  test("inserting at its own gap is a no-op order", () => {
+    expect(reorderIds(ids, "b", 1)).toEqual(["a", "b", "c", "d"]);
+  });
+  test("clamps an out-of-range gap to the end", () => {
+    expect(reorderIds(ids, "a", 99)).toEqual(["b", "c", "d", "a"]);
+  });
+});
+
+describe("centisecond rule (round 2 #5)", () => {
+  test("roundCs quantizes to 2 decimals", () => {
+    expect(roundCs(1.23456)).toBe(1.23);
+    expect(roundCs(2)).toBe(2);
+  });
+  test("formatTimeCs shows m:ss.cc", () => {
+    expect(formatTimeCs(2.5)).toBe("0:02.50");
+    expect(formatTimeCs(65.25)).toBe("1:05.25");
   });
 });
 
@@ -34,7 +62,7 @@ describe("clampBoundary (#2)", () => {
   test("keeps the boundary inside its neighbours", () => {
     expect(clampBoundary(5, 0, 4)).toBe(3.95); // pinned below upper - min
     expect(clampBoundary(-1, 0, 4)).toBe(0.05); // pinned above lower + min
-    expect(clampBoundary(2.4567, 0, 4)).toBe(2.457); // rounded to ms
+    expect(clampBoundary(2.4567, 0, 4)).toBe(2.46); // rounded to centisecond
   });
 });
 

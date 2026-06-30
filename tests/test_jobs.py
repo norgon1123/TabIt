@@ -116,3 +116,21 @@ def test_seeding_overwrites_browser_duration_and_clamps_segments(db_session):
     chart = db_session.query(ChordChart).filter_by(recording_id=rec.id).one()
     ends = sorted(s.end_time for s in chart.segments)
     assert max(ends) <= 7.5  # never exceeds the audio length
+
+
+def test_dispatcher_uses_configured_min_segment_seconds(monkeypatch):
+    # Round 2 #1: the min-segment threshold is an easily-adjustable setting (default 0.75).
+    from app.config import get_settings
+    from app.jobs import get_job_dispatcher
+
+    assert get_settings().analysis_min_segment_seconds == 0.75
+
+    monkeypatch.setenv("TABIT_ANALYSIS_MIN_SEGMENT_SECONDS", "1.5")
+    get_settings.cache_clear()
+    get_job_dispatcher.cache_clear()
+    dispatcher = get_job_dispatcher()
+    try:
+        assert dispatcher._analyzer._min_segment_seconds == 1.5
+    finally:
+        dispatcher.shutdown()
+        get_job_dispatcher.cache_clear()

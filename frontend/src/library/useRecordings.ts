@@ -41,12 +41,19 @@ export function useRecordings() {
     onSuccess: invalidate,
   });
 
+  const renameMut = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api.patchJson<RecordingOut>(`/api/recordings/${id}`, { original_filename: name }),
+    onSuccess: invalidate,
+  });
+
   return {
     recordings: listQuery.data ?? [],
     isLoading: listQuery.isLoading,
     upload: (file: File) => uploadMut.mutateAsync(file),
     remove: (id: string) => removeMut.mutateAsync(id),
     reanalyze: (id: string) => reanalyzeMut.mutateAsync(id),
+    rename: (id: string, name: string) => renameMut.mutateAsync({ id, name }),
     isUploading: uploadMut.isPending,
   };
 }

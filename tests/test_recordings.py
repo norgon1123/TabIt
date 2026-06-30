@@ -30,6 +30,49 @@ def test_upload_requires_auth(client):
     assert resp.status_code == 401
 
 
+def test_recording_payload_includes_created_at(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    body = _upload(client).json()
+    assert "created_at" in body and body["created_at"]
+
+
+def test_rename_recording(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    rec_id = _upload(client).json()["id"]
+    resp = client.patch(f"/api/recordings/{rec_id}", json={"original_filename": "Verse idea.m4a"})
+    assert resp.status_code == 200
+    assert resp.json()["original_filename"] == "Verse idea.m4a"
+    assert client.get(f"/api/recordings/{rec_id}").json()["original_filename"] == "Verse idea.m4a"
+
+
+def test_rename_allows_duplicate_names(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    a = _upload(client, "a.m4a").json()["id"]
+    b = _upload(client, "b.m4a").json()["id"]
+    client.patch(f"/api/recordings/{a}", json={"original_filename": "same.m4a"})
+    resp = client.patch(f"/api/recordings/{b}", json={"original_filename": "same.m4a"})
+    assert resp.status_code == 200
+
+
+def test_rename_rejects_empty_name(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    rec_id = _upload(client).json()["id"]
+    assert client.patch(f"/api/recordings/{rec_id}", json={"original_filename": ""}).status_code == 422
+
+
+def test_rename_other_users_recording_is_404(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client, "alice")
+    rec_id = _upload(client, "a.m4a").json()["id"]
+    client.post("/api/auth/logout")
+    _register(client, "bob")
+    assert client.patch(f"/api/recordings/{rec_id}", json={"original_filename": "x"}).status_code == 404
+
+
 def test_list_only_returns_own_recordings(client, tmp_path, monkeypatch):
     monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
     _register(client, "alice")

@@ -53,7 +53,7 @@ class LibrosaAnalyzer:
         recognizer: ChordRecognizer | None = None,
         hop_length: int = 2048,
         smooth_seconds: float = 0.4,
-        min_segment_seconds: float = 0.4,
+        min_segment_seconds: float = 0.75,  # round 2 #1: drop sub-0.75s false positives
         silence_top_db: float = 30.0,
     ) -> None:
         self._sr = sample_rate

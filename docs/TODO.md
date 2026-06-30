@@ -9,10 +9,10 @@
 9. Users should be able to drag and drop segments around. Start/end times must account for this when re-arranged.
 
 Round 2
-1. Ignore chord segments that are less than 0.75 seconds, they are likely false positives. This should be a parameter than can be easily adjusted
-2. Show progress through the chord. Show a 'loading-bar' on the current chord correpsonding to how much time there is left on the chord
-3. Make the chord segment size correspond to the time the chord has
-4. Current movement of chord segments swap. Instead, insert moved chord segment to new position and push everything to the right forward. User should see preview of where the new chord will go. This should be shown as a pulsing vertical blue line placed between the existing segments that the moved segment will go between.
-5. Time should only be shown to the centisecond as a UX improvement.
-6. Allow file names to be updated. The do not need to be unique. Show the uploaded at timestamp (MM/DD/YY HH:mm:ss)
-7. Make login page username/password on their own horizontal line. Currently the share the same line
+- [x] 1. Ignore chord segments that are less than 0.75 seconds, they are likely false positives. This should be a parameter than can be easily adjusted
+- [x] 2. Show progress through the chord. Show a 'loading-bar' on the current chord correpsonding to how much time there is left on the chord
+- [x] 3. Make the chord segment size correspond to the time the chord has
+- [x] 4. Current movement of chord segments swap. Instead, insert moved chord segment to new position and push everything to the right forward. User should see preview of where the new chord will go. This should be shown as a pulsing vertical blue line placed between the existing segments that the moved segment will go beteen.
+- [x] 5. Time should only be shown to the centisecond as a UX improvement.
+- [x] 6. Allow file names to be updated. The do not need to be unique. Show the uploaded at timestamp (MM/DD/YY HH:mm:ss)
+- [x] 7. Make login page username/password on their own horizontal line. Currently the share the same line
