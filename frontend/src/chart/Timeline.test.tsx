@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
 import { beatSlashMarks } from "./beatMath";
@@ -53,23 +53,12 @@ test("renders resize handles on each edge when resizable (#2)", () => {
   expect(screen.getByLabelText("Resize end of C")).toBeInTheDocument();
 });
 
-test("dragging a chord past another reorders by insert (round 2 #4)", () => {
-  const onReorder = vi.fn();
-  const { container } = renderTimeline({ onReorder });
-  const cellC = container.querySelector('[data-segment-id="s1"]')!;
-  const cellG = container.querySelector('[data-segment-id="s2"]') as HTMLElement;
-  fireEvent.dragStart(cellC);
-  // A real MouseEvent carries clientX (fireEvent.dragOver drops it); past the midpoint → after s2.
-  fireEvent(cellG, new MouseEvent("dragover", { bubbles: true, clientX: 80 }));
-  fireEvent.drop(cellG);
-  expect(onReorder).toHaveBeenCalledWith(["s2", "s1"]);
-});
-
-test("shows a progress bar across the chord under the playhead (round 2 #2)", () => {
+test("fills the active chord's progress bar to the current fraction when paused", () => {
   const { container } = renderTimeline({ currentTime: 3 }); // halfway through s2 [2,4)
   const bar = container.querySelector('[data-segment-id="s2"] .chord-progress') as HTMLElement;
   expect(bar).toBeInTheDocument();
-  expect(bar.style.width).toBe("50%");
+  // Paused: the fill snaps (no compositor transition) to the true fraction via scaleX.
+  expect(bar.style.transform).toBe("scaleX(0.5)");
 });
 
 it("renders slash marks for a 4-beat chord", () => {

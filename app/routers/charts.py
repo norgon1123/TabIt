@@ -13,7 +13,6 @@ from app.schemas import (
     ChartSettingsUpdate,
     SegmentCreate,
     SegmentOut,
-    SegmentReorder,
     SegmentUpdate,
     TransposeRequest,
 )
@@ -183,34 +182,6 @@ def delete_segment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
     db.delete(seg)
     db.commit()
-
-
-@router.post("/charts/{chart_id}/reorder", response_model=ChartOut)
-def reorder_segments(
-    chart_id: str,
-    payload: SegmentReorder,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> ChartOut:
-    chart = _owned_chart(db, user, chart_id)
-    by_id = {s.id: s for s in chart.segments}
-    if set(payload.segment_ids) != set(by_id) or len(payload.segment_ids) != len(by_id):
-        raise HTTPException(
-            status_code=422, detail="segment_ids must be a permutation of the chart's segments"
-        )
-    cursor = min((s.start_beat for s in chart.segments), default=0.0)
-    grid, duration = _chart_grid(chart)
-    for seg_id in payload.segment_ids:
-        seg = by_id[seg_id]
-        length = seg.end_beat - seg.start_beat
-        seg.start_beat = cursor
-        seg.end_beat = cursor + length
-        cursor = seg.end_beat
-    if duration and cursor > total_beats(grid, duration) + 1e-6:
-        raise HTTPException(status_code=422, detail="reordered segments exceed the beat grid")
-    db.commit()
-    db.refresh(chart)
-    return _chart_out(chart)
 
 
 @router.patch("/charts/{chart_id}/settings", response_model=ChartOut)

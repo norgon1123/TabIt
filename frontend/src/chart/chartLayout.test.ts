@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { boundaryUpdates, groupIntoLines, reorderIds } from "./chartLayout";
+import { boundaryUpdates, groupIntoLines } from "./chartLayout";
 import { roundCs, formatTimeCs, clampBoundary } from "./timeMath";
 
 const seg = (b: number) => ({ start_beat: 0, end_beat: b });
@@ -26,22 +26,6 @@ describe("groupIntoLines (beat-aware)", () => {
     expect(groupIntoLines([a, b], 0).map((l) => l.length)).toEqual([1, 1]);
     // sanity: with cap 2 they share a line, proving the clamp (not the overflow check) drove the split above
     expect(groupIntoLines([a, b], 2).map((l) => l.length)).toEqual([2]);
-  });
-});
-
-describe("reorderIds (round 2 #4)", () => {
-  const ids = ["a", "b", "c", "d"];
-  test("moves an item later, pushing the rest left", () => {
-    expect(reorderIds(ids, "a", 3)).toEqual(["b", "c", "a", "d"]);
-  });
-  test("moves an item earlier, pushing the rest right", () => {
-    expect(reorderIds(ids, "d", 1)).toEqual(["a", "d", "b", "c"]);
-  });
-  test("inserting at its own gap is a no-op order", () => {
-    expect(reorderIds(ids, "b", 1)).toEqual(["a", "b", "c", "d"]);
-  });
-  test("clamps an out-of-range gap to the end", () => {
-    expect(reorderIds(ids, "a", 99)).toEqual(["b", "c", "d", "a"]);
   });
 });
 

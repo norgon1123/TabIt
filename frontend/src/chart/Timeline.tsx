@@ -1,10 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SegmentOut } from "../api/types";
 import {
   boundaryUpdates,
   groupIntoLines,
   MEASURES_PER_LINE,
-  reorderIds,
   type SegmentUpdate,
 } from "./chartLayout";
 import { beatSlashMarks, clampBeatBoundary } from "./beatMath";
@@ -17,12 +16,12 @@ interface Props {
   measureOffset: number;
   duration: number;
   currentTime: number;
+  playing?: boolean;
+  rate?: number;
   selectedId: string | null;
   onSelect: (segmentId: string) => void;
   onSeek?: (time: number) => void;
   onResizeCommit?: (updates: SegmentUpdate[]) => void;
-  // Round 2 #4: receives the full new left-to-right order after an insert-reorder.
-  onReorder?: (orderedIds: string[]) => void;
 }
 
 // Horizontal pointer movement -> beats for the resize handles.
@@ -38,27 +37,64 @@ export default function Timeline({
   beatsPerMeasure,
   measureOffset,
   currentTime,
+  playing = false,
+  rate = 1,
   selectedId,
   onSelect,
   onSeek,
   onResizeCommit,
-  onReorder,
 }: Props) {
-  const ordered = [...segments].sort((a, b) => a.start_beat - b.start_beat);
-  const orderedIds = ordered.map((s) => s.id);
-  const indexById = new Map(orderedIds.map((id, i) => [id, i] as const));
+  // Layout is by beats; playback positioning uses the derived seconds.
+  const ordered = useMemo(
+    () => [...segments].sort((a, b) => a.start_beat - b.start_beat),
+    [segments],
+  );
+  const indexById = useMemo(
+    () => new Map(ordered.map((s, i) => [s.id, i] as const)),
+    [ordered],
+  );
   const beatsPerLine = Math.max(1, beatsPerMeasure) * MEASURES_PER_LINE;
   const lines = groupIntoLines(ordered, beatsPerLine);
-  const dragId = useRef<string | null>(null);
-  // State drives the visual indicator; the ref is read synchronously on drop (state lags).
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const dropIndexRef = useRef<number | null>(null);
   const suppressClick = useRef(false);
 
-  function setDrop(idx: number | null) {
-    dropIndexRef.current = idx;
-    setDropIndex(idx);
-  }
+  // The chord under the playhead, derived from currentTime (seconds). A precise
+  // timer advances it exactly at the chord boundary so the highlight switches on
+  // time instead of waiting for the next (~4Hz) timeupdate.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    const active =
+      ordered.find((s) => currentTime >= s.start_time && currentTime < s.end_time) ?? null;
+    setActiveId(active?.id ?? null);
+    if (!playing || !active) return;
+    const remainingMs = ((active.end_time - currentTime) / (rate || 1)) * 1000;
+    const timer = window.setTimeout(() => {
+      const next = ordered.find((s) => s.start_time >= active.end_time) ?? null;
+      setActiveId(next?.id ?? null);
+    }, Math.max(0, remainingMs));
+    return () => window.clearTimeout(timer);
+  }, [ordered, currentTime, playing, rate]);
+
+  // Drive the active chord's fill with a compositor (GPU) CSS transition: arm it
+  // toward 100% over the chord's remaining real time while playing, or snap it to
+  // the true fraction while paused. Re-runs each timeupdate to re-sync any drift.
+  const fillRef = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    const fill = fillRef.current;
+    if (!fill) return;
+    const seg = ordered.find((s) => s.id === activeId);
+    if (!seg) return;
+    const span = Math.max(0.01, seg.end_time - seg.start_time);
+    const frac = Math.min(1, Math.max(0, (currentTime - seg.start_time) / span));
+    fill.style.transition = "none";
+    fill.style.transform = `scaleX(${frac})`;
+    if (!playing) return;
+    const remaining = Math.max(0, (seg.end_time - currentTime) / (rate || 1));
+    const raf = requestAnimationFrame(() => {
+      fill.style.transition = `transform ${remaining}s linear`;
+      fill.style.transform = "scaleX(1)";
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeId, ordered, currentTime, playing, rate]);
 
   function startResize(index: number, edge: "left" | "right", e: React.PointerEvent) {
     e.stopPropagation();
@@ -86,17 +122,6 @@ export default function Timeline({
     window.addEventListener("pointerup", up);
   }
 
-  function commitReorder() {
-    const from = dragId.current;
-    const at = dropIndexRef.current;
-    if (onReorder && from && at != null) {
-      const next = reorderIds(orderedIds, from, at);
-      if (next.join(" ") !== orderedIds.join(" ")) onReorder(next);
-    }
-    dragId.current = null;
-    setDrop(null);
-  }
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {lines.map((line, li) => (
@@ -104,45 +129,21 @@ export default function Timeline({
           {line.map((s) => {
             const i = indexById.get(s.id)!;
             const selected = s.id === selectedId;
+            const isActive = s.id === activeId;
             const beats = Math.max(0.5, s.end_beat - s.start_beat);
-            const playing = currentTime >= s.start_time && currentTime < s.end_time;
-            const span = Math.max(0.01, s.end_time - s.start_time);
-            // #2: how far the playhead has travelled through this chord, 0..1.
-            const progress = playing
-              ? Math.min(1, Math.max(0, (currentTime - s.start_time) / span))
-              : 0;
+            // A bar line is drawn on the left edge of cells that start a measure.
             const onMeasure =
               Math.abs(((s.start_beat - measureOffset) % beatsPerMeasure)) < 1e-6;
-            const dragging = dragId.current != null;
             return (
               <div
                 key={s.id}
                 role="button"
                 tabIndex={0}
                 aria-pressed={selected}
-                className={["chord-cell", playing && "playing", selected && "selected"]
+                className={["chord-cell", isActive && "playing", selected && "selected"]
                   .filter(Boolean)
                   .join(" ")}
-                draggable={!!onReorder}
                 data-segment-id={s.id}
-                onDragStart={() => {
-                  dragId.current = s.id;
-                }}
-                onDragOver={(e) => {
-                  if (!onReorder || !dragId.current) return;
-                  e.preventDefault();
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const after = e.clientX - rect.left > rect.width / 2;
-                  setDrop(i + (after ? 1 : 0));
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  commitReorder();
-                }}
-                onDragEnd={() => {
-                  dragId.current = null;
-                  setDrop(null);
-                }}
                 onClick={() => {
                   if (suppressClick.current) {
                     suppressClick.current = false;
@@ -153,6 +154,7 @@ export default function Timeline({
                 }}
                 style={{
                   position: "relative",
+                  // Width tracks the chord's beat count within the line.
                   flex: `${beats} 1 0`,
                   minWidth: 56,
                   height: 64,
@@ -163,27 +165,20 @@ export default function Timeline({
                   cursor: "pointer",
                   overflow: "hidden",
                   border: selected ? "2px solid var(--accent)" : "1px solid #2c313a",
-                  borderLeft: onMeasure ? "3px solid var(--accent)" : selected ? "2px solid var(--accent)" : "1px solid #2c313a",
-                  background: playing ? "#26303f" : "var(--panel)",
+                  borderLeft: onMeasure
+                    ? "3px solid var(--accent)"
+                    : selected
+                      ? "2px solid var(--accent)"
+                      : "1px solid #2c313a",
+                  background: isActive ? "#26303f" : "var(--panel)",
                 }}
               >
-                {/* #4: pulsing blue line previewing where the dragged chord will land. */}
-                {dragging && dropIndex === i && (
-                  <span aria-hidden className="drop-indicator" style={{ left: -1.5 }} />
-                )}
-                {dragging && dropIndex === i + 1 && (
-                  <span aria-hidden className="drop-indicator" style={{ right: -1.5 }} />
-                )}
                 {onResizeCommit && (
                   <span
                     aria-label={`Resize start of ${chordLabel(s)}`}
                     draggable={false}
                     onPointerDown={(e) => startResize(i, "left", e)}
                     onClick={(e) => e.stopPropagation()}
-                    onDragStart={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
                     style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
                   />
                 )}
@@ -196,15 +191,12 @@ export default function Timeline({
                     draggable={false}
                     onPointerDown={(e) => startResize(i, "right", e)}
                     onClick={(e) => e.stopPropagation()}
-                    onDragStart={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
                     style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
                   />
                 )}
-                {playing && (
+                {isActive && (
                   <span
+                    ref={fillRef}
                     aria-hidden
                     className="chord-progress"
                     style={{
@@ -212,9 +204,10 @@ export default function Timeline({
                       left: 0,
                       bottom: 0,
                       height: 4,
-                      width: `${progress * 100}%`,
+                      width: "100%",
+                      transformOrigin: "left",
+                      transform: "scaleX(0)",
                       background: "var(--accent)",
-                      transition: "width 0.1s linear",
                     }}
                   />
                 )}

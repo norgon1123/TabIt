@@ -50,11 +50,6 @@ export function useChart(recordingId: string) {
       api.postJson<ChartOut>(`/api/charts/${chartId}/transpose`, { semitones }),
     onSuccess: invalidate,
   });
-  const reorderMut = useMutation({
-    mutationFn: (segmentIds: string[]) =>
-      api.postJson<ChartOut>(`/api/charts/${chartId}/reorder`, { segment_ids: segmentIds }),
-    onSuccess: invalidate,
-  });
   const settingsMut = useMutation({
     mutationFn: (patch: ChartSettingsPatch) =>
       api.patchJson<ChartOut>(`/api/charts/${chartId}/settings`, patch),
@@ -69,14 +64,12 @@ export function useChart(recordingId: string) {
       updateMut.isPending ||
       deleteMut.isPending ||
       transposeMut.isPending ||
-      reorderMut.isPending ||
       settingsMut.isPending,
     addSegment: (input: SegmentInput) => addMut.mutateAsync(input),
     updateSegment: (segmentId: string, patch: SegmentPatch) =>
       updateMut.mutateAsync({ segmentId, patch }),
     deleteSegment: (segmentId: string) => deleteMut.mutateAsync(segmentId),
     transpose: (semitones: number) => transposeMut.mutateAsync(semitones),
-    reorder: (segmentIds: string[]) => reorderMut.mutateAsync(segmentIds),
     updateSettings: (patch: ChartSettingsPatch) => settingsMut.mutateAsync(patch),
   };
 }
