@@ -14,20 +14,6 @@ export function groupIntoLines<T>(items: T[], perLine: number): T[][] {
   return lines;
 }
 
-// Round 2 #4: insert (don't swap) — move `fromId` so it lands at `insertIndex` in the current
-// left-to-right order, pushing the rest right. `insertIndex` is a gap index in [0, ids.length].
-// NOTE: still exported because Timeline.tsx uses it for its drag handler; will be removed in Task 4.
-export function reorderIds(ids: string[], fromId: string, insertIndex: number): string[] {
-  const from = ids.indexOf(fromId);
-  if (from < 0) return ids.slice();
-  const without = ids.filter((id) => id !== fromId);
-  // Removing `fromId` shifts every later gap one slot to the left.
-  const adjusted = insertIndex > from ? insertIndex - 1 : insertIndex;
-  const clamped = Math.max(0, Math.min(without.length, adjusted));
-  without.splice(clamped, 0, fromId);
-  return without;
-}
-
 export interface SegmentUpdate {
   id: string;
   patch: { start_time?: number; end_time?: number };
