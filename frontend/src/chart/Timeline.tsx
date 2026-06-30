@@ -43,6 +43,7 @@ export default function Timeline({
 
   function startResize(index: number, edge: "left" | "right", e: React.PointerEvent) {
     e.stopPropagation();
+    suppressClick.current = false;
     if (!onResizeCommit) return;
     const seg = ordered[index];
     const left = edge === "left" ? ordered[index - 1] : seg;
@@ -120,8 +121,13 @@ export default function Timeline({
             {onResizeCommit && (
               <span
                 aria-label={`Resize start of ${chordLabel(s)}`}
+                draggable={false}
                 onPointerDown={(e) => startResize(i, "left", e)}
                 onClick={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
               />
             )}
@@ -130,8 +136,13 @@ export default function Timeline({
             {onResizeCommit && (
               <span
                 aria-label={`Resize end of ${chordLabel(s)}`}
+                draggable={false}
                 onPointerDown={(e) => startResize(i, "right", e)}
                 onClick={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
               />
             )}
