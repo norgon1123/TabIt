@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -78,6 +78,8 @@ class Analysis(Base):
     error: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
+    beat_times: Mapped[list[float]] = mapped_column(JSON, default=list, nullable=False)
+
     recording: Mapped[Recording] = relationship(back_populates="analysis")
 
 
@@ -90,12 +92,15 @@ class ChordChart(Base):
     )
     key_tonic: Mapped[str] = mapped_column(String, nullable=False)
     key_mode: Mapped[str] = mapped_column(String, nullable=False)
+    beats_per_measure: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    measure_offset: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    beat_times: Mapped[list[float]] = mapped_column(JSON, default=list, nullable=False)
 
     recording: Mapped[Recording] = relationship(back_populates="chart")
     segments: Mapped[list["ChordSegment"]] = relationship(
         back_populates="chart",
         cascade="all, delete-orphan",
-        order_by="ChordSegment.start_time",
+        order_by="ChordSegment.start_beat",
     )
 
 
@@ -104,8 +109,8 @@ class ChordSegment(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     chart_id: Mapped[str] = mapped_column(ForeignKey("chord_charts.id"), index=True, nullable=False)
-    start_time: Mapped[float] = mapped_column(Float, nullable=False)
-    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    start_beat: Mapped[float] = mapped_column(Float, nullable=False)
+    end_beat: Mapped[float] = mapped_column(Float, nullable=False)
     chord_root: Mapped[str] = mapped_column(String, nullable=False)
     chord_quality: Mapped[str] = mapped_column(String, nullable=False)
 
