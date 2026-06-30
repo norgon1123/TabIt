@@ -38,12 +38,15 @@ API docs at http://localhost:8000/docs
 
 Uploading a recording enqueues an in-process background job that:
 
-1. Decodes the audio to mono
-2. Detects BPM via beat tracking
-3. Estimates key (tonic pitch class and mode)
-4. Recognizes chord segments using template matching (`template-v1`)
-5. Creates an immutable `Analysis` record with results
-6. Seeds a new editable `ChordChart` with the detected chords
+1. Decodes the audio to mono and records its true duration (used in place of the
+   browser-reported length, so charts never run past the end of the audio)
+2. Trims leading/trailing silence so the chart spans only the audible region
+3. Detects BPM via beat tracking
+4. Estimates key (tonic pitch class and mode)
+5. Recognizes chord segments using template matching over high-resolution chroma
+   with frame-accurate change boundaries (`template-v2`)
+6. Creates an immutable `Analysis` record with results
+7. Seeds a new editable `ChordChart` with the detected chords
 
 Poll `GET /api/recordings/{id}/analysis` to monitor the `Analysis` status: `pending` → `running` → `done` or `failed`.
 
