@@ -13,10 +13,19 @@ describe("groupIntoLines (beat-aware)", () => {
   test("empty input yields no lines", () => {
     expect(groupIntoLines([], 4)).toEqual([]);
   });
-  test("caps minimum beatsPerLine at 1", () => {
-    const items = [seg(1), seg(1)];
-    const lines = groupIntoLines(items, 0);
-    expect(lines.map((l) => l.length)).toEqual([1, 1]);
+  test("a chord longer than beatsPerLine gets its own line", () => {
+    const longChord = { start_beat: 0, end_beat: 16 };
+    const short = { start_beat: 0, end_beat: 4 };
+    const lines = groupIntoLines([short, longChord, short], 8);
+    expect(lines.map((l) => l.length)).toEqual([1, 1, 1]);
+  });
+  test("clamps beatsPerLine to a minimum of 1 beat", () => {
+    const a = { start_beat: 0, end_beat: 1 };
+    const b = { start_beat: 0, end_beat: 1 };
+    // cap 0 is clamped up to 1 -> each 1-beat chord on its own line
+    expect(groupIntoLines([a, b], 0).map((l) => l.length)).toEqual([1, 1]);
+    // sanity: with cap 2 they share a line, proving the clamp (not the overflow check) drove the split above
+    expect(groupIntoLines([a, b], 2).map((l) => l.length)).toEqual([2]);
   });
 });
 
