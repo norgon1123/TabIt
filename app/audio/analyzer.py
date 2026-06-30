@@ -33,6 +33,7 @@ class AnalysisResult:
     duration: float
     segments: list[DetectedSegment] = field(default_factory=list)
     engine_version: str = ENGINE_VERSION
+    beat_times: list[float] = field(default_factory=list)
 
 
 class Analyzer(Protocol):
@@ -86,8 +87,9 @@ class LibrosaAnalyzer:
         y_trim, lead = _trim_silence(y, self._sr, self._silence_top_db)
         trimmed_dur = float(len(y_trim) / self._sr)
 
-        tempo, _ = librosa.beat.beat_track(y=y_trim, sr=self._sr)
+        tempo, beat_frames = librosa.beat.beat_track(y=y_trim, sr=self._sr, units="time")
         bpm = float(np.atleast_1d(tempo)[0])
+        beat_times = [float(t) + lead for t in np.atleast_1d(beat_frames)]
 
         chroma = _chroma_features(y_trim, self._sr, self._hop, self._use_hpss)
         tonic_pc, mode = estimate_key(chroma.mean(axis=1))
@@ -96,7 +98,7 @@ class LibrosaAnalyzer:
         # path so a few mistaken frames cannot flip the label (replaces majority voting).
         state_labels, scores = self._recognizer.score(chroma)
         if scores.shape[1] == 0:
-            return AnalysisResult(bpm, tonic_pc, mode, duration, [])
+            return AnalysisResult(bpm, tonic_pc, mode, duration, [], beat_times=beat_times)
         labels = viterbi_decode(scores, state_labels, self._change_penalty)
 
         frame_times = librosa.frames_to_time(
@@ -108,7 +110,7 @@ class LibrosaAnalyzer:
         segments = merge_segments(labels, boundaries)
         segments = drop_short_segments(segments, self._min_segment_seconds)
         segments = shift_segments(segments, lead)
-        return AnalysisResult(bpm, tonic_pc, mode, duration, segments)
+        return AnalysisResult(bpm, tonic_pc, mode, duration, segments, beat_times=beat_times)
 
 
 class ChordinoAnalyzer:
@@ -142,8 +144,9 @@ class ChordinoAnalyzer:
             raise RuntimeError("decoded audio is empty")
         duration = float(len(y) / self._sr)
 
-        tempo, _ = librosa.beat.beat_track(y=y, sr=self._sr)
+        tempo, beat_frames = librosa.beat.beat_track(y=y, sr=self._sr, units="time")
         bpm = float(np.atleast_1d(tempo)[0])
+        beat_times = [float(t) for t in np.atleast_1d(beat_frames)]
 
         chroma = librosa.feature.chroma_cqt(y=y, sr=self._sr)
         tonic_pc, mode = estimate_key(chroma.mean(axis=1))
@@ -152,5 +155,6 @@ class ChordinoAnalyzer:
         entries = result.get("list", []) if isinstance(result, dict) else []
         segments = chordino_segments(entries, duration, self._min_segment_seconds)
         return AnalysisResult(
-            bpm, tonic_pc, mode, duration, segments, CHORDINO_ENGINE_VERSION
+            bpm, tonic_pc, mode, duration, segments, CHORDINO_ENGINE_VERSION,
+            beat_times=beat_times,
         )

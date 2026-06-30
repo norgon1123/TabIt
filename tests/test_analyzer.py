@@ -81,3 +81,18 @@ def test_leading_and_trailing_silence_is_trimmed(tmp_path):
     assert result.segments
     assert result.segments[0].start_time >= 0.7  # chart starts at the first sound, not 0
     assert result.segments[-1].end_time <= 3.3  # and ends before the trailing silence
+
+
+def test_analysis_result_has_beat_times_field():
+    from app.audio.analyzer import AnalysisResult
+    r = AnalysisResult(bpm=120.0, key_tonic_pc=0, key_mode="major", duration=2.0)
+    assert r.beat_times == []
+
+
+def test_librosa_analyzer_returns_ascending_beat_times(tmp_path):
+    path = tmp_path / "song.wav"
+    _write_chord_song(path, [(0, 4, 7), (7, 11, 2)])  # C major, then G major
+    from app.audio.analyzer import LibrosaAnalyzer
+    result = LibrosaAnalyzer(sample_rate=22050).analyze(str(path))
+    assert result.beat_times == sorted(result.beat_times)
+    assert all(t >= 0 for t in result.beat_times)
