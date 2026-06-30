@@ -8,9 +8,10 @@ description: Use when creating or updating Tabit's CONTEXT.md (architecture orie
 Generate and maintain two root-level docs for the Tabit repo:
 
 - **CONTEXT.md** — the *mental model*. What Tabit is, how the pieces fit, the data model, the analysis pipeline, and the invariants. Audience: anyone (human or agent) who needs to understand the system before touching it.
-- **AGENTS.md** — the *operating manual*. Commands, conventions, gotchas, and the definition of done. Audience: a coding agent about to make a change.
+- **AGENTS.md** — the *operating manual*. Commands, conventions, gotchas, and the definition of done. Audience: a coding agent about to make a change. This is the canonical instructions file (the tool-agnostic standard).
+- **CLAUDE.md** — a symlink to `AGENTS.md`, so Claude Code auto-loads the operating manual without maintaining a second copy. Never edit `CLAUDE.md` directly; edit `AGENTS.md` and let the symlink follow.
 
-Keep them disjoint: CONTEXT.md explains *what is true*; AGENTS.md tells you *what to do*. Don't duplicate command lists into CONTEXT.md or architecture prose into AGENTS.md.
+Keep CONTEXT.md and AGENTS.md disjoint: CONTEXT.md explains *what is true*; AGENTS.md tells you *what to do*. Don't duplicate command lists into CONTEXT.md or architecture prose into AGENTS.md.
 
 ## Core rule: verify before you write
 
@@ -36,8 +37,13 @@ If a template line contradicts the code, the code wins — update the line. If a
 2. **Gather facts** by reading the files in the table above. Prefer a single broad read pass over the relevant dirs.
 3. **Write CONTEXT.md** from the template, replacing each section with verified content.
 4. **Write AGENTS.md** from the template, same discipline.
-5. **Cross-check** the two don't contradict each other (e.g. same test command, same invariants worded consistently).
-6. **Report** which facts you verified and any drift you corrected, so the user can sanity-check.
+5. **Link CLAUDE.md → AGENTS.md.** Ensure `CLAUDE.md` is a relative symlink to `AGENTS.md` so Claude Code auto-loads the operating manual:
+
+       ln -sf AGENTS.md CLAUDE.md   # run from the repo root
+
+   If a real `CLAUDE.md` file already exists (not a symlink), fold any unique content into `AGENTS.md` first, then replace it with the symlink. Verify with `ls -l CLAUDE.md` (should show `CLAUDE.md -> AGENTS.md`).
+6. **Cross-check** CONTEXT.md and AGENTS.md don't contradict each other (e.g. same test command, same invariants worded consistently).
+7. **Report** which facts you verified and any drift you corrected, so the user can sanity-check.
 
 When updating, do a section-by-section diff in your head: keep prose the user clearly hand-wrote, replace anything the code has outgrown, and add sections for newly-added subsystems.
 
@@ -173,3 +179,4 @@ mental model.
 - **Bloating AGENTS.md with architecture** or **stuffing CONTEXT.md with commands.** Keep the split.
 - **Dropping the sharp edges** (immutable Analysis, re-analysis overwrites edits, ms precision, ffmpeg). These are exactly what saves the next agent.
 - **Overwriting hand-written prose on update.** Reconcile drift; preserve intentional human edits.
+- **Editing CLAUDE.md directly or committing it as a real file.** It's a symlink to AGENTS.md — edit AGENTS.md instead, and make sure the symlink (not a copied file) is what's committed.
