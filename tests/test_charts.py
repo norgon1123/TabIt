@@ -162,3 +162,58 @@ def test_add_segment_on_null_duration_chart(client, db_session, tmp_path, monkey
         json={"start_beat": 0.0, "end_beat": 4.0, "chord_root": "C", "chord_quality": "maj"},
     )
     assert resp.status_code == 201
+
+
+def _three_segments(client, chart_id):
+    ids = []
+    for root, sb, eb in (("C", 0.0, 4.0), ("F", 4.0, 8.0), ("G", 8.0, 12.0)):
+        ids.append(client.post(
+            f"/api/charts/{chart_id}/segments",
+            json={"start_beat": sb, "end_beat": eb, "chord_root": root, "chord_quality": "maj"},
+        ).json()["id"])
+    return ids
+
+
+def test_batch_resize_applies_redistributed_windows(client, tmp_path, monkeypatch):
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)  # duration 10s -> 20 beats
+    a, b, c = _three_segments(client, chart_id)
+    # Grow A to 6 by taking 2 from B — the single-PATCH path would 422 on overlap.
+    resp = client.patch(f"/api/charts/{chart_id}/segments", json={"segments": [
+        {"id": a, "start_beat": 0.0, "end_beat": 6.0},
+        {"id": b, "start_beat": 6.0, "end_beat": 8.0},
+    ]})
+    assert resp.status_code == 200
+    spans = {s["chord_root"]: (s["start_beat"], s["end_beat"]) for s in resp.json()["segments"]}
+    assert spans["C"] == (0.0, 6.0)
+    assert spans["F"] == (6.0, 8.0)
+    assert spans["G"] == (8.0, 12.0)
+
+
+def test_batch_resize_rejects_overlapping_final_state_atomically(client, tmp_path, monkeypatch):
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)
+    a, b, c = _three_segments(client, chart_id)
+    resp = client.patch(f"/api/charts/{chart_id}/segments", json={"segments": [
+        {"id": a, "start_beat": 0.0, "end_beat": 6.0},  # overlaps B, which is unchanged
+    ]})
+    assert resp.status_code == 422
+    # Nothing committed.
+    spans = {s["chord_root"]: s["end_beat"] for s in client.get(f"/api/recordings/{rec_id}/chart").json()["segments"]}
+    assert spans["C"] == 4.0
+
+
+def test_batch_resize_rejects_beyond_grid(client, tmp_path, monkeypatch):
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)  # 20 beats max
+    a, b, c = _three_segments(client, chart_id)
+    resp = client.patch(f"/api/charts/{chart_id}/segments", json={"segments": [
+        {"id": c, "start_beat": 8.0, "end_beat": 999.0},
+    ]})
+    assert resp.status_code == 422
+
+
+def test_batch_resize_unknown_segment_404(client, tmp_path, monkeypatch):
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)
+    _three_segments(client, chart_id)
+    resp = client.patch(f"/api/charts/{chart_id}/segments", json={"segments": [
+        {"id": "nope", "start_beat": 0.0, "end_beat": 2.0},
+    ]})
+    assert resp.status_code == 404

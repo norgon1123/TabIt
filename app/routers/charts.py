@@ -11,6 +11,7 @@ from app.schemas import (
     ChartCreate,
     ChartOut,
     ChartSettingsUpdate,
+    SegmentBatchUpdate,
     SegmentCreate,
     SegmentOut,
     SegmentUpdate,
@@ -165,6 +166,42 @@ def update_segment(
     db.refresh(seg)
     grid, duration = _chart_grid(chart)
     return _segment_out(seg, chart, grid, duration)
+
+
+@router.patch("/charts/{chart_id}/segments", response_model=ChartOut)
+def resize_segments(
+    chart_id: str,
+    payload: SegmentBatchUpdate,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ChartOut:
+    chart = _owned_chart(db, user, chart_id)
+    by_id = {s.id: s for s in chart.segments}
+    for w in payload.segments:
+        if w.id not in by_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
+        if w.start_beat >= w.end_beat:
+            raise HTTPException(status_code=422, detail="start_beat must be before end_beat")
+
+    # Validate the resulting FULL set (requested windows layered over current ones).
+    windows = {s.id: (s.start_beat, s.end_beat) for s in chart.segments}
+    for w in payload.segments:
+        windows[w.id] = (w.start_beat, w.end_beat)
+    ordered = sorted(windows.values())
+    for (s1, e1), (s2, e2) in zip(ordered, ordered[1:]):
+        if s1 < e2 and e1 > s2:
+            raise HTTPException(status_code=422, detail="segment overlaps an existing segment")
+    grid, duration = _chart_grid(chart)
+    if duration and ordered and ordered[-1][1] > total_beats(grid, duration) + 1e-6:
+        raise HTTPException(status_code=422, detail="end_beat exceeds the chart's beat grid")
+
+    for w in payload.segments:
+        seg = by_id[w.id]
+        seg.start_beat = w.start_beat
+        seg.end_beat = w.end_beat
+    db.commit()
+    db.refresh(chart)
+    return _chart_out(chart)
 
 
 @router.delete(

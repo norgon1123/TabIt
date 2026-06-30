@@ -60,6 +60,16 @@ class SegmentUpdate(BaseModel):
     chord_quality: str | None = Field(default=None, pattern="^(maj|min|dom7|maj7|min7)$")
 
 
+class SegmentWindow(BaseModel):
+    id: str
+    start_beat: float = Field(ge=0)
+    end_beat: float = Field(gt=0)
+
+
+class SegmentBatchUpdate(BaseModel):
+    segments: list[SegmentWindow] = Field(min_length=1)
+
+
 class SegmentOut(BaseModel):
     id: str
     start_beat: float
