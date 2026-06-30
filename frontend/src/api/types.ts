@@ -15,6 +15,7 @@ export interface AnalysisOut {
   detected_key_mode: string | null;
   engine_version: string | null;
   error: string | null;
+  beat_times: number[];
 }
 
 export interface RecordingOut {
@@ -29,6 +30,8 @@ export interface RecordingOut {
 
 export interface SegmentOut {
   id: string;
+  start_beat: number;
+  end_beat: number;
   start_time: number;
   end_time: number;
   chord_root: string;
@@ -41,5 +44,8 @@ export interface ChartOut {
   recording_id: string;
   key_tonic: string;
   key_mode: string;
+  beats_per_measure: number;
+  measure_offset: number;
+  beat_times: number[];
   segments: SegmentOut[];
 }

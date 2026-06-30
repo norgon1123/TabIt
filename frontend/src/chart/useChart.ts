@@ -3,12 +3,16 @@ import { ApiError, api } from "../api/client";
 import type { ChartOut, SegmentOut } from "../api/types";
 
 export interface SegmentInput {
-  start_time: number;
-  end_time: number;
+  start_beat: number;
+  end_beat: number;
   chord_root: string;
   chord_quality: string;
 }
 export type SegmentPatch = Partial<SegmentInput>;
+export interface ChartSettingsPatch {
+  beats_per_measure?: number;
+  measure_offset?: number;
+}
 
 async function fetchChart(recordingId: string): Promise<ChartOut | null> {
   try {
@@ -51,6 +55,11 @@ export function useChart(recordingId: string) {
       api.postJson<ChartOut>(`/api/charts/${chartId}/reorder`, { segment_ids: segmentIds }),
     onSuccess: invalidate,
   });
+  const settingsMut = useMutation({
+    mutationFn: (patch: ChartSettingsPatch) =>
+      api.patchJson<ChartOut>(`/api/charts/${chartId}/settings`, patch),
+    onSuccess: invalidate,
+  });
 
   return {
     chart: chartQuery.data ?? null,
@@ -60,12 +69,14 @@ export function useChart(recordingId: string) {
       updateMut.isPending ||
       deleteMut.isPending ||
       transposeMut.isPending ||
-      reorderMut.isPending,
+      reorderMut.isPending ||
+      settingsMut.isPending,
     addSegment: (input: SegmentInput) => addMut.mutateAsync(input),
     updateSegment: (segmentId: string, patch: SegmentPatch) =>
       updateMut.mutateAsync({ segmentId, patch }),
     deleteSegment: (segmentId: string) => deleteMut.mutateAsync(segmentId),
     transpose: (semitones: number) => transposeMut.mutateAsync(semitones),
     reorder: (segmentIds: string[]) => reorderMut.mutateAsync(segmentIds),
+    updateSettings: (patch: ChartSettingsPatch) => settingsMut.mutateAsync(patch),
   };
 }
