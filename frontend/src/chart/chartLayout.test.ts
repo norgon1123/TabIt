@@ -1,4 +1,4 @@
-import { describe, expect, it, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { boundaryUpdates, groupIntoLines, reorderIds } from "./chartLayout";
 import { roundCs, formatTimeCs, clampBoundary } from "./timeMath";
 

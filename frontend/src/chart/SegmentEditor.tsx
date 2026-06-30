@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { SegmentOut } from "../api/types";
 import type { SegmentPatch } from "./useChart";
 import { ROOTS, QUALITIES, QUALITY_LABELS } from "../api/music";
-import { roundCs } from "./timeMath";
+import { snapHalfBeat } from "./beatMath";
 
 interface Props {
   segment: SegmentOut;
@@ -14,26 +14,24 @@ interface Props {
 export default function SegmentEditor({ segment, onSave, onDelete, busy }: Props) {
   const [root, setRoot] = useState(segment.chord_root);
   const [quality, setQuality] = useState(segment.chord_quality);
-  const [start, setStart] = useState(segment.start_time);
-  const [end, setEnd] = useState(segment.end_time);
+  const [beats, setBeats] = useState(segment.end_beat - segment.start_beat);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setRoot(segment.chord_root);
     setQuality(segment.chord_quality);
-    setStart(segment.start_time);
-    setEnd(segment.end_time);
+    setBeats(segment.end_beat - segment.start_beat);
     setError(null);
-  }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_time, segment.end_time]);
+  }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_beat, segment.end_beat]);
 
   async function save() {
     setError(null);
     try {
+      const length = Math.max(0.5, snapHalfBeat(beats));
       await onSave({
         chord_root: root,
         chord_quality: quality,
-        start_time: roundCs(start),
-        end_time: roundCs(end),
+        end_beat: snapHalfBeat(segment.start_beat + length),
       });
     } catch (err) {
       const detail = (err as { detail?: string }).detail;
@@ -47,35 +45,23 @@ export default function SegmentEditor({ segment, onSave, onDelete, busy }: Props
       <label>
         Root
         <select value={root} onChange={(e) => setRoot(e.target.value)}>
-          {ROOTS.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
+          {ROOTS.map((r) => (<option key={r} value={r}>{r}</option>))}
         </select>
       </label>
       <label>
         Quality
         <select value={quality} onChange={(e) => setQuality(e.target.value)}>
-          {QUALITIES.map((q) => (
-            <option key={q} value={q}>{QUALITY_LABELS[q]}</option>
-          ))}
+          {QUALITIES.map((q) => (<option key={q} value={q}>{QUALITY_LABELS[q]}</option>))}
         </select>
       </label>
       <label>
-        Start (s)
+        Beats
         <input
           type="number"
-          step="0.01"
-          value={roundCs(start)}
-          onChange={(e) => setStart(Number(e.target.value))}
-        />
-      </label>
-      <label>
-        End (s)
-        <input
-          type="number"
-          step="0.01"
-          value={roundCs(end)}
-          onChange={(e) => setEnd(Number(e.target.value))}
+          step="0.5"
+          min="0.5"
+          value={beats}
+          onChange={(e) => setBeats(Number(e.target.value))}
         />
       </label>
       {error && <p className="error">{error}</p>}

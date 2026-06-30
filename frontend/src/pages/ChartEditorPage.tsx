@@ -7,6 +7,7 @@ import { useChart } from "../chart/useChart";
 import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 import SegmentEditor from "../chart/SegmentEditor";
 import TransposeControl from "../chart/TransposeControl";
+import TimeSignatureControl from "../chart/TimeSignatureControl";
 
 export default function ChartEditorPage() {
   const { recordingId } = useParams<{ recordingId: string }>();
@@ -28,6 +29,7 @@ export default function ChartEditorPage() {
     deleteSegment,
     transpose,
     reorder,
+    updateSettings,
   } = useChart(id);
 
   const recording = recordingQuery.data;
@@ -78,7 +80,8 @@ export default function ChartEditorPage() {
           <div style={{ marginTop: 12 }}>
             <Timeline
               segments={chart.segments}
-              bpm={analysis?.bpm ?? null}
+              beatsPerMeasure={chart.beats_per_measure}
+              measureOffset={chart.measure_offset}
               duration={duration}
               currentTime={currentTime}
               selectedId={selectedId}
@@ -96,13 +99,20 @@ export default function ChartEditorPage() {
               busy={isMutating}
             />
 
+            <TimeSignatureControl
+              beatsPerMeasure={chart.beats_per_measure}
+              measureOffset={chart.measure_offset}
+              onChange={(patch) => updateSettings(patch)}
+              busy={isMutating}
+            />
+
             <button
               disabled={isMutating}
               onClick={() => {
-                const lastEnd = chart.segments[chart.segments.length - 1]?.end_time ?? 0;
+                const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
                 addSegment({
-                  start_time: lastEnd,
-                  end_time: Math.min(duration || lastEnd + 1, lastEnd + 1),
+                  start_beat: lastEnd,
+                  end_beat: lastEnd + chart.beats_per_measure,
                   chord_root: chart.key_tonic,
                   chord_quality: "maj",
                 });
