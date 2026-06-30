@@ -10,6 +10,10 @@ tabit.db
 
 # Frontend build output
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Local uploaded audio storage
+storage/
 
 # OS / editor
 .DS_Store
