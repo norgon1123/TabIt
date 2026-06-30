@@ -42,7 +42,7 @@ export default function ChartEditorPage() {
 
   return (
     <div className="container">
-      <p><Link to="/">Back to Library</Link></p>
+      <p><Link to="/">&larr; Library</Link></p>
       <h1>{recording?.original_filename ?? "Chart"}</h1>
 
       {analysis?.status === "failed" && (
@@ -50,7 +50,7 @@ export default function ChartEditorPage() {
       )}
 
       {!chart && analysis?.status !== "failed" && (
-        <p className="muted">Analyzing... the chart will appear when analysis finishes.</p>
+        <p className="muted">Analyzing&hellip; the chart will appear when analysis finishes.</p>
       )}
 
       {chart && (
