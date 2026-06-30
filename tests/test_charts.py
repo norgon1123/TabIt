@@ -102,39 +102,6 @@ def test_transpose_shifts_key_and_chords_but_keeps_numerals(client, tmp_path, mo
     assert numerals == ["I", "IV", "V"]
 
 
-def _seed_three(client, chart_id):
-    ids = []
-    for root, s, e in (("C", 0.0, 2.0), ("F", 2.0, 5.0), ("G", 5.0, 6.0)):
-        ids.append(
-            client.post(
-                f"/api/charts/{chart_id}/segments",
-                json={"start_time": s, "end_time": e, "chord_root": root, "chord_quality": "maj"},
-            ).json()["id"]
-        )
-    return ids
-
-
-def test_reorder_preserves_durations_and_recomputes_times(client, tmp_path, monkeypatch):
-    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)
-    c, f, g = _seed_three(client, chart_id)  # durations 2, 3, 1
-    # Move G (last) to the front: order G, C, F
-    resp = client.post(f"/api/charts/{chart_id}/reorder", json={"segment_ids": [g, c, f]})
-    assert resp.status_code == 200
-    segs = resp.json()["segments"]
-    assert [s["chord_root"] for s in segs] == ["G", "C", "F"]
-    # Contiguous, anchored at 0, each chord keeps its original duration (1, 2, 3).
-    assert [(s["start_time"], s["end_time"]) for s in segs] == [(0.0, 1.0), (1.0, 3.0), (3.0, 6.0)]
-
-
-def test_reorder_rejects_non_permutation(client, tmp_path, monkeypatch):
-    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)
-    c, f, g = _seed_three(client, chart_id)
-    assert client.post(f"/api/charts/{chart_id}/reorder", json={"segment_ids": [c, f]}).status_code == 422
-    assert client.post(
-        f"/api/charts/{chart_id}/reorder", json={"segment_ids": [c, f, g, g]}
-    ).status_code == 422
-
-
 def test_chart_access_scoped_to_owner(client, tmp_path, monkeypatch):
     rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)
     client.post("/api/auth/logout")

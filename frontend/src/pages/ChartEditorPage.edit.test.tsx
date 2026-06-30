@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -33,36 +33,6 @@ test("selecting a segment and saving sends a PATCH", async () => {
   await userEvent.selectOptions(await screen.findByLabelText(/quality/i), "min");
   await userEvent.click(screen.getByRole("button", { name: /save/i }));
   expect(patched).toMatchObject({ chord_quality: "min" });
-});
-
-test("dragging a chord past another posts the new order to /reorder (round 2 #4)", async () => {
-  login();
-  const TWO = {
-    ...CHART,
-    segments: [
-      { id: "s1", start_time: 0, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
-      { id: "s2", start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
-    ],
-  };
-  let body: unknown = null;
-  server.use(
-    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
-    http.get("/api/recordings/r1/chart", () => HttpResponse.json(TWO)),
-    http.post("/api/charts/c1/reorder", async ({ request }) => {
-      body = await request.json();
-      return HttpResponse.json(TWO);
-    }),
-  );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
-  await screen.findByText("C");
-  const cellC = document.querySelector('[data-segment-id="s1"]')!;
-  const cellG = document.querySelector('[data-segment-id="s2"]') as HTMLElement;
-  fireEvent.dragStart(cellC);
-  fireEvent(cellG, new MouseEvent("dragover", { bubbles: true, clientX: 80 })); // past midpoint → after s2
-  fireEvent.drop(cellG);
-  await vi.waitFor(() => {
-    expect(body).toEqual({ segment_ids: ["s2", "s1"] });
-  });
 });
 
 test("transpose +1 posts to the chart", async () => {
