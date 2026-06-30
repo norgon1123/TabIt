@@ -41,4 +41,11 @@ describe("SegmentEditor beats", () => {
     fireEvent.click(screen.getByText("Delete"));
     expect(onDelete).toHaveBeenCalled();
   });
+
+  it("displays error message when onSave rejects", async () => {
+    const onSave = vi.fn().mockRejectedValue({ detail: "nope" });
+    render(<SegmentEditor {...baseProps} onSave={onSave} />);
+    fireEvent.click(screen.getByText("Save"));
+    expect(await screen.findByText("nope")).toBeInTheDocument();
+  });
 });

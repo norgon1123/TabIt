@@ -38,7 +38,7 @@ export default function SegmentEditor({
     setError(null);
   }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_beat, segment.end_beat]);
 
-  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, [segment.id]);
 
   function changeBeats(value: number) {
     setBeats(value);
