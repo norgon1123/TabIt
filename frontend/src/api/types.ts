@@ -39,6 +39,12 @@ export interface SegmentOut {
   roman_numeral: string;
 }
 
+export interface SegmentWindowInput {
+  id: string;
+  start_beat: number;
+  end_beat: number;
+}
+
 export interface ChartOut {
   id: string;
   recording_id: string;

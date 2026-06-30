@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../api/client";
-import type { ChartOut, SegmentOut } from "../api/types";
+import type { ChartOut, SegmentOut, SegmentWindowInput } from "../api/types";
 
 export interface SegmentInput {
   start_beat: number;
@@ -55,6 +55,29 @@ export function useChart(recordingId: string) {
       api.patchJson<ChartOut>(`/api/charts/${chartId}/settings`, patch),
     onSuccess: invalidate,
   });
+  const resizeMut = useMutation({
+    mutationFn: (windows: SegmentWindowInput[]) =>
+      api.patchJson<ChartOut>(`/api/charts/${chartId}/segments`, { segments: windows }),
+    onMutate: async (windows: SegmentWindowInput[]) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<ChartOut | null>(key);
+      if (prev) {
+        const byId = new Map(windows.map((w) => [w.id, w]));
+        queryClient.setQueryData<ChartOut>(key, {
+          ...prev,
+          segments: prev.segments.map((s) => {
+            const w = byId.get(s.id);
+            return w ? { ...s, start_beat: w.start_beat, end_beat: w.end_beat } : s;
+          }),
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _w, ctx) => {
+      if (ctx?.prev !== undefined) queryClient.setQueryData(key, ctx.prev);
+    },
+    onSettled: invalidate,
+  });
 
   return {
     chart: chartQuery.data ?? null,
@@ -64,12 +87,14 @@ export function useChart(recordingId: string) {
       updateMut.isPending ||
       deleteMut.isPending ||
       transposeMut.isPending ||
-      settingsMut.isPending,
+      settingsMut.isPending ||
+      resizeMut.isPending,
     addSegment: (input: SegmentInput) => addMut.mutateAsync(input),
     updateSegment: (segmentId: string, patch: SegmentPatch) =>
       updateMut.mutateAsync({ segmentId, patch }),
     deleteSegment: (segmentId: string) => deleteMut.mutateAsync(segmentId),
     transpose: (semitones: number) => transposeMut.mutateAsync(semitones),
     updateSettings: (patch: ChartSettingsPatch) => settingsMut.mutateAsync(patch),
+    resizeSegments: (windows: SegmentWindowInput[]) => resizeMut.mutateAsync(windows),
   };
 }
