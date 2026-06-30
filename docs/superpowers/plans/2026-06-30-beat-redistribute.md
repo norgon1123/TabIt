@@ -76,9 +76,9 @@ describe("redistributeLength", () => {
     expect(out[2].end_beat).toBe(14); // clamped to the grid
   });
 
-  test("snaps the requested length to a half-beat", () => {
-    const out = redistributeLength(ABC(), 0, 5.3, 20);
-    expect(lens(out)[0]).toBe(5);
+  test("snaps the requested length to the nearest half-beat", () => {
+    const out = redistributeLength(ABC(), 0, 5.3, 20); // 5.3 -> 5.5
+    expect(lens(out)[0]).toBe(5.5);
   });
 });
 ```
