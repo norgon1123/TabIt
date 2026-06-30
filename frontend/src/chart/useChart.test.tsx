@@ -80,9 +80,9 @@ test("resizeSegments posts the windows and optimistically updates the cache", as
       body = await request.json();
       // Simulate realistic network latency: without it, the optimistic
       // onMutate update and the onSettled-triggered refetch both resolve
-      // within the same microtask flush, and React 18 batches them into a
-      // single commit — the assertion below would never observe the
-      // intermediate optimistic state.
+      // within the same microtask flush, so there's no window for RTL's
+      // waitFor polling to observe the optimistic state before onSettled's
+      // invalidate/refetch overwrites it with the (identical) server response.
       await new Promise((r) => setTimeout(r, 150));
       return HttpResponse.json(CHART_BEATS);
     }),

@@ -124,4 +124,18 @@ describe("redistributeLength", () => {
     expect(out[1].end_beat).toBeLessThanOrEqual(11.9 + 1e-9);
     expect(out[1].end_beat).toBeGreaterThan(out[1].start_beat);
   });
+
+  test("interior edit keeps the fractional last end_beat within the grid cap (no 422 flicker)", () => {
+    // Last chord C ends exactly on a fractional grid cap (length 3.9, end 11.9),
+    // as real analysis stores it. Growing A must not let snapHalfBeat push C's end to 12.0.
+    const out = redistributeLength([span(0, 4), span(4, 8), span(8, 11.9)], 0, 6, 11.9);
+    expect(lens(out)[0]).toBe(6); // A grew to 6 (B gave up 2)
+    expect(out[2].end_beat).toBeLessThanOrEqual(11.9 + 1e-9); // tail not snapped past the cap
+  });
+
+  test("treats a non-positive maxTotalBeats as no cap (null-duration chart)", () => {
+    // duration unknown -> totalBeats is 0; editing the last chord must not clamp end to 0.
+    const out = redistributeLength([span(0, 4), span(4, 8)], 1, 6, 0);
+    expect(out[1].end_beat).toBe(10); // 4 + 6, NOT clamped to 0
+  });
 });

@@ -192,6 +192,8 @@ def resize_segments(
         if s1 < e2 and e1 > s2:
             raise HTTPException(status_code=422, detail="segment overlaps an existing segment")
     grid, duration = _chart_grid(chart)
+    # ordered[-1][1] is the global max end_beat only because the overlap check above
+    # already guaranteed the set is non-overlapping (sorted-by-start == sorted-by-end).
     if duration and ordered and ordered[-1][1] > total_beats(grid, duration) + 1e-6:
         raise HTTPException(status_code=422, detail="end_beat exceeds the chart's beat grid")
 

@@ -70,7 +70,9 @@ export function redistributeLength(
 
   if (followers.length === 0) {
     const requested = Math.max(MIN_BEATS, snapHalfBeat(newLength));
-    edited.end_beat = Math.min(snapHalfBeat(edited.start_beat + requested), maxTotalBeats);
+    let end = snapHalfBeat(edited.start_beat + requested);
+    if (maxTotalBeats > 0) end = Math.min(end, maxTotalBeats); // <=0 means no recording duration yet -> no cap
+    edited.end_beat = end;
     return out;
   }
 
@@ -87,7 +89,7 @@ export function redistributeLength(
   followers.forEach((f, i) => {
     let len = followerLengths[i];
     if (toReclaim > 0) {
-      const give = Math.min(toReclaim, len - MIN_BEATS);
+      const give = Math.max(0, Math.min(toReclaim, len - MIN_BEATS));
       len -= give;
       toReclaim -= give;
     } else if (delta < 0 && i === 0) {
@@ -97,6 +99,14 @@ export function redistributeLength(
     f.end_beat = snapHalfBeat(cursor + len);
     cursor = f.end_beat;
   });
+
+  // The last segment's stored end_beat may sit on the (fractional) grid cap; snapHalfBeat
+  // would round it UP past the cap and the server would 422. Clamp the tail so the
+  // optimistic layout matches what the grid check accepts. (maxTotalBeats<=0 => no cap.)
+  if (maxTotalBeats > 0) {
+    const last = out[out.length - 1];
+    if (last.end_beat > maxTotalBeats) last.end_beat = maxTotalBeats;
+  }
 
   return out;
 }
