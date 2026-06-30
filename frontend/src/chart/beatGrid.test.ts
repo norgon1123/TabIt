@@ -21,4 +21,14 @@ describe("totalBeats", () => {
     // last interval 1s; duration 5s, grid ends at 3 (beat 3) -> 3 + 2 = 5.
     expect(totalBeats([0, 1, 2, 3], 120, 5)).toBeCloseTo(5, 6);
   });
+
+  test("returns 0 when duration is at or before the first onset (leading silence)", () => {
+    // Detected grid starting at 2s (leading silence). Beat 0 is the first onset.
+    expect(totalBeats([2, 3, 4], 120, 1)).toBe(0); // before the first onset
+    expect(totalBeats([2, 3, 4], 120, 2)).toBe(0); // exactly at the first onset
+  });
+
+  test("duration exactly at the last onset yields that beat index", () => {
+    expect(totalBeats([0, 1, 2, 3], 120, 3)).toBeCloseTo(3, 6);
+  });
 });
