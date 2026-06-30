@@ -24,3 +24,5 @@ a { color: var(--accent); }
 .muted { color: var(--muted); }
 
 @media (max-width: 600px) { .container { padding: 12px; } }
+
+.scrub-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
