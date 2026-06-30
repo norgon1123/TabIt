@@ -1,17 +1,19 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
+import { beatSlashMarks } from "./beatMath";
 
 const segments = [
-  { id: "s1", start_time: 0, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
-  { id: "s2", start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
+  { id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
+  { id: "s2", start_beat: 4, end_beat: 8, start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
 ];
 
 function renderTimeline(props: Partial<React.ComponentProps<typeof Timeline>> = {}) {
   return render(
     <Timeline
       segments={segments}
-      bpm={120}
+      beatsPerMeasure={4}
+      measureOffset={0}
       duration={4}
       currentTime={0}
       selectedId={null}
@@ -68,4 +70,14 @@ test("shows a progress bar across the chord under the playhead (round 2 #2)", ()
   const bar = container.querySelector('[data-segment-id="s2"] .chord-progress') as HTMLElement;
   expect(bar).toBeInTheDocument();
   expect(bar.style.width).toBe("50%");
+});
+
+it("renders slash marks for a 4-beat chord", () => {
+  const segs = [{
+    id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2,
+    chord_root: "C", chord_quality: "maj", roman_numeral: "I",
+  }];
+  // Render Timeline with the new props (mirror the existing test's render call).
+  renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
+  expect(screen.getByText(beatSlashMarks(4))).toBeInTheDocument(); // "╱ ╱ ╱"
 });
