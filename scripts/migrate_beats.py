@@ -1,51 +1,34 @@
 # scripts/migrate_beats.py
-"""Additive migration: add beat-native columns to an existing tabit SQLite DB.
+"""Additive migration CLI: add beat-native columns to an existing tabit SQLite DB.
 
-The app has no Alembic; tables come from create_all. This adds the new columns to
-pre-existing databases so the app boots. Existing chord rows keep stale/NULL beat
-values until each recording is re-analyzed (POST /api/recordings/{id}/analyze),
-which re-seeds the chart in beats. Safe to run repeatedly.
+The app runs the same migration automatically on startup (see app.main); this
+script is for migrating a database out-of-band. It delegates to
+``app.migrations.run_additive_migrations`` so there is a single source of truth
+for which columns exist. Safe to run repeatedly. Existing chord rows keep
+stale/NULL beat values until each recording is re-analyzed
+(POST /api/recordings/{id}/analyze), which re-seeds the chart in beats.
 
 Usage: .venv/bin/python scripts/migrate_beats.py [sqlite_path]
 """
 
 from __future__ import annotations
 
-import sqlite3
+import os
 import sys
 
-ADDITIONS = {
-    "analyses": [("beat_times", "TEXT NOT NULL DEFAULT '[]'")],
-    "chord_charts": [
-        ("beats_per_measure", "INTEGER NOT NULL DEFAULT 4"),
-        ("measure_offset", "INTEGER NOT NULL DEFAULT 0"),
-        ("beat_times", "TEXT NOT NULL DEFAULT '[]'"),
-    ],
-    "chord_segments": [
-        ("start_beat", "REAL NOT NULL DEFAULT 0"),
-        ("end_beat", "REAL NOT NULL DEFAULT 0"),
-    ],
-}
+# Allow running as `python scripts/migrate_beats.py` from the repo root by
+# putting the repo root (this file's parent's parent) on the import path.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import create_engine
 
-def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+from app.migrations import run_additive_migrations
 
 
 def migrate(path: str) -> None:
-    conn = sqlite3.connect(path)
-    try:
-        for table, cols in ADDITIONS.items():
-            existing = _columns(conn, table)
-            if not existing:
-                continue  # table not created yet; create_all will handle it
-            for name, decl in cols:
-                if name not in existing:
-                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
-                    print(f"added {table}.{name}")
-        conn.commit()
-    finally:
-        conn.close()
+    engine = create_engine(f"sqlite:///{path}")
+    for column in run_additive_migrations(engine):
+        print(f"added {column}")
     print("done — re-analyze each recording to populate beats")
 
 
