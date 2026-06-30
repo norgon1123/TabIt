@@ -23,11 +23,15 @@ async function fetchChart(recordingId: string): Promise<ChartOut | null> {
   }
 }
 
-export function useChart(recordingId: string) {
+export function useChart(recordingId: string, options: { poll?: boolean } = {}) {
   const queryClient = useQueryClient();
   const key = ["chart", recordingId];
 
-  const chartQuery = useQuery({ queryKey: key, queryFn: () => fetchChart(recordingId) });
+  const chartQuery = useQuery({
+    queryKey: key,
+    queryFn: () => fetchChart(recordingId),
+    refetchInterval: options.poll ? 2000 : false,
+  });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
   const chartId = chartQuery.data?.id;
 

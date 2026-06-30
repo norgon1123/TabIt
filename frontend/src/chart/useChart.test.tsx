@@ -33,6 +33,16 @@ test("missing chart (404) resolves to null", async () => {
   expect(result.current.chart).toBeNull();
 });
 
+test("accepts a poll option without breaking the chart fetch", async () => {
+  server.use(
+    http.get("/api/recordings/r1/chart", () =>
+      HttpResponse.json({ id: "c1", recording_id: "r1", key_tonic: "C", key_mode: "major", segments: [] }),
+    ),
+  );
+  const { result } = renderHook(() => useChart("r1", { poll: true }), { wrapper });
+  await waitFor(() => expect(result.current.chart?.id).toBe("c1"));
+});
+
 test("transpose posts semitones to the chart", async () => {
   let body: unknown = null;
   server.use(
