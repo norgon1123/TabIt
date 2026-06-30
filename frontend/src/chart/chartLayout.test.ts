@@ -117,4 +117,11 @@ describe("redistributeLength", () => {
     const out = redistributeLength(ABC(), 0, 5.3, 20); // 5.3 -> 5.5
     expect(lens(out)[0]).toBe(5.5);
   });
+
+  test("last-chord clamp never exceeds a fractional maxTotalBeats with sub-MIN headroom", () => {
+    // Grid ends at 11.9; the last chord starts at 11.5 (0.4 beats of room, < MIN_BEATS).
+    const out = redistributeLength([span(0, 11.5), span(11.5, 11.9)], 1, 5, 11.9);
+    expect(out[1].end_beat).toBeLessThanOrEqual(11.9 + 1e-9);
+    expect(out[1].end_beat).toBeGreaterThan(out[1].start_beat);
+  });
 });

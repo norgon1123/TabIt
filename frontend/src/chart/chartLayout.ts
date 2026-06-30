@@ -69,11 +69,8 @@ export function redistributeLength(
   const followers = out.slice(index + 1);
 
   if (followers.length === 0) {
-    const target = Math.max(
-      MIN_BEATS,
-      Math.min(snapHalfBeat(newLength), snapHalfBeat(maxTotalBeats - edited.start_beat)),
-    );
-    edited.end_beat = snapHalfBeat(edited.start_beat + target);
+    const requested = Math.max(MIN_BEATS, snapHalfBeat(newLength));
+    edited.end_beat = Math.min(snapHalfBeat(edited.start_beat + requested), maxTotalBeats);
     return out;
   }
 
