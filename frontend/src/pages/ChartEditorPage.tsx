@@ -6,7 +6,7 @@ import type { RecordingOut } from "../api/types";
 import { useChart } from "../chart/useChart";
 import { useMediaClock } from "../chart/useMediaClock";
 import Timeline, { type SegmentUpdate } from "../chart/Timeline";
-import ScrubBar from "../chart/ScrubBar";
+// import ScrubBar from "../chart/ScrubBar"; // disabled with the scrub-bar block below
 import SegmentEditor from "../chart/SegmentEditor";
 import TransposeControl from "../chart/TransposeControl";
 
@@ -67,7 +67,12 @@ export default function ChartEditorPage() {
             src={`/api/recordings/${id}/audio`}
           />
 
-          <div style={{ marginTop: 8 }}>
+          {/*
+            YouTube-style scrub bar — commented out to avoid a duplicate bar
+            alongside the native <audio> controls (bad UX). Kept for later use;
+            re-enable by uncommenting this block.
+          */}
+          {/* <div style={{ marginTop: 8 }}>
             <ScrubBar
               currentTime={clock.currentTime}
               duration={clock.duration || duration}
@@ -75,7 +80,7 @@ export default function ChartEditorPage() {
               rate={clock.rate}
               onSeek={clock.seek}
             />
-          </div>
+          </div> */}
 
           <div style={{ marginTop: 12 }}>
             <Timeline
