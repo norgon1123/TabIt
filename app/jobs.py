@@ -9,7 +9,7 @@ from functools import lru_cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.audio.analyzer import Analyzer, AnalysisResult, LibrosaAnalyzer
+from app.audio.analyzer import Analyzer, AnalysisResult, ChordinoAnalyzer, LibrosaAnalyzer
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Analysis, ChordChart, ChordSegment, Recording
@@ -110,15 +110,21 @@ class JobDispatcher:
         self._pool.shutdown(wait=False, cancel_futures=True)
 
 
+def _build_analyzer(settings) -> Analyzer:
+    if settings.analysis_engine == "chordino":
+        return ChordinoAnalyzer(
+            settings.analysis_sample_rate,
+            min_segment_seconds=settings.analysis_min_segment_seconds,
+        )
+    return LibrosaAnalyzer(
+        settings.analysis_sample_rate,
+        min_segment_seconds=settings.analysis_min_segment_seconds,
+        change_penalty=settings.analysis_change_penalty,
+        use_hpss=settings.analysis_use_hpss,
+    )
+
+
 @lru_cache
 def get_job_dispatcher() -> JobDispatcher:
     settings = get_settings()
-    return JobDispatcher(
-        settings.analysis_max_workers,
-        LibrosaAnalyzer(
-            settings.analysis_sample_rate,
-            min_segment_seconds=settings.analysis_min_segment_seconds,
-            change_penalty=settings.analysis_change_penalty,
-            use_hpss=settings.analysis_use_hpss,
-        ),
-    )
+    return JobDispatcher(settings.analysis_max_workers, _build_analyzer(settings))

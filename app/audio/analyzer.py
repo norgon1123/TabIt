@@ -8,6 +8,7 @@ from typing import Protocol
 import librosa
 import numpy as np
 
+from app.audio.chordino import chordino_segments
 from app.audio.decode import decode_to_mono
 from app.audio.decoding import viterbi_decode
 from app.audio.key_estimation import estimate_key
@@ -20,6 +21,8 @@ from app.audio.segments import (
 )
 
 ENGINE_VERSION = "hmm-v3"
+CHORDINO_ENGINE_VERSION = "chordino-v1"
+_CHORDINO_PLUGIN = "nnls-chroma:chordino"
 
 
 @dataclass(frozen=True)
@@ -106,3 +109,48 @@ class LibrosaAnalyzer:
         segments = drop_short_segments(segments, self._min_segment_seconds)
         segments = shift_segments(segments, lead)
         return AnalysisResult(bpm, tonic_pc, mode, duration, segments)
+
+
+class ChordinoAnalyzer:
+    """Tier 2 analyzer: the Vamp Chordino plugin (NNLS chroma + trained Viterbi).
+
+    Chordino transcribes chords directly from audio with a richer vocabulary than the
+    librosa engine; its labels are reduced to Tabit's five qualities. Tempo and key are
+    still estimated with librosa. Requires the ``vamp`` module and the nnls-chroma plugin.
+    """
+
+    def __init__(self, sample_rate: int = 22050, min_segment_seconds: float = 0.75) -> None:
+        self._sr = sample_rate
+        self._min_segment_seconds = min_segment_seconds
+        try:
+            import vamp
+        except ImportError as exc:  # pragma: no cover - env-dependent
+            raise RuntimeError(
+                "ChordinoAnalyzer needs the 'vamp' module: pip install vamp"
+            ) from exc
+        if _CHORDINO_PLUGIN not in vamp.list_plugins():  # pragma: no cover - env-dependent
+            raise RuntimeError(
+                f"Vamp plugin {_CHORDINO_PLUGIN!r} not found; install the Vamp Plugin "
+                "Pack (https://www.vamp-plugins.org/pack.html)."
+            )
+
+    def analyze(self, audio_path: str) -> AnalysisResult:
+        import vamp
+
+        y = decode_to_mono(audio_path, self._sr)
+        if y.size == 0:
+            raise RuntimeError("decoded audio is empty")
+        duration = float(len(y) / self._sr)
+
+        tempo, _ = librosa.beat.beat_track(y=y, sr=self._sr)
+        bpm = float(np.atleast_1d(tempo)[0])
+
+        chroma = librosa.feature.chroma_cqt(y=y, sr=self._sr)
+        tonic_pc, mode = estimate_key(chroma.mean(axis=1))
+
+        result = vamp.collect(y, self._sr, _CHORDINO_PLUGIN)
+        entries = result.get("list", []) if isinstance(result, dict) else []
+        segments = chordino_segments(entries, duration, self._min_segment_seconds)
+        return AnalysisResult(
+            bpm, tonic_pc, mode, duration, segments, CHORDINO_ENGINE_VERSION
+        )

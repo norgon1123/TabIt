@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Tier 1: run harmonic/percussive separation and analyse the harmonic part, so
     # percussion and pick/string noise stop polluting the chroma. Disable to A/B.
     analysis_use_hpss: bool = True
+    # Chord engine: "librosa" (built-in, no extra deps) or "chordino" (Tier 2; needs the
+    # vamp module + nnls-chroma Vamp plugin installed). Set TABIT_ANALYSIS_ENGINE.
+    analysis_engine: str = "librosa"
 
 
 @lru_cache
