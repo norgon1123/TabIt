@@ -118,5 +118,7 @@ def get_job_dispatcher() -> JobDispatcher:
         LibrosaAnalyzer(
             settings.analysis_sample_rate,
             min_segment_seconds=settings.analysis_min_segment_seconds,
+            change_penalty=settings.analysis_change_penalty,
+            use_hpss=settings.analysis_use_hpss,
         ),
     )

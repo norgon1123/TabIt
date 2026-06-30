@@ -9,6 +9,7 @@ import librosa
 import numpy as np
 
 from app.audio.decode import decode_to_mono
+from app.audio.decoding import viterbi_decode
 from app.audio.key_estimation import estimate_key
 from app.audio.recognizer import ChordRecognizer, TemplateChordRecognizer
 from app.audio.segments import (
@@ -16,10 +17,9 @@ from app.audio.segments import (
     drop_short_segments,
     merge_segments,
     shift_segments,
-    smooth_labels,
 )
 
-ENGINE_VERSION = "template-v2"
+ENGINE_VERSION = "hmm-v3"
 
 
 @dataclass(frozen=True)
@@ -44,24 +44,33 @@ def _trim_silence(y: np.ndarray, sr: int, top_db: float) -> tuple[np.ndarray, fl
     return trimmed, float(index[0]) / sr
 
 
+def _chroma_features(y: np.ndarray, sr: int, hop_length: int, use_hpss: bool) -> np.ndarray:
+    """CQT chroma, optionally taken from the harmonic component to suppress noise."""
+    if use_hpss:
+        y = librosa.effects.hpss(y)[0]  # keep harmonic part; drop percussion/transients
+    return librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop_length)
+
+
 class LibrosaAnalyzer:
-    """v2 analyzer: silence-trimmed, frame-accurate template chord recognition."""
+    """v3 analyzer: HPSS chroma + extension-tolerant scoring + Viterbi decoding."""
 
     def __init__(
         self,
         sample_rate: int = 22050,
         recognizer: ChordRecognizer | None = None,
         hop_length: int = 2048,
-        smooth_seconds: float = 0.4,
         min_segment_seconds: float = 0.75,  # round 2 #1: drop sub-0.75s false positives
         silence_top_db: float = 30.0,
+        change_penalty: float = 1.0,  # tier 1: Viterbi self-stay bias
+        use_hpss: bool = True,  # tier 1: analyse the harmonic component
     ) -> None:
         self._sr = sample_rate
         self._recognizer = recognizer or TemplateChordRecognizer()
         self._hop = hop_length
-        self._smooth_seconds = smooth_seconds
         self._min_segment_seconds = min_segment_seconds
         self._silence_top_db = silence_top_db
+        self._change_penalty = change_penalty
+        self._use_hpss = use_hpss
 
     def analyze(self, audio_path: str) -> AnalysisResult:
         y = decode_to_mono(audio_path, self._sr)
@@ -77,16 +86,15 @@ class LibrosaAnalyzer:
         tempo, _ = librosa.beat.beat_track(y=y_trim, sr=self._sr)
         bpm = float(np.atleast_1d(tempo)[0])
 
-        chroma = librosa.feature.chroma_cqt(y=y_trim, sr=self._sr, hop_length=self._hop)
+        chroma = _chroma_features(y_trim, self._sr, self._hop, self._use_hpss)
         tonic_pc, mode = estimate_key(chroma.mean(axis=1))
 
-        labels = self._recognizer.recognize(chroma)
-        if not labels:
+        # Tier 1: score every state per frame, then Viterbi-decode the most-likely chord
+        # path so a few mistaken frames cannot flip the label (replaces majority voting).
+        state_labels, scores = self._recognizer.score(chroma)
+        if scores.shape[1] == 0:
             return AnalysisResult(bpm, tonic_pc, mode, duration, [])
-
-        # #4: label per high-resolution frame and cut on the actual change, not the nearest beat.
-        window = max(1, round(self._smooth_seconds * self._sr / self._hop))
-        labels = smooth_labels(labels, window)
+        labels = viterbi_decode(scores, state_labels, self._change_penalty)
 
         frame_times = librosa.frames_to_time(
             np.arange(len(labels) + 1), sr=self._sr, hop_length=self._hop

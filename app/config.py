@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # Round 2 #1: chord segments shorter than this are treated as false positives and
     # absorbed into a neighbour. Easily tuned via TABIT_ANALYSIS_MIN_SEGMENT_SECONDS.
     analysis_min_segment_seconds: float = 0.75
+    # Tier 1: Viterbi self-stay bias. Higher = steadier labels, absorbs more playing
+    # mistakes; too high merges genuinely distinct chords.
+    analysis_change_penalty: float = 1.0
+    # Tier 1: run harmonic/percussive separation and analyse the harmonic part, so
+    # percussion and pick/string noise stop polluting the chroma. Disable to A/B.
+    analysis_use_hpss: bool = True
 
 
 @lru_cache

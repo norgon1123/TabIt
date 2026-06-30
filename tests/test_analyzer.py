@@ -42,7 +42,7 @@ def test_analyzes_a_two_chord_song(tmp_path):
     assert isinstance(result, AnalysisResult)
     assert result.bpm > 0
     assert result.key_mode in ("major", "minor")
-    assert result.engine_version == "template-v2"
+    assert result.engine_version == "hmm-v3"
     assert result.duration == pytest.approx(4.0, abs=0.05)
     roots = {segment.root_pc for segment in result.segments}
     assert 0 in roots  # C detected somewhere
