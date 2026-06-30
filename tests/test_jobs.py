@@ -35,7 +35,7 @@ def _seed_pending_recording(db):
 def test_successful_analysis_seeds_chart(db_session):
     rec = _seed_pending_recording(db_session)
     result = AnalysisResult(
-        bpm=120.0, key_tonic_pc=0, key_mode="major",
+        bpm=120.0, key_tonic_pc=0, key_mode="major", duration=4.0,
         segments=[
             DetectedSegment(0.0, 2.0, 0, Quality.MAJ),
             DetectedSegment(2.0, 4.0, 7, Quality.MAJ),
@@ -73,7 +73,7 @@ def test_seeding_failure_marks_failed_not_running(db_session, monkeypatch):
     import app.jobs as jobs
 
     rec = _seed_pending_recording(db_session)
-    result = AnalysisResult(120.0, 0, "major", [DetectedSegment(0.0, 4.0, 0, Quality.MAJ)])
+    result = AnalysisResult(120.0, 0, "major", 4.0, [DetectedSegment(0.0, 4.0, 0, Quality.MAJ)])
 
     def boom(*args, **kwargs):
         raise RuntimeError("seed failed")
@@ -90,12 +90,29 @@ def test_seeding_failure_marks_failed_not_running(db_session, monkeypatch):
 
 def test_reanalysis_replaces_existing_chart(db_session):
     rec = _seed_pending_recording(db_session)
-    first = AnalysisResult(120.0, 0, "major", [DetectedSegment(0.0, 4.0, 0, Quality.MAJ)])
+    first = AnalysisResult(120.0, 0, "major", 4.0, [DetectedSegment(0.0, 4.0, 0, Quality.MAJ)])
     analyze_recording(db_session, rec.id, StubAnalyzer(result=first))
 
-    second = AnalysisResult(90.0, 7, "major", [DetectedSegment(0.0, 4.0, 7, Quality.MAJ)])
+    second = AnalysisResult(90.0, 7, "major", 4.0, [DetectedSegment(0.0, 4.0, 7, Quality.MAJ)])
     analyze_recording(db_session, rec.id, StubAnalyzer(result=second))
 
     chart = db_session.query(ChordChart).filter_by(recording_id=rec.id).one()
     assert chart.key_tonic == "G"
     assert [(s.chord_root, s.chord_quality) for s in chart.segments] == [("G", "maj")]
+
+
+def test_seeding_overwrites_browser_duration_and_clamps_segments(db_session):
+    rec = _seed_pending_recording(db_session)  # browser-reported duration_seconds = 4.0
+    # Server decoded a longer file; a stray segment runs past the true end and must be clamped.
+    result = AnalysisResult(
+        120.0, 0, "major", 7.5,
+        [DetectedSegment(0.0, 4.0, 0, Quality.MAJ), DetectedSegment(4.0, 9.0, 7, Quality.MAJ)],
+    )
+
+    analyze_recording(db_session, rec.id, StubAnalyzer(result=result))
+
+    db_session.refresh(rec)
+    assert rec.duration_seconds == 7.5  # authoritative server duration wins
+    chart = db_session.query(ChordChart).filter_by(recording_id=rec.id).one()
+    ends = sorted(s.end_time for s in chart.segments)
+    assert max(ends) <= 7.5  # never exceeds the audio length

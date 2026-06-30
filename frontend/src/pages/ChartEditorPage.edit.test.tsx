@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -33,6 +33,36 @@ test("selecting a segment and saving sends a PATCH", async () => {
   await userEvent.selectOptions(await screen.findByLabelText(/quality/i), "min");
   await userEvent.click(screen.getByRole("button", { name: /save/i }));
   expect(patched).toMatchObject({ chord_quality: "min" });
+});
+
+test("dragging one chord onto another swaps their identities via two PATCHes (#9)", async () => {
+  login();
+  const TWO = {
+    ...CHART,
+    segments: [
+      { id: "s1", start_time: 0, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
+      { id: "s2", start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
+    ],
+  };
+  const patches: Record<string, unknown> = {};
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(TWO)),
+    http.patch("/api/charts/c1/segments/:sid", async ({ request, params }) => {
+      patches[params.sid as string] = await request.json();
+      return HttpResponse.json(TWO.segments[0]);
+    }),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await screen.findByText("C");
+  const cellC = document.querySelector('[data-segment-id="s1"]')!;
+  const cellG = document.querySelector('[data-segment-id="s2"]')!;
+  fireEvent.dragStart(cellC);
+  fireEvent.drop(cellG);
+  await vi.waitFor(() => {
+    expect(patches["s1"]).toMatchObject({ chord_root: "G", chord_quality: "maj" });
+    expect(patches["s2"]).toMatchObject({ chord_root: "C", chord_quality: "maj" });
+  });
 });
 
 test("transpose +1 posts to the chart", async () => {

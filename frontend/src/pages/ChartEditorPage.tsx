@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RecordingOut } from "../api/types";
 import { useChart } from "../chart/useChart";
-import Timeline from "../chart/Timeline";
+import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 import SegmentEditor from "../chart/SegmentEditor";
 import TransposeControl from "../chart/TransposeControl";
 
 export default function ChartEditorPage() {
   const { recordingId } = useParams<{ recordingId: string }>();
   const id = recordingId!;
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -24,6 +25,24 @@ export default function ChartEditorPage() {
   const recording = recordingQuery.data;
   const analysis = recording?.analysis ?? null;
   const duration = recording?.duration_seconds ?? 0;
+
+  const seek = (time: number) => {
+    if (audioRef.current) audioRef.current.currentTime = time;
+    setCurrentTime(time);
+  };
+
+  const applyResize = async (updates: SegmentUpdate[]) => {
+    for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
+  };
+
+  const swapSegments = async (aId: string, bId: string) => {
+    const segs = chart?.segments ?? [];
+    const a = segs.find((s) => s.id === aId);
+    const b = segs.find((s) => s.id === bId);
+    if (!a || !b) return;
+    await updateSegment(aId, { chord_root: b.chord_root, chord_quality: b.chord_quality });
+    await updateSegment(bId, { chord_root: a.chord_root, chord_quality: a.chord_quality });
+  };
 
   if (recordingQuery.isLoading || chartLoading) return <p className="muted container">Loading…</p>;
 
@@ -48,6 +67,7 @@ export default function ChartEditorPage() {
           </p>
 
           <audio
+            ref={audioRef}
             controls
             style={{ width: "100%" }}
             src={`/api/recordings/${id}/audio`}
@@ -57,10 +77,14 @@ export default function ChartEditorPage() {
           <div style={{ marginTop: 12 }}>
             <Timeline
               segments={chart.segments}
+              bpm={analysis?.bpm ?? null}
               duration={duration}
               currentTime={currentTime}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              onSeek={seek}
+              onResizeCommit={applyResize}
+              onSwap={swapSegments}
             />
           </div>
 

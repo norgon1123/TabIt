@@ -62,17 +62,25 @@ def _seed_chart(db: Session, recording: Recording, result: AnalysisResult) -> No
         db.delete(existing)
         db.flush()
 
+    # #1: trust the server-decoded length over the browser-reported duration, which is
+    # unreliable for VBR mp3/m4a and let charts run past the end of the audio.
+    duration = result.duration
+    recording.duration_seconds = duration
+
     tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
     prefer_flats = key_prefers_flats(tonic, result.key_mode)
     chart = ChordChart(recording_id=recording.id, key_tonic=tonic, key_mode=result.key_mode)
     db.add(chart)
     db.flush()
     for segment in result.segments:
+        end_time = min(segment.end_time, duration)
+        if end_time <= segment.start_time:  # fully past the end of the audio; drop it
+            continue
         db.add(
             ChordSegment(
                 chart_id=chart.id,
                 start_time=segment.start_time,
-                end_time=segment.end_time,
+                end_time=end_time,
                 chord_root=pitch_class_to_note(segment.root_pc, prefer_flats=prefer_flats),
                 chord_quality=segment.quality.value,
             )

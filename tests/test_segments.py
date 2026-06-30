@@ -1,8 +1,51 @@
 import numpy as np
 import pytest
 
-from app.audio.segments import DetectedSegment, beat_boundaries, merge_segments
+from app.audio.segments import (
+    DetectedSegment,
+    beat_boundaries,
+    drop_short_segments,
+    merge_segments,
+    shift_segments,
+    smooth_labels,
+)
 from app.music_theory import Quality
+
+
+def test_smooth_labels_removes_single_frame_jitter():
+    c, g = (0, Quality.MAJ), (7, Quality.MAJ)
+    labels = [c, c, g, c, c]  # lone G is noise
+    assert smooth_labels(labels, window=3) == [c, c, c, c, c]
+
+
+def test_smooth_labels_keeps_real_changes():
+    c, g = (0, Quality.MAJ), (7, Quality.MAJ)
+    labels = [c, c, c, g, g, g]
+    assert smooth_labels(labels, window=3) == labels
+
+
+def test_drop_short_segments_absorbs_into_longer_neighbour():
+    segs = [
+        DetectedSegment(0.0, 2.0, 0, Quality.MAJ),
+        DetectedSegment(2.0, 2.1, 7, Quality.MAJ),  # too short
+        DetectedSegment(2.1, 4.0, 5, Quality.MAJ),
+    ]
+    out = drop_short_segments(segs, min_seconds=0.5)
+    assert [(s.start_time, s.end_time, s.root_pc) for s in out] == [
+        (0.0, 2.1, 0),
+        (2.1, 4.0, 5),
+    ]
+
+
+def test_drop_short_segments_preserves_full_coverage():
+    segs = [DetectedSegment(0.0, 0.1, 0, Quality.MAJ), DetectedSegment(0.1, 4.0, 7, Quality.MAJ)]
+    out = drop_short_segments(segs, min_seconds=0.5)
+    assert out[0].start_time == 0.0 and out[-1].end_time == 4.0
+
+
+def test_shift_segments_translates_in_time():
+    segs = [DetectedSegment(0.0, 2.0, 0, Quality.MAJ)]
+    assert shift_segments(segs, 1.5) == [DetectedSegment(1.5, 3.5, 0, Quality.MAJ)]
 
 
 def test_merges_consecutive_identical_labels():
