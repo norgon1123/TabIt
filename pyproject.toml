@@ -27,6 +27,17 @@ dev = [
 chordino = [
     "vamp>=1.1",
 ]
+# ML stack for source separation (Demucs) + the deep chord model + eval scoring
+# (Phase 0/1). Heavy (torch); deliberately kept out of the base install so the app
+# still installs and runs without it — heavy imports are lazy throughout. The
+# inference box pins Python to a version with cu128 torch + Demucs wheels (≈3.12);
+# see docs/technical-plan-phase-0-1.md. Install with: pip install -e ".[ml]"
+ml = [
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "demucs>=4.0",
+    "mir_eval>=0.7",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

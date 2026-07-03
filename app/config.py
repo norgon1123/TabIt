@@ -27,6 +27,23 @@ class Settings(BaseSettings):
     # missing. Set TABIT_ANALYSIS_ENGINE to force one.
     analysis_engine: str = "chordino"
 
+    # --- Multi-instrument pipeline (Phase 0/1) ---
+    # Compute backend for torch-based analysis (Demucs separation, deep chord model).
+    # "auto" resolves cuda -> mps -> cpu; force with "cuda" | "mps" | "cpu".
+    analysis_device: str = "auto"
+    # Source separation. Off by default so the base app is byte-for-byte unchanged;
+    # enabling it requires the ".[ml]" extra (Demucs) to be installed.
+    enable_separation: bool = False
+    # Demucs model. htdemucs_6s is the only 6-source model (adds guitar + piano stems).
+    separation_model: str = "htdemucs_6s"
+    # Stem persistence policy (Phase 1). "persist" keeps stems on disk (Option A, the
+    # Phase 0/1 recommendation — never recompute the expensive separation step);
+    # "ephemeral" would regenerate on demand. Swappable later without a schema change.
+    stem_storage: str = "persist"
+    # On-disk codec for persisted stems. FLAC (lossless) by default — lossy formats add
+    # artifacts that degrade downstream chord/tab analysis.
+    stem_format: str = "flac"
+
 
 @lru_cache
 def get_settings() -> Settings:

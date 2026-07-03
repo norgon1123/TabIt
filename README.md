@@ -34,6 +34,30 @@ API docs at http://localhost:8000/docs
 - `TABIT_ANALYSIS_SAMPLE_RATE` (default `22050` Hz; audio resample target for analysis)
 - `TABIT_ANALYSIS_MAX_WORKERS` (default `1`; background analysis worker threads)
 
+### Multi-instrument pipeline (Phase 0/1)
+
+The separation + deep-model work needs the heavy ML stack, kept out of the base install:
+
+    pip install -e ".[ml]"        # torch, torchaudio, demucs, mir_eval
+
+The inference box pins Python to a version with `cu128` torch + Demucs wheels (≈3.12) —
+see `docs/technical-plan-phase-0-1.md`. Config vars (all default to the app being
+unchanged):
+
+- `TABIT_ANALYSIS_DEVICE` (default `auto`; `auto` → cuda → mps → cpu, or force one)
+- `TABIT_ENABLE_SEPARATION` (default `false`)
+- `TABIT_SEPARATION_MODEL` (default `htdemucs_6s`; the only 6-source Demucs model)
+- `TABIT_STEM_STORAGE` (default `persist`) / `TABIT_STEM_FORMAT` (default `flac`)
+
+Phase 0 tools (see the roadmap and technical plan under `docs/`):
+
+    # score an engine against a ground-truth set of audio + .lab pairs
+    python scripts/eval_chords.py --dataset tests/eval --engine librosa --baseline chordino
+    # generate a starter .lab to hand-correct into ground truth
+    python scripts/bootstrap_labels.py path/to/clip.m4a --engine chordino
+    # Demucs separation timing/VRAM spike
+    python scripts/separation_spike.py path/to/song.m4a --out-dir /tmp/stems
+
 ## Analysis Flow
 
 Uploading a recording enqueues an in-process background job that:
