@@ -31,14 +31,25 @@ Two machines, one codebase:
 
 - **Blackwell needs current wheels.** The 5070 Ti (`sm_120`) requires **PyTorch built
   against CUDA 12.8+ (`cu128` wheels)**. Older builds lack `sm_120` kernels and will
-  error or fall back to CPU. First task on the GPU box: confirm
-  `torch.cuda.is_available()` and a real matmul on-device.
+  error or fall back to CPU. **First task on the GPU box (hard feasibility gate):** confirm
+  `torch.cuda.is_available()`, a real matmul on-device, **and that the exact chosen models
+  — Demucs `htdemucs_6s` and the BTC-class chord model — import and run on the 5070 Ti
+  under the pinned stack.** These libs aren't swappable, so if they won't run this is an
+  environment problem to *solve* (the foundation), not a signal to pick a different model.
 - **Keep heavy deps optional.** Add an extra dependency group (e.g. `[ml]`) in
   `pyproject.toml` for `torch`, `demucs`, `mir_eval`. The base app must still install and
   run without them (same pattern already used for the optional `vamp`/Chordino engine).
-- **Python 3.14 / `.venv`.** Use the project `.venv`; there is no bare `python` on PATH.
-  Verify Demucs + the chosen chord model import under 3.14 early (dependency rot is a
-  named risk below).
+- **Pin Python to what the ML libs support — don't assume 3.14.** Demucs (`htdemucs_6s`)
+  and the BTC-class chord model are chosen for accuracy and are **not swappable**, so the
+  environment must bend to them, not the reverse. Pin the *inference box* to the highest
+  Python for which `torch` (`cu128`), Demucs, and the chord-model deps all ship working
+  wheels — realistically **3.12** (already allowed by `requires-python = ">=3.12"`).
+  Fighting a brand-new CPython (3.14) with un-swappable ML deps is the worst combination.
+  The dev Mac uses the project `.venv` (no bare `python` on PATH); the inference box's
+  Python is pinned independently.
+- **Containerize the inference box.** A pinned image (Python + `torch cu128` + CUDA 12.8,
+  Blackwell-ready) makes the environment reproducible and decoupled from the dev Mac,
+  rather than negotiated per-install.
 - **Device abstraction.** A single `TABIT_ANALYSIS_DEVICE` (`cuda` | `mps` | `cpu`)
   selects the backend so the same code runs on both machines.
 
@@ -103,8 +114,13 @@ Proceed to Phase 1 only if, on the eval set:
 - **Cost/latency:** separation + analysis for a ~3-minute song completes within budget
   on the 5070 Ti (target: **well under real-time**, e.g. ≲ 20–30 s/song), within 16 GB
   VRAM.
-- **Feasibility:** Demucs and the chord model both run under Python 3.14 with `cu128`
-  torch.
+- **Feasibility:** Demucs and the chord model both import and run on the 5070 Ti under the
+  pinned stack (`cu128` torch on the chosen, wheel-supported Python — ≈3.12).
+
+> **TODO:** decide how to guard the margin against the small (15–30 clip) eval set —
+> e.g. require the gain to hold across *most* clips (per-clip win rate) or survive a
+> bootstrap CI, so one or two easy clips can't carry the go decision. `eval_chords.py`
+> already reports per-clip, so this is a reporting/threshold choice to settle in 0.1.
 
 If the margin isn't there, we stop and reconsider (e.g. different model, fine-tuning,
 better stem handling) *before* building Phase 1 on the assumption.
@@ -144,7 +160,7 @@ The open decision from the roadmap. Tradeoffs:
 
 | Option | Disk | Re-access cost | Notes |
 |--------|------|----------------|-------|
-| **A. Persist stems (lossless FLAC)** | ~5–6× source per recording | cheap (read file) | Separation is the most expensive step; never recompute it for playback / re-analysis / future tabs |
+| **A. Persist stems (lossless FLAC)** | ≈6× the *decoded* audio — i.e. **~8–12× a compressed upload** (MP3/AAC) | cheap (read file) | Separation is the most expensive step; never recompute it for playback / re-analysis / future tabs |
 | **B. Regenerate on demand** | minimal | expensive (re-run Demucs on GPU every time) | Slow, re-loads the GPU for every access |
 | **C. Hybrid cache** | source + evictable stem cache | cheap on hit, expensive on miss | Best at scale; more moving parts |
 
@@ -197,12 +213,12 @@ fields.
 
 | Risk | Mitigation |
 |------|------------|
-| Blackwell `cu128` torch wheels / Python 3.14 support | Verify `torch.cuda` + Demucs import as the very first task; pin known-good versions in the `[ml]` extra |
-| BTC/pretrained repo dependency rot | Time-box the port; fall back to another maintained pretrained chord model, or use `chordino-v1` as the "trained" comparison if BTC won't run |
+| Blackwell `cu128` torch wheels / new-CPython support | Pin the inference box to a Python the ML libs ship wheels for (≈3.12, not 3.14) inside a containerized `cu128`/CUDA-12.8 image; verify `torch.cuda` + Demucs + chord-model import as the very first task; pin known-good versions in the `[ml]` extra |
+| BTC/pretrained repo dependency rot (model is **not swappable**) | The chord model was chosen for accuracy — de-risk the *environment*, not by keeping a replacement. Time-box the port; if it won't run, treat it as an environment problem to solve (pinned/containerized stack), not a reason to substitute a weaker model. `chordino-v1` is a heuristic, **not** a valid "trained" stand-in — it wouldn't test the thesis |
 | `htdemucs_6s` piano stem is weak | Prioritize guitar/bass; treat piano as best-effort; don't gate the go/no-go on piano |
 | Separation artifacts hurt recognition | Evaluate stem vs full mix in 0.3; the bass-stem-for-root reconciliation lands in Phase 2 |
 | Eval set too small/biased to trust the gate | Cover the instruments/genres Tabit actually targets; expand if results are noisy |
-| Disk growth from persisted stems | Accept in Phase 0–1 (FLAC); plan Option C eviction for Phase 2 |
+| Disk growth from persisted stems (≈8–12× a compressed upload) | Accept in Phase 0–1 (FLAC); plan Option C eviction for Phase 2 |
 
 ---
 
@@ -219,7 +235,7 @@ Phase 0:
 
 Phase 1:
 
-- [ ] `Stem` model + additive migration
+- [ ] `Stem` model (fresh `create_all`, no migration — disposable dev DB)
 - [ ] `SeparationService` + separation job stage
 - [ ] Stem storage (Option A, FLAC) + config knobs
 - [ ] `GET /recordings/{id}/stems` + schemas/types + minimal stem UI
