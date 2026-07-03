@@ -67,7 +67,9 @@ chosen infra path. → **Go/no-go gate for the whole program.**
 
 - Data model: `Recording` **1:N `Stem`** (instrument type + stored separated audio);
   `Analysis` / `ChordChart` become per-stem. The immutable-`Analysis` invariant carries
-  over. New columns via `app/migrations.py` (additive migrations), never `create_all`.
+  over. No migrations needed yet — the dev DB is disposable, so drop and recreate it and
+  let `create_all` build the new schema (revisit `app/migrations.py` before first real
+  deployment).
 - Pipeline: Demucs separation becomes a job stage; the queue fans out per-stem work.
 - Decide stem **storage strategy** (persist vs regenerate on demand — cost/latency
   tradeoff; see the Phase 0–1 technical plan).
@@ -157,7 +159,8 @@ ideally after the deep model (Phase 2).
   fine-tuning/retraining on our own data is an optional later lever, not a Phase 2
   blocker.
 - **Schema discipline:** new API fields update `app/schemas.py` *and*
-  `frontend/src/api/types.ts` together; new DB columns via `app/migrations.py`.
+  `frontend/src/api/types.ts` together. The dev DB is disposable for now (drop/recreate,
+  no migrations); the `app/migrations.py` path returns once there is data to preserve.
 
 ---
 

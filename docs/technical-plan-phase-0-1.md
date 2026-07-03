@@ -116,18 +116,18 @@ better stem handling) *before* building Phase 1 on the assumption.
 Durable, tested, additive. Existing behavior (whole-recording analysis) keeps working;
 stems are layered alongside.
 
-### 1.1 Data model (`app/models.py` + `app/migrations.py`)
+### 1.1 Data model (`app/models.py`)
 
 - **New `Stem`**: `id`, `recording_id` (FK), `instrument` (enum: vocals/drums/bass/
   guitar/piano/other), `stored_path`, `model_version` (e.g. `htdemucs_6s`), `created_at`.
   `Recording` **1:N `Stem`**.
 - **`Analysis` and `ChordChart` gain a nullable `stem_id` FK.** `NULL` = the existing
-  whole-mix analysis/chart (preserves all current rows and behavior); a set `stem_id` =
-  per-instrument. The immutable-`Analysis` invariant is unchanged.
-- **Migrations:** add every new column via `run_additive_migrations` in
-  `app/migrations.py`. `create_all` adds missing *tables* but never *columns* on an
-  existing SQLite DB — the documented gotcha. New tables (`stems`) are fine via
-  `create_all`; the new FK columns on existing tables are not.
+  whole-mix analysis/chart; a set `stem_id` = per-instrument. The immutable-`Analysis`
+  invariant is unchanged.
+- **No migrations needed.** At this stage the dev DB is disposable — drop and recreate it
+  so `Base.metadata.create_all()` builds the new `stems` table and the `stem_id` columns
+  from scratch. (The `app/migrations.py` additive-migration path only matters once there
+  is production data to preserve; revisit before first real deployment.)
 
 ### 1.2 Separation pipeline stage
 
@@ -176,8 +176,8 @@ New `TABIT_`-prefixed vars, documented:
 
 ### 1.6 Tests
 
-- Unit: `Stem` model + the additive migration (assert the new columns exist on a
-  pre-existing DB — the delete-schema gotcha class of bug).
+- Unit: `Stem` model + relationships (a fresh `create_all` DB has the `stems` table and
+  the `stem_id` columns; round-trip a `Recording` → `Stem` → per-stem `ChordChart`).
 - Service: separation stage against a short synthetic clip, or with the separator mocked
   where torch/Demucs isn't installed in CI — gated behind a marker exactly like the
   existing optional-Chordino tests, so `pytest` stays green without the ML extras.
