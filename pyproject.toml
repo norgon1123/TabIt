@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "tabit"
 version = "0.1.0"
@@ -27,6 +31,12 @@ dev = [
 chordino = [
     "vamp>=1.1",
 ]
+
+# Only `app` is a distributable Python package. Declare it explicitly so
+# setuptools' flat-layout auto-discovery doesn't trip over sibling dirs
+# (storage/, frontend/, node_modules/) and refuse to build.
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
