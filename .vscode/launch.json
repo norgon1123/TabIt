@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Run/debug the FastAPI backend with autoreload (docs at http://localhost:8000/docs)
+      "name": "Backend: uvicorn (reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload"],
+      "jinja": false,
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      // Debug the currently open pytest file
+      "name": "Backend: pytest (current file)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-v"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      // Run the Vite dev server (frontend at http://localhost:5173, proxies /api -> :8000)
+      "name": "Frontend: Vite dev server",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      // One click to start both — cookie auth needs SPA + API same-origin (via the dev proxy)
+      "name": "Full stack: backend + frontend",
+      "configurations": ["Backend: uvicorn (reload)", "Frontend: Vite dev server"]
+    }
+  ]
+}
