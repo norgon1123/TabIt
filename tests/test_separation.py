@@ -15,7 +15,7 @@ def test_construction_is_cheap_and_lazy():
     # Building the service must not import Demucs or load a model (importable without
     # the [ml] extra), mirroring ChordinoAnalyzer's lazy design.
     svc = SeparationService()
-    assert svc._separator is None
+    assert svc._model is None
 
 
 @pytest.mark.skipif(_HAS_DEMUCS, reason="Demucs installed; the missing-dep path can't be exercised")
