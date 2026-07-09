@@ -74,22 +74,57 @@ def format_lab(intervals: list[Interval], labels: list[str]) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def parse_lab(text: str) -> tuple[list[Interval], list[str]]:
-    """Parse ``.lab`` text into (intervals, labels). Blank lines are ignored."""
+def parse_lab(text: str, *, source: str | None = None) -> tuple[list[Interval], list[str]]:
+    """Parse ``.lab`` text into (intervals, labels). Blank lines are ignored.
+
+    Errors carry a ``source:line`` location when ``source`` (a filename) is given, so a
+    hand-editing slip like a ``:`` typed for a ``.`` in a time field points at the exact
+    line instead of surfacing as a bare ``float()`` failure deep in the eval run.
+    """
     intervals: list[Interval] = []
     labels: list[str] = []
-    for raw in text.splitlines():
+    for lineno, raw in enumerate(text.splitlines(), start=1):
         line = raw.strip()
         if not line:
             continue
+        loc = f"{source}:{lineno}" if source else f"line {lineno}"
         parts = line.split()
         if len(parts) < 3:
-            raise ValueError(f"malformed .lab line: {raw!r}")
-        start, end = float(parts[0]), float(parts[1])
+            raise ValueError(f"{loc}: malformed .lab line (need 'start end label'): {raw!r}")
+        try:
+            start, end = float(parts[0]), float(parts[1])
+        except ValueError:
+            raise ValueError(
+                f"{loc}: time fields must be numbers (a ':' typed for a '.'?): {raw!r}"
+            ) from None
         label = " ".join(parts[2:])
         intervals.append((start, end))
         labels.append(label)
     return intervals, labels
+
+
+def validate_labels(
+    intervals: list[Interval], labels: list[str], *, source: str | None = None
+) -> list[str]:
+    """Return human-readable issues that would break ``mir_eval`` scoring (empty = clean).
+
+    Checks each segment is forward (``start < end``) and that consecutive segments don't
+    overlap — ``mir_eval.chord`` rejects overlapping intervals outright. Gaps are allowed
+    (they score as no-chord), so they're not flagged.
+    """
+    where = f"{source}: " if source else ""
+    issues: list[str] = []
+    for i, (start, end) in enumerate(intervals, start=1):
+        if start >= end:
+            issues.append(f"{where}segment {i}: start {start} >= end {end}")
+    for i in range(len(intervals) - 1):
+        end_i = intervals[i][1]
+        start_next = intervals[i + 1][0]
+        if end_i > start_next + 1e-9:
+            issues.append(
+                f"{where}segments {i + 1}->{i + 2} overlap: {end_i} > {start_next}"
+            )
+    return issues
 
 
 def write_lab(path: str, intervals: list[Interval], labels: list[str]) -> None:
@@ -99,4 +134,4 @@ def write_lab(path: str, intervals: list[Interval], labels: list[str]) -> None:
 
 def read_lab(path: str) -> tuple[list[Interval], list[str]]:
     with open(path, encoding="utf-8") as fh:
-        return parse_lab(fh.read())
+        return parse_lab(fh.read(), source=path)

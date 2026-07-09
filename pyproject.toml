@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "tabit"
 version = "0.1.0"
@@ -48,6 +52,11 @@ ml = [
     # torchcodec package as of torchaudio 2.11). libsndfile handles FLAC natively.
     "soundfile>=0.12",
 ]
+
+# Only `app` is an importable Python package; `storage` (blob data) and `frontend`
+# (TypeScript) sit at the repo root and must be excluded from flat-layout discovery.
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

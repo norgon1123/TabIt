@@ -228,10 +228,11 @@ Phase 0 (measured results in [phase-0-findings.md](./phase-0-findings.md)):
 
 - [x] **ML environment feasibility gate** — matched `torch/torchaudio 2.11.0+cu130` on
   Python 3.14, Demucs + mir_eval import & run on the 5070 Ti (findings log)
-- [ ] `tests/eval/` ground-truth set (audio + `.lab`) — *blocked on eval audio*
+- [x] `tests/eval/` ground-truth set (audio + `.lab`) — 10 hand-labeled clips; librosa 0.446
+  vs chordino **0.776** WCSR-majmin baseline (findings log)
 - [x] `scripts/eval_chords.py` (mir_eval WCSR report)
 - [x] Demucs timing/VRAM table + separated stems (0.2) — separation ≲real-time, ~1 GB VRAM
-- [ ] Deep-chord A/B/C accuracy report — *needs 0.3 port + eval audio*
+- [ ] Deep-chord A/B/C accuracy report — *needs 0.3 port* (eval set now ready)
 - [ ] Queue/GPU-worker POC + infra decision (Arq vs Celery) — *needs Redis provisioned*
 - [ ] **Go/no-go writeup against the gate** — *waits on 0.3 numbers*
 

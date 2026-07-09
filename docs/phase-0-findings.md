@@ -1,9 +1,10 @@
 # Phase 0 — Findings Log
 
 Running record of measured evidence for the [Phase 0 go/no-go gate](./technical-plan-phase-0-1.md#phase-0-exit--gono-go-gate).
-Updated as spikes complete. **Accuracy numbers are pending the eval audio set** (being
-produced); this log currently covers the **ML environment feasibility gate** and the
-**Demucs separation cost/latency spike (0.2)**, which are audio-independent.
+Updated as spikes complete. Covers the **ML environment feasibility gate**, the **Demucs
+separation cost/latency spike (0.2)**, and the **0.1 chord-accuracy baseline** (librosa vs
+chordino on the ground-truth eval set). The **deep BTC model (0.3)** — the engine the gate
+actually turns on — is still pending, so the go/no-go decision is not yet made.
 
 ## Environment (5070 Ti inference box)
 
@@ -68,12 +69,41 @@ pip install -e ".[ml]"   # demucs + mir_eval + soundfile from PyPI (torch alread
 |----------------|--------|
 | **Feasibility** — Demucs imports & runs on the 5070 Ti under the pinned stack | ✅ **PASS** (measured above) |
 | **Cost/latency** — separation well under real-time within 16 GB | ✅ **PASS** (separation only; add chord-model latency once 0.3 lands) |
-| **Accuracy** — deep model on isolated stem beats `hmm-v3` by ≥+8-10 WCSR pts | ⏳ **Pending eval audio** + BTC chord model port (0.3) |
+| **Accuracy** — deep model on isolated stem beats `hmm-v3` by ≥+8-10 WCSR pts | ⏳ **Baseline set** (chordino below); still needs the BTC chord-model port (0.3) |
+
+## 0.1 Chord accuracy baseline — eval set
+
+Ground-truth eval set built: **10 clips** (~4 min total) covering solo/backing guitar,
+blues, waltz, and known progressions, each with a hand-corrected MIREX `.lab` under
+`tests/eval/`. Scored with `mir_eval.chord` WCSR via `scripts/eval_chords.py`. This
+establishes the **baseline the deep model must beat** — it is *not* the gate itself
+(that's deep-on-stem vs chordino, in 0.3).
+
+| Engine | WCSR majmin (weighted mean) | Notes |
+|--------|-----------------------------|-------|
+| `librosa` (Tier 1 heuristic) | **0.446** | template chroma matching; weak, as expected — not a gate engine |
+| `chordino` (Tier 2, `nnls-chroma:chordino`) | **0.776** | NNLS chroma + trained HMM/Viterbi; **the bar to beat** |
+
+Chordino wins **8/10 clips** (Δ +0.330 majmin over librosa). Per-clip ranged from static
+vamps where chordino is near-perfect (`D backing`, single Dm7) to the harder `A backing`
+(Bm/A/C#m) where both engines struggle.
+
+- **Reproduce:** `python scripts/eval_chords.py --dataset tests/eval --engine librosa --baseline chordino`
+- **Caveat — mild pro-chordino bias.** 8 of the 10 `.lab` files were bootstrapped from
+  chordino and hand-corrected, so the ground-truth *boundaries* started from chordino's
+  segmentation, giving it a small home-field edge on overlap-weighted scores. It doesn't
+  distort the 0.3 gate (deep vs chordino are scored against the *same* truth), but chordino's
+  0.776 is a slightly optimistic absolute number.
+- **Chordino requires the native nnls-chroma Vamp plugin** (Vamp Plugin Pack → `~/vamp/`)
+  plus `pip install --no-build-isolation "vamp>=1.1"`. See `pyproject.toml` `[chordino]`.
+- **Label hygiene:** `scripts/validate_labels.py` checks every `.lab` parses and has no
+  overlapping/backwards intervals before scoring (hand-editing typos otherwise crash the
+  run deep inside `mir_eval`).
 
 ## Still open (blocked on inputs, not the environment)
 
-- **0.1 ground-truth set** — needs the eval audio clips (in production) → hand-labeled
-  `.lab` pairs under `tests/eval/`.
+- **0.1 ground-truth set** — ✅ **done** (10 hand-labeled `.lab` pairs under `tests/eval/`;
+  librosa/chordino baseline above). Expand the set only if the 0.3 margin comes back noisy.
 - **0.3 deep chord model** — `BTCChordEngine` is still a stub. The environment is now
   ready; remaining work is vendoring the BTC inference code + staging pretrained weights on
   this box, then running the A/B/C WCSR comparison on the eval set. Deliberately **not**

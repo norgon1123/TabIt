@@ -35,11 +35,16 @@ Target ~15–30 clips, ~20–40 s each, covering what Tabit actually gets: solo 
 piano, and a few small multi-instrument recordings — include some messy practice-voice-memo
 cases. Then:
 
-    # 1. get a starter .lab from an existing engine
+    # 1. get a starter .lab from an existing engine (chordino is far closer to truth
+    #    than librosa, so there's much less to correct — needs the nnls-chroma Vamp plugin)
     python scripts/bootstrap_labels.py tests/eval/solo-guitar-01.m4a --engine chordino
     # 2. CORRECT it by ear (or in Tabit's editor) until it's true ground truth
-    # 3. score an engine against the whole set
+    # 3. check the labels parse and don't overlap before scoring
+    python scripts/validate_labels.py
+    # 4. score an engine against the whole set
     python scripts/eval_chords.py --dataset tests/eval --engine librosa --baseline chordino
 
 The starter labels are only a scaffold — the accuracy numbers are meaningless unless the
-`.lab` files are corrected to reflect the real chords.
+`.lab` files are corrected to reflect the real chords. A `:` typed for a `.` in a time
+field, or a segment that overlaps the next, will crash the eval run; `validate_labels.py`
+catches both with a `file:line` location.
