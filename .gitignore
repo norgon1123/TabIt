@@ -15,6 +15,9 @@ frontend/tsconfig.tsbuildinfo
 # Local uploaded audio storage
 storage/
 
+# Generated eval stem datasets (derived from tests/eval via scripts/make_eval_stems.py)
+tests/eval-stems/
+
 # OS / editor
 .DS_Store
 .idea/

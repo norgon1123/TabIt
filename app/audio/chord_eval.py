@@ -95,3 +95,59 @@ def win_rate(
             wins += 1
     rate = wins / len(deltas) if deltas else 0.0
     return rate, deltas
+
+
+@dataclass(frozen=True)
+class DeltaCI:
+    point: float          # observed duration-weighted delta (engine - baseline)
+    lo: float             # lower CI bound
+    hi: float             # upper CI bound
+    level: float          # e.g. 0.95
+    n_clips: int
+
+
+def bootstrap_delta_ci(
+    engine: list[ClipScore],
+    baseline: list[ClipScore],
+    metric: str = "majmin",
+    *,
+    n_resamples: int = 2000,
+    level: float = 0.95,
+    seed: int = 0,
+) -> DeltaCI:
+    """Clip-level bootstrap CI on the duration-weighted ``engine - baseline`` delta.
+
+    The second half of the small-eval-set guard (alongside :func:`win_rate`): resample the
+    matched clips with replacement, recompute the duration-weighted mean delta each time,
+    and report the ``level`` percentile interval. The gate's "meaningful margin" is credible
+    only if the CI's lower bound clears the target (e.g. +0.08); a wide interval straddling
+    zero means the eval set is too small/noisy to call. Deterministic for a given ``seed``.
+    """
+    by_name = {c.name: c for c in baseline}
+    diffs: list[float] = []
+    weights: list[float] = []
+    for c in engine:
+        base = by_name.get(c.name)
+        if base is None:
+            continue
+        diffs.append(c.scores.get(metric, 0.0) - base.scores.get(metric, 0.0))
+        weights.append(c.duration)
+    n = len(diffs)
+    if n == 0:
+        return DeltaCI(0.0, 0.0, 0.0, level, 0)
+    d = np.asarray(diffs, dtype=float)
+    w = np.asarray(weights, dtype=float)
+
+    def _weighted(idx: np.ndarray) -> float:
+        wi = w[idx]
+        total = wi.sum()
+        return float((d[idx] * wi).sum() / total) if total > 0 else float(d[idx].mean())
+
+    point = _weighted(np.arange(n))
+    rng = np.random.default_rng(seed)
+    samples = np.empty(n_resamples, dtype=float)
+    for i in range(n_resamples):
+        samples[i] = _weighted(rng.integers(0, n, size=n))
+    alpha = (1.0 - level) / 2.0
+    lo, hi = np.quantile(samples, [alpha, 1.0 - alpha])
+    return DeltaCI(point, float(lo), float(hi), level, n)

@@ -88,12 +88,59 @@ Nothing else can be judged without it.
 ### 0.3 Deep chord model spike
 
 - Target model: a **BTC-class bidirectional transformer** (PyTorch, pretrained weights),
-  run for **inference only** in Phase 0.
+  run for **inference only** in Phase 0. Canonical implementation: **BTC-ISMIR19** (Park et
+  al., *A Bi-directional Transformer for Musical Chord Recognition*), which publishes
+  PyTorch code + pretrained weights.
 - Run three conditions through `eval_chords.py` and compare on the same eval set:
   1. deep model on the **full mix**,
-  2. deep model on the **isolated harmonic stem** (guitar/piano from 0.2),
-  3. the current **`hmm-v3`** engine (baseline), and optionally `chordino-v1`.
+  2. deep model on the **isolated harmonic stem** (guitar/piano/other from 0.2),
+  3. the current heuristic baseline — **`chordino`** (measured **0.776** WCSR-majmin; the
+     `hmm-v3`/`librosa` template engine is weaker at 0.446 and is not the bar).
 - **Deliverable:** the A/B/C WCSR report. This is the evidence for the gate.
+
+**Seam already in place** (do not rebuild): `BTCChordEngine.segments(path) ->
+list[DetectedSegment]` (`app/audio/deep_chord.py`), scored via `eval_chords.py --engine
+deep`; `segments.py` (`merge_segments`/`smooth_labels`/`drop_short_segments`) turns frame
+labels into timed segments; `chordino.py::_reduce_suffix` is the vocab-reduction pattern to
+mirror; `SeparationService.separate_to_files` supplies stems; `resolve_device` + the pinned
+torch 2.11+cu130 stack are proven.
+
+**Decisions to settle in the spike:**
+
+1. **Model config is load-bearing.** Read the exact CQT featurization (sample rate,
+   bins/octave, hop, ~10 Hz frame rate) and vocabulary (25-class `majmin` vs ~170-class
+   `large_voca`) from the model's own `run_config.yaml` — **not from memory**. A wrong
+   input transform silently yields garbage and would invalidate the gate. Sanity-check the
+   engine on the two known-progression clips (`I V IV I`, `I II III II I`) before trusting
+   aggregates.
+2. **Stem condition needs plumbing.** Harness engines take a full-file *path*; there is no
+   stem seam. Pre-separate the eval set into a parallel dataset `tests/eval-stems/` (chosen
+   stem as `<clip>.flac` + copied `<clip>.lab`) and run `--dataset tests/eval-stems`.
+   *Which* stem is part of the experiment (guitar/piano are weak → try "other"/harmonic or
+   a guitar+piano+other sum).
+3. **Three-way report.** `eval_chords.py` is pairwise (one engine vs one baseline); extend
+   it to run/compare A/B/C in one invocation so the gate report is reproducible.
+4. **Margin guard (open TODO above).** With 10 clips (guitar-heavy, no piano, 8/10
+   chordino-seeded), guard the ≥+8–10-pt gate with per-clip win rate + a bootstrap CI so
+   one easy clip can't carry the "go."
+
+**Task breakdown** (~3–4 focused days). T5/T6/T3-pure are GPU/weight-independent and land
+first; T1/T2/T4/T7 run on the inference box.
+
+| # | Task | On GPU box? |
+|---|------|:-----------:|
+| T1 | Vendor + pin BTC inference code; stage pretrained weights out of band | yes |
+| T2 | Featurization: decode mono → CQT per the model's exact config | reads config |
+| T3 | Inference → frame posterior → vocab-map → `DetectedSegment`s (pure half first) | pure half no |
+| T4 | **Feasibility check** — imports & runs on the 5070 Ti (hard gate) | yes |
+| T5 | Generate eval stems (`SeparationService` over the 10 clips) | yes (fast) |
+| T6 | Extend harness to 3-way A/B/C + margin guard (win rate + bootstrap CI) | no |
+| T7 | Run conditions 1/2/3; write findings + go/no-go verdict | yes |
+
+**Top risk — repo-rot (see risk table):** BTC-ISMIR19 targets old torch; expect shims for
+torch 2.11 / py3.14. Time-box the port and treat failure as an *environment* problem
+(pin/containerize), **not** a reason to swap in a weaker model — `chordino` is a baseline,
+not a valid trained-model stand-in.
 
 ### 0.4 Job-queue / GPU-worker POC
 

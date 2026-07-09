@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 """Score a chord engine against a ground-truth eval set (Phase 0, spike 0.1).
 
-The durable output of Phase 0. Runs an engine over a folder of ``audio + .lab`` pairs,
-scores each clip with ``mir_eval`` across the MIREX vocabularies, and writes a
-markdown (and optional CSV) report. Pass ``--baseline`` to also report per-clip win rate
-vs another engine — the guard that stops one or two easy clips from carrying the go/no-go
-decision on a small eval set.
+The durable output of Phase 0. Runs one or more engines over a folder of ``audio + .lab``
+pairs, scores each clip with ``mir_eval`` across the MIREX vocabularies, and writes a
+markdown (and optional CSV) report. Against a ``--baseline`` it reports the guards that stop
+one or two easy clips from carrying the go/no-go decision on a small eval set: per-clip win
+rate **and** a bootstrap CI on the duration-weighted majmin delta, with a PASS verdict only
+when the CI's lower bound clears ``--gate-margin``.
 
-    python scripts/eval_chords.py --dataset tests/eval --engine librosa \
-        --baseline chordino --out eval-report.md --csv eval-scores.csv
+    # single engine vs baseline (spike 0.1)
+    python scripts/eval_chords.py --dataset tests/eval --engine librosa --baseline chordino
+
+    # A/B/C gate report (spike 0.3): deep on stem vs deep on mix vs chordino
+    python scripts/eval_chords.py --dataset tests/eval-stems \
+        --engines deep,chordino --baseline chordino --out gate-report.md
 
 Engines: ``librosa`` (hmm-v3), ``chordino`` (chordino-v1), ``deep`` (BTC-class; not wired
 up yet — see app/audio/deep_chord.py). Requires the ``[ml]`` extra for mir_eval; the
@@ -29,6 +34,7 @@ from app.audio.chord_eval import (  # noqa: E402
     DEFAULT_VOCABS,
     ClipScore,
     aggregate,
+    bootstrap_delta_ci,
     clip_duration,
     score_labels,
     win_rate,
@@ -92,36 +98,107 @@ def _score_engine(name: str, pairs: list[tuple[str, Path, Path]]) -> list[ClipSc
     return clips
 
 
-def _markdown(name: str, clips: list[ClipScore], baseline: tuple[str, list[ClipScore]] | None) -> str:
+def _gate_block(
+    name: str,
+    clips: list[ClipScore],
+    base_name: str,
+    base_clips: list[ClipScore],
+    *,
+    bootstrap: int,
+    seed: int,
+    gate_margin: float,
+) -> list[str]:
+    """Render the ``name`` vs ``base_name`` majmin comparison + small-eval-set guards.
+
+    The gate turns on this block: the duration-weighted Δ, per-clip win rate, and a
+    bootstrap CI. The verdict only reads PASS when the CI's lower bound clears
+    ``gate_margin`` *and* the win rate is a majority — so one or two easy clips can't carry
+    the decision.
+    """
+    agg = aggregate(clips, DEFAULT_VOCABS).get("majmin", 0.0)
+    base_agg = aggregate(base_clips, DEFAULT_VOCABS).get("majmin", 0.0)
+    rate, deltas = win_rate(clips, base_clips, metric="majmin")
+    ci = bootstrap_delta_ci(clips, base_clips, "majmin", n_resamples=bootstrap, seed=seed)
+    passes = ci.lo >= gate_margin and rate > 0.5
+    verdict = "✅ PASS" if passes else "❌ not met"
+    wins = sum(1 for _, d in deltas if d > 1e-9)
+    lines = [
+        f"## `{name}` vs `{base_name}` (majmin)",
+        "",
+        f"- weighted-mean majmin: **{agg:.3f}** vs {base_agg:.3f} (Δ **{agg - base_agg:+.3f}**)",
+        f"- per-clip win rate: **{rate:.0%}** ({wins}/{len(deltas)} clips)",
+        f"- bootstrap {ci.level:.0%} CI on Δ: **[{ci.lo:+.3f}, {ci.hi:+.3f}]** "
+        f"({bootstrap} resamples, seed {seed})",
+        f"- gate (Δ CI-lower ≥ {gate_margin:+.2f} **and** win rate > 50%): {verdict}",
+        "",
+        "| clip | Δ majmin |",
+        "|---|---|",
+    ]
+    lines += [f"| {cn} | {d:+.3f} |" for cn, d in deltas]
+    lines.append("")
+    return lines
+
+
+def _score_table(clips: list[ClipScore]) -> list[str]:
     vocabs = DEFAULT_VOCABS
-    lines = [f"# Chord eval — `{name}`", ""]
     header = "| clip | dur (s) | " + " | ".join(vocabs) + " |"
     sep = "|" + "---|" * (len(vocabs) + 2)
-    lines += [header, sep]
+    lines = [header, sep]
     for c in clips:
         cells = " | ".join(f"{c.scores.get(v, 0.0):.3f}" for v in vocabs)
         lines.append(f"| {c.name} | {c.duration:.1f} | {cells} |")
     agg = aggregate(clips, vocabs)
     lines.append("| **weighted mean** | | " + " | ".join(f"**{agg[v]:.3f}**" for v in vocabs) + " |")
     lines.append("")
+    return lines
+
+
+def _markdown(
+    name: str,
+    clips: list[ClipScore],
+    baseline: tuple[str, list[ClipScore]] | None,
+    *,
+    bootstrap: int = 2000,
+    seed: int = 0,
+    gate_margin: float = 0.08,
+) -> str:
+    lines = [f"# Chord eval — `{name}`", ""]
+    lines += _score_table(clips)
     if baseline is not None:
         base_name, base_clips = baseline
-        rate, deltas = win_rate(clips, base_clips, metric="majmin")
-        base_agg = aggregate(base_clips, vocabs)
-        lines += [
-            f"## vs baseline `{base_name}` (majmin)",
-            "",
-            f"- weighted-mean majmin: **{agg.get('majmin', 0.0):.3f}** "
-            f"vs {base_agg.get('majmin', 0.0):.3f} "
-            f"(Δ {agg.get('majmin', 0.0) - base_agg.get('majmin', 0.0):+.3f})",
-            f"- per-clip win rate: **{rate:.0%}** ({sum(1 for _, d in deltas if d > 1e-9)}/{len(deltas)} clips)",
-            "",
-            "| clip | Δ majmin |",
-            "|---|---|",
-        ]
-        for cn, d in deltas:
-            lines.append(f"| {cn} | {d:+.3f} |")
-        lines.append("")
+        lines += _gate_block(
+            name, clips, base_name, base_clips,
+            bootstrap=bootstrap, seed=seed, gate_margin=gate_margin,
+        )
+    return "\n".join(lines)
+
+
+def _multi_markdown(
+    results: list[tuple[str, list[ClipScore]]],
+    base_name: str,
+    *,
+    bootstrap: int,
+    seed: int,
+    gate_margin: float,
+) -> str:
+    """A/B/C report: one aggregate row per engine, then each engine vs the baseline."""
+    vocabs = DEFAULT_VOCABS
+    by_name = dict(results)
+    lines = ["# Chord eval — A/B/C", "", "## Aggregate (duration-weighted)", ""]
+    lines += ["| engine | " + " | ".join(vocabs) + " |", "|" + "---|" * (len(vocabs) + 1)]
+    for name, clips in results:
+        agg = aggregate(clips, vocabs)
+        tag = " _(baseline)_" if name == base_name else ""
+        lines.append(f"| `{name}`{tag} | " + " | ".join(f"{agg[v]:.3f}" for v in vocabs) + " |")
+    lines.append("")
+    base_clips = by_name[base_name]
+    for name, clips in results:
+        if name == base_name:
+            continue
+        lines += _gate_block(
+            name, clips, base_name, base_clips,
+            bootstrap=bootstrap, seed=seed, gate_margin=gate_margin,
+        )
     return "\n".join(lines)
 
 
@@ -136,28 +213,62 @@ def _write_csv(path: Path, name: str, clips: list[ClipScore]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", default="tests/eval", help="folder of audio + .lab pairs")
-    ap.add_argument("--engine", required=True, help="librosa | chordino | deep")
-    ap.add_argument("--baseline", default=None, help="optional engine to compare against")
+    ap.add_argument("--engine", default=None, help="single engine: librosa | chordino | deep")
+    ap.add_argument(
+        "--engines",
+        default=None,
+        help="comma-separated engines for an A/B/C report, e.g. 'deep,chordino,librosa'",
+    )
+    ap.add_argument("--baseline", default=None, help="engine to compare against (the gate bar)")
     ap.add_argument("--out", default=None, help="markdown report path (default: stdout)")
     ap.add_argument("--csv", default=None, help="optional per-clip CSV path")
+    ap.add_argument("--bootstrap", type=int, default=2000, help="bootstrap resamples for the Δ CI")
+    ap.add_argument("--seed", type=int, default=0, help="bootstrap RNG seed (reproducible)")
+    ap.add_argument(
+        "--gate-margin", type=float, default=0.08,
+        help="required majmin Δ CI-lower bound for a PASS verdict (gate target ~+0.08-0.10)",
+    )
     args = ap.parse_args(argv)
+
+    if not args.engine and not args.engines:
+        ap.error("pass --engine or --engines")
 
     dataset = Path(args.dataset)
     pairs = _find_pairs(dataset)
     if not pairs:
         raise SystemExit(f"no audio+.lab pairs found under {dataset}/")
 
-    clips = _score_engine(args.engine, pairs)
-    baseline = (args.baseline, _score_engine(args.baseline, pairs)) if args.baseline else None
+    if args.engines:
+        names: list[str] = []
+        for n in args.engines.split(","):
+            n = n.strip()
+            if n and n not in names:
+                names.append(n)
+        base_name = args.baseline or names[-1]  # default: last engine is the baseline
+        if base_name not in names:
+            names.append(base_name)
+        results = [(n, _score_engine(n, pairs)) for n in names]
+        report = _multi_markdown(
+            results, base_name,
+            bootstrap=args.bootstrap, seed=args.seed, gate_margin=args.gate_margin,
+        )
+        primary = results[0]
+    else:
+        clips = _score_engine(args.engine, pairs)
+        baseline = (args.baseline, _score_engine(args.baseline, pairs)) if args.baseline else None
+        report = _markdown(
+            args.engine, clips, baseline,
+            bootstrap=args.bootstrap, seed=args.seed, gate_margin=args.gate_margin,
+        )
+        primary = (args.engine, clips)
 
-    report = _markdown(args.engine, clips, baseline)
     if args.out:
         Path(args.out).write_text(report, encoding="utf-8")
         print(f"wrote {args.out}")
     else:
         print(report)
     if args.csv:
-        _write_csv(Path(args.csv), args.engine, clips)
+        _write_csv(Path(args.csv), primary[0], primary[1])
         print(f"wrote {args.csv}")
     return 0
 
