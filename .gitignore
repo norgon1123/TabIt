@@ -18,6 +18,10 @@ storage/
 # Generated eval stem datasets (derived from tests/eval via scripts/make_eval_stems.py)
 tests/eval-stems/
 
+# Vendored BTC model weights — staged out of band on the inference box, not committed
+# (large; see vendor/btc/README.md). The inference source under vendor/btc/ IS tracked.
+vendor/btc/weights/
+
 # OS / editor
 .DS_Store
 .idea/
