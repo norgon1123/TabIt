@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
 import { renderWithProviders } from "../test/utils";
@@ -42,5 +43,38 @@ test("shows analyzing state when the chart is not ready", async () => {
     http.get("/api/recordings/r1/chart", () => HttpResponse.json({ detail: "Chart not found" }, { status: 404 })),
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
-  expect(await screen.findByText(/analyzing/i)).toBeInTheDocument();
+  // Both the header loading indicator and the body placeholder say "Analyzing…".
+  expect((await screen.findAllByText(/analyzing/i)).length).toBeGreaterThan(0);
+});
+
+test("re-analyze button posts to the analyze endpoint", async () => {
+  login();
+  let hit = false;
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+    http.post("/api/recordings/r1/analyze", () => {
+      hit = true;
+      return HttpResponse.json(
+        { status: "pending", bpm: null, detected_key_tonic: null, detected_key_mode: null, engine_version: null, error: null },
+        { status: 202 },
+      );
+    }),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await screen.findByText(/120 BPM/i);
+  await userEvent.click(screen.getByRole("button", { name: /re-analyze/i }));
+  await waitFor(() => expect(hit).toBe(true));
+});
+
+test("shows a spinner while analysis is running", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () =>
+      HttpResponse.json({ ...RECORDING, analysis: { ...RECORDING.analysis, status: "running" } }),
+    ),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json({ detail: "Chart not found" }, { status: 404 })),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  expect(await screen.findByRole("status")).toBeInTheDocument();
 });

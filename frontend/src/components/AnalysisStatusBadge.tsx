@@ -1,4 +1,5 @@
 import type { AnalysisOut } from "../api/types";
+import Spinner from "./Spinner";
 
 const COLORS: Record<string, string> = {
   pending: "var(--muted)",
@@ -9,8 +10,14 @@ const COLORS: Record<string, string> = {
 
 export default function AnalysisStatusBadge({ analysis }: { analysis: AnalysisOut | null }) {
   const status = analysis?.status ?? "pending";
+  const inProgress = status === "pending" || status === "running";
   return (
     <span style={{ color: COLORS[status] ?? "var(--muted)", fontWeight: 600 }}>
+      {inProgress && (
+        <>
+          <Spinner size={12} label={status} />{" "}
+        </>
+      )}
       {status}
       {analysis?.status === "done" && analysis.bpm != null && (
         <span className="muted" style={{ fontWeight: 400 }}>

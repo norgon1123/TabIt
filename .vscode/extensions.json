@@ -1,0 +1,32 @@
+{
+  // Recommended extensions for Tabit (Python/FastAPI backend + React/TS frontend).
+  // VS Code will prompt to install these when the repo is opened.
+  "recommendations": [
+    // --- IntelliJ-like feel ---
+    "k--kato.intellij-idea-keybindings", // JetBrains keymap (Shift Shift, Alt+Enter, etc.)
+    "alefragnani.project-manager",        // JetBrains-style project switching
+    "usernamehw.errorlens",               // inline diagnostics, like IntelliJ inspections
+    "eamodio.gitlens",                    // IntelliJ-grade VCS integration
+    "gruntfuggly.todo-tree",              // TODO/FIXME tool window
+    "pkief.material-icon-theme",          // familiar file-tree icons
+
+    // --- Python (backend) ---
+    "ms-python.python",
+    "ms-python.vscode-pylance",           // code intelligence / type checking
+    "ms-python.debugpy",                  // debugger (uvicorn, pytest)
+
+    // --- TypeScript / React (frontend) ---
+    "vitest.explorer",                    // run/debug Vitest from the gutter
+
+    // --- General must-haves ---
+    "streetsidesoftware.code-spell-checker",
+    "christian-kohler.path-intellisense",
+    "editorconfig.editorconfig",
+    "humao.rest-client",                  // hit the FastAPI endpoints in-editor
+
+    // --- Optional: this repo has no config for these yet, but harmless ---
+    "charliermarsh.ruff",                 // Python lint/format (runs on defaults)
+    "dbaeumer.vscode-eslint",             // JS/TS lint (runs on defaults)
+    "esbenp.prettier-vscode"              // formatter (runs on defaults)
+  ]
+}

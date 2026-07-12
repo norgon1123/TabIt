@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from app.audio.beatgrid import ensure_grid, time_for_beat, total_beats
 from app.db import get_db
 from app.deps import get_current_user, get_owned_recording
 from app.models import ChordChart, ChordSegment, Recording, User
@@ -9,6 +10,8 @@ from app.music_theory import Quality, key_prefers_flats, roman_numeral, transpos
 from app.schemas import (
     ChartCreate,
     ChartOut,
+    ChartSettingsUpdate,
+    SegmentBatchUpdate,
     SegmentCreate,
     SegmentOut,
     SegmentUpdate,
@@ -18,11 +21,20 @@ from app.schemas import (
 router = APIRouter(prefix="/api", tags=["charts"])
 
 
-def _segment_out(seg: ChordSegment, chart: ChordChart) -> SegmentOut:
+def _chart_grid(chart: ChordChart) -> tuple[list[float], float]:
+    duration = chart.recording.duration_seconds or 0.0
+    bpm = chart.recording.analysis.bpm if chart.recording.analysis else None
+    grid = ensure_grid(list(chart.beat_times or []), bpm, duration)
+    return grid, duration
+
+
+def _segment_out(seg: ChordSegment, chart: ChordChart, grid: list[float], duration: float) -> SegmentOut:
     return SegmentOut(
         id=seg.id,
-        start_time=seg.start_time,
-        end_time=seg.end_time,
+        start_beat=seg.start_beat,
+        end_beat=seg.end_beat,
+        start_time=time_for_beat(seg.start_beat, grid, duration),
+        end_time=time_for_beat(seg.end_beat, grid, duration),
         chord_root=seg.chord_root,
         chord_quality=seg.chord_quality,
         roman_numeral=roman_numeral(
@@ -32,12 +44,16 @@ def _segment_out(seg: ChordSegment, chart: ChordChart) -> SegmentOut:
 
 
 def _chart_out(chart: ChordChart) -> ChartOut:
+    grid, duration = _chart_grid(chart)
     return ChartOut(
         id=chart.id,
         recording_id=chart.recording_id,
         key_tonic=chart.key_tonic,
         key_mode=chart.key_mode,
-        segments=[_segment_out(s, chart) for s in chart.segments],
+        beats_per_measure=chart.beats_per_measure,
+        measure_offset=chart.measure_offset,
+        beat_times=list(chart.beat_times or []),
+        segments=[_segment_out(s, chart, grid, duration) for s in chart.segments],
     )
 
 
@@ -53,16 +69,17 @@ def _owned_chart(db: DbSession, user: User, chart_id: str) -> ChordChart:
 
 
 def _validate_segment_window(
-    chart: ChordChart, start: float, end: float, duration: float | None, exclude_id: str | None
+    chart: ChordChart, start: float, end: float, exclude_id: str | None
 ) -> None:
     if start >= end:
-        raise HTTPException(status_code=422, detail="start_time must be before end_time")
-    if duration is not None and end > duration:
-        raise HTTPException(status_code=422, detail="end_time exceeds recording duration")
+        raise HTTPException(status_code=422, detail="start_beat must be before end_beat")
+    grid, duration = _chart_grid(chart)
+    if duration and end > total_beats(grid, duration) + 1e-6:
+        raise HTTPException(status_code=422, detail="end_beat exceeds the chart's beat grid")
     for other in chart.segments:
         if other.id == exclude_id:
             continue
-        if start < other.end_time and end > other.start_time:
+        if start < other.end_beat and end > other.start_beat:
             raise HTTPException(status_code=422, detail="segment overlaps an existing segment")
 
 
@@ -109,20 +126,19 @@ def add_segment(
     user: User = Depends(get_current_user),
 ) -> SegmentOut:
     chart = _owned_chart(db, user, chart_id)
-    _validate_segment_window(
-        chart, payload.start_time, payload.end_time, chart.recording.duration_seconds, None
-    )
+    _validate_segment_window(chart, payload.start_beat, payload.end_beat, None)
     seg = ChordSegment(
         chart_id=chart.id,
-        start_time=payload.start_time,
-        end_time=payload.end_time,
+        start_beat=payload.start_beat,
+        end_beat=payload.end_beat,
         chord_root=payload.chord_root,
         chord_quality=payload.chord_quality,
     )
     db.add(seg)
     db.commit()
     db.refresh(seg)
-    return _segment_out(seg, chart)
+    grid, duration = _chart_grid(chart)
+    return _segment_out(seg, chart, grid, duration)
 
 
 @router.patch("/charts/{chart_id}/segments/{segment_id}", response_model=SegmentOut)
@@ -137,20 +153,57 @@ def update_segment(
     seg = next((s for s in chart.segments if s.id == segment_id), None)
     if seg is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
-    new_start = payload.start_time if payload.start_time is not None else seg.start_time
-    new_end = payload.end_time if payload.end_time is not None else seg.end_time
-    _validate_segment_window(
-        chart, new_start, new_end, chart.recording.duration_seconds, exclude_id=seg.id
-    )
-    seg.start_time = new_start
-    seg.end_time = new_end
+    new_start = payload.start_beat if payload.start_beat is not None else seg.start_beat
+    new_end = payload.end_beat if payload.end_beat is not None else seg.end_beat
+    _validate_segment_window(chart, new_start, new_end, exclude_id=seg.id)
+    seg.start_beat = new_start
+    seg.end_beat = new_end
     if payload.chord_root is not None:
         seg.chord_root = payload.chord_root
     if payload.chord_quality is not None:
         seg.chord_quality = payload.chord_quality
     db.commit()
     db.refresh(seg)
-    return _segment_out(seg, chart)
+    grid, duration = _chart_grid(chart)
+    return _segment_out(seg, chart, grid, duration)
+
+
+@router.patch("/charts/{chart_id}/segments", response_model=ChartOut)
+def resize_segments(
+    chart_id: str,
+    payload: SegmentBatchUpdate,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ChartOut:
+    chart = _owned_chart(db, user, chart_id)
+    by_id = {s.id: s for s in chart.segments}
+    for w in payload.segments:
+        if w.id not in by_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
+        if w.start_beat >= w.end_beat:
+            raise HTTPException(status_code=422, detail="start_beat must be before end_beat")
+
+    # Validate the resulting FULL set (requested windows layered over current ones).
+    windows = {s.id: (s.start_beat, s.end_beat) for s in chart.segments}
+    for w in payload.segments:
+        windows[w.id] = (w.start_beat, w.end_beat)
+    ordered = sorted(windows.values())
+    for (s1, e1), (s2, e2) in zip(ordered, ordered[1:]):
+        if s1 < e2 and e1 > s2:
+            raise HTTPException(status_code=422, detail="segment overlaps an existing segment")
+    grid, duration = _chart_grid(chart)
+    # ordered[-1][1] is the global max end_beat only because the overlap check above
+    # already guaranteed the set is non-overlapping (sorted-by-start == sorted-by-end).
+    if duration and ordered and ordered[-1][1] > total_beats(grid, duration) + 1e-6:
+        raise HTTPException(status_code=422, detail="end_beat exceeds the chart's beat grid")
+
+    for w in payload.segments:
+        seg = by_id[w.id]
+        seg.start_beat = w.start_beat
+        seg.end_beat = w.end_beat
+    db.commit()
+    db.refresh(chart)
+    return _chart_out(chart)
 
 
 @router.delete(
@@ -168,6 +221,23 @@ def delete_segment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
     db.delete(seg)
     db.commit()
+
+
+@router.patch("/charts/{chart_id}/settings", response_model=ChartOut)
+def update_chart_settings(
+    chart_id: str,
+    payload: ChartSettingsUpdate,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ChartOut:
+    chart = _owned_chart(db, user, chart_id)
+    if payload.beats_per_measure is not None:
+        chart.beats_per_measure = payload.beats_per_measure
+    if payload.measure_offset is not None:
+        chart.measure_offset = payload.measure_offset
+    db.commit()
+    db.refresh(chart)
+    return _chart_out(chart)
 
 
 @router.post("/charts/{chart_id}/transpose", response_model=ChartOut)

@@ -1,40 +1,67 @@
-import { useEffect, useState } from "react";
-import type { SegmentOut } from "../api/types";
+import { useEffect, useRef, useState } from "react";
+import type { SegmentOut, SegmentWindowInput } from "../api/types";
 import type { SegmentPatch } from "./useChart";
 import { ROOTS, QUALITIES, QUALITY_LABELS } from "../api/music";
-import { roundCs } from "./timeMath";
+import { redistributeLength } from "./chartLayout";
 
 interface Props {
   segment: SegmentOut;
+  allSegments: SegmentOut[];
+  maxTotalBeats: number;
+  onResize: (windows: SegmentWindowInput[]) => void;
   onSave: (patch: SegmentPatch) => Promise<void>;
   onDelete: () => void;
   busy: boolean;
+  debounceMs?: number;
 }
 
-export default function SegmentEditor({ segment, onSave, onDelete, busy }: Props) {
+export default function SegmentEditor({
+  segment,
+  allSegments,
+  maxTotalBeats,
+  onResize,
+  onSave,
+  onDelete,
+  busy,
+  debounceMs = 400,
+}: Props) {
   const [root, setRoot] = useState(segment.chord_root);
   const [quality, setQuality] = useState(segment.chord_quality);
-  const [start, setStart] = useState(segment.start_time);
-  const [end, setEnd] = useState(segment.end_time);
+  const [beats, setBeats] = useState(segment.end_beat - segment.start_beat);
   const [error, setError] = useState<string | null>(null);
+  const timer = useRef<number | null>(null);
 
   useEffect(() => {
     setRoot(segment.chord_root);
     setQuality(segment.chord_quality);
-    setStart(segment.start_time);
-    setEnd(segment.end_time);
+    setBeats(segment.end_beat - segment.start_beat);
     setError(null);
-  }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_time, segment.end_time]);
+  }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_beat, segment.end_beat]);
 
-  async function save() {
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, [segment.id]);
+
+  function changeBeats(value: number) {
+    setBeats(value);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      const ordered = [...allSegments].sort((a, b) => a.start_beat - b.start_beat);
+      const index = ordered.findIndex((s) => s.id === segment.id);
+      if (index < 0) return;
+      const windows = redistributeLength(ordered, index, value, maxTotalBeats);
+      onResize(
+        windows.map((w, i) => ({
+          id: ordered[i].id,
+          start_beat: w.start_beat,
+          end_beat: w.end_beat,
+        })),
+      );
+    }, debounceMs);
+  }
+
+  async function saveChord() {
     setError(null);
     try {
-      await onSave({
-        chord_root: root,
-        chord_quality: quality,
-        start_time: roundCs(start),
-        end_time: roundCs(end),
-      });
+      await onSave({ chord_root: root, chord_quality: quality });
     } catch (err) {
       const detail = (err as { detail?: string }).detail;
       setError(detail ?? "Could not save segment");
@@ -47,40 +74,28 @@ export default function SegmentEditor({ segment, onSave, onDelete, busy }: Props
       <label>
         Root
         <select value={root} onChange={(e) => setRoot(e.target.value)}>
-          {ROOTS.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
+          {ROOTS.map((r) => (<option key={r} value={r}>{r}</option>))}
         </select>
       </label>
       <label>
         Quality
         <select value={quality} onChange={(e) => setQuality(e.target.value)}>
-          {QUALITIES.map((q) => (
-            <option key={q} value={q}>{QUALITY_LABELS[q]}</option>
-          ))}
+          {QUALITIES.map((q) => (<option key={q} value={q}>{QUALITY_LABELS[q]}</option>))}
         </select>
       </label>
       <label>
-        Start (s)
+        Beats
         <input
           type="number"
-          step="0.01"
-          value={roundCs(start)}
-          onChange={(e) => setStart(Number(e.target.value))}
-        />
-      </label>
-      <label>
-        End (s)
-        <input
-          type="number"
-          step="0.01"
-          value={roundCs(end)}
-          onChange={(e) => setEnd(Number(e.target.value))}
+          step="0.5"
+          min="0.5"
+          value={beats}
+          onChange={(e) => changeBeats(Number(e.target.value))}
         />
       </label>
       {error && <p className="error">{error}</p>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button className="primary" onClick={save} disabled={busy}>Save</button>
+        <button className="primary" onClick={saveChord} disabled={busy}>Save</button>
         <button className="danger" onClick={onDelete} disabled={busy}>Delete</button>
       </div>
     </div>

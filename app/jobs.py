@@ -9,7 +9,15 @@ from functools import lru_cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.audio.analyzer import Analyzer, AnalysisResult, ChordinoAnalyzer, LibrosaAnalyzer
+from app.audio.analyzer import (
+    Analyzer,
+    AnalysisResult,
+    BTCAnalyzer,
+    ChordinoAnalyzer,
+    LibrosaAnalyzer,
+)
+from app.audio.beatgrid import beat_for_time, ensure_grid, snap_half, total_beats
+from app.audio.separation import SeparationService
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Analysis, ChordChart, ChordSegment, Recording
@@ -62,29 +70,40 @@ def _seed_chart(db: Session, recording: Recording, result: AnalysisResult) -> No
         db.delete(existing)
         db.flush()
 
-    # #1: trust the server-decoded length over the browser-reported duration, which is
-    # unreliable for VBR mp3/m4a and let charts run past the end of the audio.
+    # #1: trust the server-decoded length over the browser-reported duration.
     duration = result.duration
     recording.duration_seconds = duration
 
+    grid = ensure_grid(result.beat_times, result.bpm, duration)
+    max_beat = total_beats(grid, duration)
+
     tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
     prefer_flats = key_prefers_flats(tonic, result.key_mode)
-    chart = ChordChart(recording_id=recording.id, key_tonic=tonic, key_mode=result.key_mode)
+    chart = ChordChart(
+        recording_id=recording.id,
+        key_tonic=tonic,
+        key_mode=result.key_mode,
+        beat_times=grid,
+    )
     db.add(chart)
     db.flush()
+
+    cursor = 0.0  # beats; chords are laid out contiguously from beat 0
     for segment in result.segments:
-        end_time = min(segment.end_time, duration)
-        if end_time <= segment.start_time:  # fully past the end of the audio; drop it
+        end_beat = snap_half(beat_for_time(min(segment.end_time, duration), grid))
+        end_beat = min(end_beat, max_beat)
+        if end_beat - cursor < 0.5:  # too short after snapping; skip
             continue
         db.add(
             ChordSegment(
                 chart_id=chart.id,
-                start_time=segment.start_time,
-                end_time=end_time,
+                start_beat=cursor,
+                end_beat=end_beat,
                 chord_root=pitch_class_to_note(segment.root_pc, prefer_flats=prefer_flats),
                 chord_quality=segment.quality.value,
             )
         )
+        cursor = end_beat
 
 
 class JobDispatcher:
@@ -119,8 +138,35 @@ def _build_librosa_analyzer(settings) -> Analyzer:
     )
 
 
+def _build_btc_analyzer(settings) -> Analyzer:
+    """The deep engine, fed a Demucs stem when separation is enabled.
+
+    Nothing heavy is imported here: Demucs and the BTC weights load on the first analyze()
+    call, on the worker thread. A missing dependency therefore surfaces as a failed analysis
+    with the real error, never as a silent downgrade — the deep model is the point of
+    selecting this engine (see the "not swappable" note in app/audio/deep_chord.py).
+    """
+    separator = (
+        SeparationService(
+            model=settings.separation_model, device=settings.analysis_device
+        )
+        if settings.enable_separation
+        else None
+    )
+    return BTCAnalyzer(
+        settings.analysis_sample_rate,
+        min_segment_seconds=settings.analysis_min_segment_seconds,
+        device=settings.analysis_device,
+        separator=separator,
+        stem=settings.separation_stems,
+    )
+
+
 def _build_analyzer(settings) -> Analyzer:
-    if settings.analysis_engine == "chordino":
+    engine = settings.analysis_engine.lower()
+    if engine in ("btc", "deep"):
+        return _build_btc_analyzer(settings)
+    if engine == "chordino":
         try:
             return ChordinoAnalyzer(
                 settings.analysis_sample_rate,

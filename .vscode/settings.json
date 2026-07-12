@@ -1,0 +1,33 @@
+{
+  // --- Python (backend) ---
+  // Points at the .venv the setup docs tell you to create:
+  //   python -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+
+  // --- TypeScript / React (frontend) ---
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+
+  // --- Editor behaviour ---
+  "editor.formatOnSave": false, // no Prettier/Ruff config committed yet — flip to true once you add one
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.egg-info": true,
+    "**/.pytest_cache": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/frontend/dist": true,
+    "**/storage": true,
+    "**/.venv": true
+  },
+
+  // --- Vitest ---
+  "vitest.rootConfig": "frontend/vite.config.ts"
+}
