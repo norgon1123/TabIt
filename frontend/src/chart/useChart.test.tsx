@@ -73,6 +73,31 @@ test("updateSegment patches the right segment", async () => {
   expect(body).toEqual({ chord_quality: "min" });
 });
 
+test("correcting the key patches settings and refreshes numerals, not chords", async () => {
+  let body: unknown = null;
+  server.use(
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+    http.patch("/api/charts/c1/settings", async ({ request }) => {
+      body = await request.json();
+      // What the server returns: same chord, re-derived numeral (C is IV in G major).
+      return HttpResponse.json({
+        ...CHART,
+        key_tonic: "G",
+        segments: [{ ...CHART.segments[0], roman_numeral: "IV" }],
+      });
+    }),
+  );
+  const { result } = renderHook(() => useChart("r1"), { wrapper });
+  await waitFor(() => expect(result.current.chart).not.toBeNull());
+
+  await result.current.updateSettings({ key_tonic: "G" });
+  expect(body).toEqual({ key_tonic: "G" });
+  // The response is adopted into the cache, so the UI re-renders without a refetch.
+  await waitFor(() => expect(result.current.chart!.key_tonic).toBe("G"));
+  expect(result.current.chart!.segments[0].roman_numeral).toBe("IV");
+  expect(result.current.chart!.segments[0].chord_root).toBe("C");
+});
+
 const CHART_BEATS = {
   id: "c1", recording_id: "r1", key_tonic: "C", key_mode: "major",
   beats_per_measure: 4, measure_offset: 0, beat_times: [],

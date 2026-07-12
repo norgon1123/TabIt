@@ -4,6 +4,14 @@ export const ROOTS = [
   "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
 ];
 
+// Key modes accepted by the backend (^(major|minor)$).
+export const MODES = ["major", "minor"] as const;
+
+export const MODE_LABELS: Record<(typeof MODES)[number], string> = {
+  major: "Major",
+  minor: "Minor",
+};
+
 export const QUALITIES = ["maj", "min", "dom7", "maj7", "min7"] as const;
 
 export const QUALITY_LABELS: Record<(typeof QUALITIES)[number], string> = {
