@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SegmentOut } from "../api/types";
-import { boundaryUpdates, chordsPerLine, groupIntoLines, type SegmentUpdate } from "./chartLayout";
-import { clampBoundary } from "./timeMath";
+import {
+  boundaryUpdates,
+  groupIntoLines,
+  MEASURES_PER_LINE,
+  type SegmentUpdate,
+} from "./chartLayout";
+import { beatSlashMarks, clampBeatBoundary } from "./beatMath";
 
 export type { SegmentUpdate };
 
 interface Props {
   segments: SegmentOut[];
-  bpm: number | null;
+  beatsPerMeasure: number;
+  measureOffset: number;
   duration: number;
   currentTime: number;
   playing?: boolean;
@@ -18,8 +24,8 @@ interface Props {
   onResizeCommit?: (updates: SegmentUpdate[]) => void;
 }
 
-// Horizontal pointer movement → time for the resize handles.
-const SECONDS_PER_PIXEL = 0.02;
+// Horizontal pointer movement -> beats for the resize handles.
+const BEATS_PER_PIXEL = 0.05;
 
 function chordLabel(s: SegmentOut): string {
   const q = s.chord_quality === "maj" ? "" : s.chord_quality === "min" ? "m" : s.chord_quality;
@@ -28,8 +34,8 @@ function chordLabel(s: SegmentOut): string {
 
 export default function Timeline({
   segments,
-  bpm,
-  duration,
+  beatsPerMeasure,
+  measureOffset,
   currentTime,
   playing = false,
   rate = 1,
@@ -38,21 +44,22 @@ export default function Timeline({
   onSeek,
   onResizeCommit,
 }: Props) {
+  // Layout is by beats; playback positioning uses the derived seconds.
   const ordered = useMemo(
-    () => [...segments].sort((a, b) => a.start_time - b.start_time),
+    () => [...segments].sort((a, b) => a.start_beat - b.start_beat),
     [segments],
   );
   const indexById = useMemo(
     () => new Map(ordered.map((s, i) => [s.id, i] as const)),
     [ordered],
   );
-  const perLine = chordsPerLine(bpm);
-  const lines = groupIntoLines(ordered, perLine);
+  const beatsPerLine = Math.max(1, beatsPerMeasure) * MEASURES_PER_LINE;
+  const lines = groupIntoLines(ordered, beatsPerLine);
   const suppressClick = useRef(false);
 
-  // The chord under the playhead. Derived from currentTime, but a precise timer
-  // advances it exactly at the chord boundary so the highlight switches on time
-  // instead of waiting for the next (~4Hz) timeupdate.
+  // The chord under the playhead, derived from currentTime (seconds). A precise
+  // timer advances it exactly at the chord boundary so the highlight switches on
+  // time instead of waiting for the next (~4Hz) timeupdate.
   const [activeId, setActiveId] = useState<string | null>(null);
   useEffect(() => {
     const active =
@@ -96,20 +103,18 @@ export default function Timeline({
     const seg = ordered[index];
     const left = edge === "left" ? ordered[index - 1] : seg;
     const right = edge === "left" ? seg : ordered[index + 1];
-    const oldBoundary = edge === "left" ? seg.start_time : seg.end_time;
-    const lower = left ? left.start_time : 0;
-    const upper = right ? right.end_time : duration || seg.end_time;
+    const oldBoundary = edge === "left" ? seg.start_beat : seg.end_beat;
+    const lower = left ? left.start_beat : 0;
+    const upper = right ? right.end_beat : oldBoundary + beatsPerMeasure;
     const startX = e.clientX;
 
-    const move = (ev: PointerEvent) => {
-      ev.preventDefault();
-    };
+    const move = (ev: PointerEvent) => ev.preventDefault();
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       suppressClick.current = true;
-      const dt = (ev.clientX - startX) * SECONDS_PER_PIXEL;
-      const boundary = clampBoundary(oldBoundary + dt, lower, upper);
+      const db = (ev.clientX - startX) * BEATS_PER_PIXEL;
+      const boundary = clampBeatBoundary(oldBoundary + db, lower, upper);
       const updates = boundaryUpdates(left, right, oldBoundary, boundary);
       if (updates.length) onResizeCommit(updates);
     };
@@ -125,7 +130,10 @@ export default function Timeline({
             const i = indexById.get(s.id)!;
             const selected = s.id === selectedId;
             const isActive = s.id === activeId;
-            const span = Math.max(0.01, s.end_time - s.start_time);
+            const beats = Math.max(0.5, s.end_beat - s.start_beat);
+            // A bar line is drawn on the left edge of cells that start a measure.
+            const onMeasure =
+              Math.abs(((s.start_beat - measureOffset) % beatsPerMeasure)) < 1e-6;
             return (
               <div
                 key={s.id}
@@ -146,7 +154,8 @@ export default function Timeline({
                 }}
                 style={{
                   position: "relative",
-                  flex: `${span} 1 0`,
+                  // Width tracks the chord's beat count within the line.
+                  flex: `${beats} 1 0`,
                   minWidth: 56,
                   height: 64,
                   display: "flex",
@@ -156,6 +165,11 @@ export default function Timeline({
                   cursor: "pointer",
                   overflow: "hidden",
                   border: selected ? "2px solid var(--accent)" : "1px solid #2c313a",
+                  borderLeft: onMeasure
+                    ? "3px solid var(--accent)"
+                    : selected
+                      ? "2px solid var(--accent)"
+                      : "1px solid #2c313a",
                   background: isActive ? "#26303f" : "var(--panel)",
                 }}
               >
@@ -169,6 +183,7 @@ export default function Timeline({
                   />
                 )}
                 <strong>{chordLabel(s)}</strong>
+                <span className="muted slash-marks">{beatSlashMarks(beats)}</span>
                 <span className="muted">{s.roman_numeral}</span>
                 {onResizeCommit && (
                   <span

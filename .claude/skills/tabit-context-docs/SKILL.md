@@ -8,9 +8,10 @@ description: Use when creating or updating Tabit's CONTEXT.md (architecture orie
 Generate and maintain two root-level docs for the Tabit repo:
 
 - **CONTEXT.md** — the *mental model*. What Tabit is, how the pieces fit, the data model, the analysis pipeline, and the invariants. Audience: anyone (human or agent) who needs to understand the system before touching it.
-- **AGENTS.md** — the *operating manual*. Commands, conventions, gotchas, and the definition of done. Audience: a coding agent about to make a change.
+- **AGENTS.md** — the *operating manual*. Commands, conventions, gotchas, and the definition of done. Audience: a coding agent about to make a change. This is the canonical instructions file (the tool-agnostic standard).
+- **CLAUDE.md** — a symlink to `AGENTS.md`, so Claude Code auto-loads the operating manual without maintaining a second copy. Never edit `CLAUDE.md` directly; edit `AGENTS.md` and let the symlink follow.
 
-Keep them disjoint: CONTEXT.md explains *what is true*; AGENTS.md tells you *what to do*. Don't duplicate command lists into CONTEXT.md or architecture prose into AGENTS.md.
+Keep CONTEXT.md and AGENTS.md disjoint: CONTEXT.md explains *what is true*; AGENTS.md tells you *what to do*. Don't duplicate command lists into CONTEXT.md or architecture prose into AGENTS.md.
 
 ## Core rule: verify before you write
 
@@ -36,10 +37,21 @@ If a template line contradicts the code, the code wins — update the line. If a
 2. **Gather facts** by reading the files in the table above. Prefer a single broad read pass over the relevant dirs.
 3. **Write CONTEXT.md** from the template, replacing each section with verified content.
 4. **Write AGENTS.md** from the template, same discipline.
-5. **Cross-check** the two don't contradict each other (e.g. same test command, same invariants worded consistently).
-6. **Report** which facts you verified and any drift you corrected, so the user can sanity-check.
+5. **Link CLAUDE.md → AGENTS.md.** Ensure `CLAUDE.md` is a relative symlink to `AGENTS.md` so Claude Code auto-loads the operating manual:
+
+       ln -sf AGENTS.md CLAUDE.md   # run from the repo root
+
+   If a real `CLAUDE.md` file already exists (not a symlink), fold any unique content into `AGENTS.md` first, then replace it with the symlink. Verify with `ls -l CLAUDE.md` (should show `CLAUDE.md -> AGENTS.md`).
+6. **Cross-check** CONTEXT.md and AGENTS.md don't contradict each other (e.g. same test command, same invariants worded consistently).
+7. **Report** which facts you verified and any drift you corrected, so the user can sanity-check.
 
 When updating, do a section-by-section diff in your head: keep prose the user clearly hand-wrote, replace anything the code has outgrown, and add sections for newly-added subsystems.
+
+**Never drop these on update (load-bearing best practices, carry them forward verbatim unless the user changed them):**
+- The **Bug fixes specifically** definition of done (reproduce → failing test first → prove → root-cause fix → regression lock).
+- The **`create_all` schema gotcha** (new columns need `app/migrations.py`, not `create_all`).
+
+These live in the AGENTS.md template below precisely so they survive regeneration. If a future best practice must persist the same way, add it to the template here — not only to the generated file.
 
 ## Tabit facts (verify each — see table above)
 
@@ -164,6 +176,25 @@ mental model.
 - New behavior has tests in the matching suite.
 - Env/config changes documented in `README.md` and reflected in `app/config.py`.
 - Open items live in `docs/TODO.md` — don't silently regress them.
+
+### Bug fixes specifically
+A bug fix is **not done** until all of the following hold:
+1. **Reproduced.** You can trigger the reported failure yourself and have identified the
+   root cause — not just the symptom. State the root cause in the change.
+2. **Failing test first.** A test in the matching suite reproduces the bug and *fails for
+   the right reason* before the fix (watch it fail). Exercise the real failing path, not a
+   mock of it.
+3. **Proven by that test.** The same test passes after the fix, and the full relevant
+   suite still passes.
+4. **Fixed at the root, not the symptom.** Patching one stale database or one call site is
+   not a fix — make the code self-correct so the failure can't recur.
+5. **Regression locked in.** The new test stays in the suite so the bug can't silently return.
+
+> Schema gotcha that has bitten deletes before: `Base.metadata.create_all()` creates
+> missing *tables* but never adds *columns* to existing ones, so a pre-existing SQLite DB
+> keeps its old schema and the ORM fails on the new column. New columns must be added via
+> `app/migrations.py` (`run_additive_migrations`, run on startup and by
+> `scripts/migrate_beats.py`) — not by relying on `create_all`.
 ```
 
 ## Common mistakes
@@ -173,3 +204,5 @@ mental model.
 - **Bloating AGENTS.md with architecture** or **stuffing CONTEXT.md with commands.** Keep the split.
 - **Dropping the sharp edges** (immutable Analysis, re-analysis overwrites edits, ms precision, ffmpeg). These are exactly what saves the next agent.
 - **Overwriting hand-written prose on update.** Reconcile drift; preserve intentional human edits.
+- **Editing CLAUDE.md directly or committing it as a real file.** It's a symlink to AGENTS.md — edit AGENTS.md instead, and make sure the symlink (not a copied file) is what's committed.
+- **Dropping the load-bearing best practices** (Bug-fix definition of done, the `create_all` schema gotcha). They are baked into the template above so regeneration retains them — keep them.
