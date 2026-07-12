@@ -9,7 +9,14 @@ from functools import lru_cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.audio.analyzer import Analyzer, AnalysisResult, ChordinoAnalyzer, LibrosaAnalyzer
+from app.audio.analyzer import (
+    Analyzer,
+    AnalysisResult,
+    BTCAnalyzer,
+    ChordinoAnalyzer,
+    LibrosaAnalyzer,
+)
+from app.audio.separation import SeparationService
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Analysis, ChordChart, ChordSegment, Recording
@@ -119,8 +126,35 @@ def _build_librosa_analyzer(settings) -> Analyzer:
     )
 
 
+def _build_btc_analyzer(settings) -> Analyzer:
+    """The deep engine, fed a Demucs stem when separation is enabled.
+
+    Nothing heavy is imported here: Demucs and the BTC weights load on the first analyze()
+    call, on the worker thread. A missing dependency therefore surfaces as a failed analysis
+    with the real error, never as a silent downgrade — the deep model is the point of
+    selecting this engine (see the "not swappable" note in app/audio/deep_chord.py).
+    """
+    separator = (
+        SeparationService(
+            model=settings.separation_model, device=settings.analysis_device
+        )
+        if settings.enable_separation
+        else None
+    )
+    return BTCAnalyzer(
+        settings.analysis_sample_rate,
+        min_segment_seconds=settings.analysis_min_segment_seconds,
+        device=settings.analysis_device,
+        separator=separator,
+        stem=settings.separation_stems,
+    )
+
+
 def _build_analyzer(settings) -> Analyzer:
-    if settings.analysis_engine == "chordino":
+    engine = settings.analysis_engine.lower()
+    if engine in ("btc", "deep"):
+        return _build_btc_analyzer(settings)
+    if engine == "chordino":
         try:
             return ChordinoAnalyzer(
                 settings.analysis_sample_rate,
