@@ -55,5 +55,28 @@ def test_ensure_grid_keeps_real_onsets():
     assert ensure_grid(GRID, bpm=120.0, duration=2.0) == GRID
 
 
+def test_ensure_grid_backfills_beats_before_the_first_onset():
+    # librosa's beat tracker routinely finds no onsets until the groove settles — on the
+    # eval track the first beat lands 7.9s in. Without beats covering that head the whole
+    # intro maps to beat 0 (see beat_for_time's clamp) and its chords are lost, so the grid
+    # must be extended backwards at the detected interval until it reaches t=0.
+    onsets = [7.918, 8.336, 8.754, 9.172]
+    grid = ensure_grid(onsets, bpm=143.6, duration=20.0)
+
+    interval = onsets[1] - onsets[0]
+    assert 0.0 <= grid[0] < interval  # the grid now starts within one beat of t=0
+    assert grid[: -len(onsets)]  # beats were prepended
+    assert grid[-len(onsets) :] == onsets  # the detected onsets survive untouched
+    steps = [b - a for a, b in zip(grid, grid[1:])]
+    assert all(step == pytest.approx(interval) for step in steps)
+
+
+def test_backfilled_grid_separates_chords_in_the_intro():
+    # The bug in one line: two chords that end before the first detected beat used to
+    # collapse onto beat 0 and become indistinguishable.
+    grid = ensure_grid([7.918, 8.336, 8.754], bpm=143.6, duration=20.0)
+    assert beat_for_time(4.81, grid) > beat_for_time(0.91, grid) > 0.0
+
+
 def test_total_beats():
     assert total_beats(GRID, 1.0) == pytest.approx(2.0)

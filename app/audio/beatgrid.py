@@ -19,19 +19,39 @@ def snap_half(beat: float) -> float:
 
 
 def ensure_grid(beat_times: list[float], bpm: float | None, duration: float) -> list[float]:
-    """Return a usable grid (>= 2 ascending entries).
+    """Return a usable grid (>= 2 ascending entries) covering the audio from t=0.
 
     When detection produced fewer than two onsets, synthesize a uniform grid from
     `bpm` (falling back to 120 BPM) anchored at t=0 and spanning past `duration`.
+    Otherwise keep the detected onsets and extend them back to the start of the
+    recording (see `_backfill_head`).
     """
     clean = sorted(float(t) for t in beat_times)
     if len(clean) >= 2:
-        return clean
+        return _backfill_head(clean)
     tempo = bpm if bpm and bpm > 0 else _DEFAULT_BPM
     interval = 60.0 / tempo
     span = max(duration, interval * 2)
     n = int(span / interval) + 2
     return [round(i * interval, 6) for i in range(n)]
+
+
+def _backfill_head(grid: list[float]) -> list[float]:
+    """Extend a grid backwards to t=0 at its opening inter-beat interval.
+
+    Beat trackers commonly emit nothing until the groove settles — a rubato or softly
+    picked intro can leave the first several bars of a recording with no onsets at all.
+    That head must still be on the grid: `beat_for_time` clamps everything at or before
+    the first onset to beat 0, so an off-grid head collapses every chord played there
+    onto a single zero-length beat, and the chart drops them and opens on whichever chord
+    happens to end after the first onset. Prepending beats keeps the head addressable.
+    """
+    interval = grid[1] - grid[0]
+    if interval <= 0 or grid[0] <= 0:
+        return grid
+    n = int(grid[0] / interval)  # whole beats that fit before the first detected onset
+    head = [round(grid[0] - i * interval, 6) for i in range(n, 0, -1)]
+    return head + grid
 
 
 def _interval(grid: list[float], i: int) -> float:
@@ -45,10 +65,12 @@ def _interval(grid: list[float], i: int) -> float:
 
 def time_for_beat(beat: float, grid: list[float], duration: float) -> float:
     """Beat index -> seconds, clamped to [0, duration]."""
-    if beat <= 0:
-        return 0.0
     last = len(grid) - 1
-    if beat >= last:
+    if beat <= 0:
+        # Beat 0 is grid[0], not necessarily t=0; extrapolate below it so the mapping
+        # stays the inverse of beat_for_time (which puts beat 0 at grid[0]).
+        seconds = grid[0] + beat * _interval(grid, 0)
+    elif beat >= last:
         seconds = grid[-1] + (beat - last) * _interval(grid, last)
     else:
         i = int(beat)

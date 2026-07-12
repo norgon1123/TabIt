@@ -22,10 +22,13 @@ describe("totalBeats", () => {
     expect(totalBeats([0, 1, 2, 3], 120, 5)).toBeCloseTo(5, 6);
   });
 
-  test("returns 0 when duration is at or before the first onset (leading silence)", () => {
-    // Detected grid starting at 2s (leading silence). Beat 0 is the first onset.
-    expect(totalBeats([2, 3, 4], 120, 1)).toBe(0); // before the first onset
-    expect(totalBeats([2, 3, 4], 120, 2)).toBe(0); // exactly at the first onset
+  test("counts the beats before the first detected onset (rubato intro)", () => {
+    // A grid detected only from 2s on is backfilled to t=0 at its own interval, so the
+    // head of the recording is still on the grid. It used to collapse to beat 0, which
+    // dropped every chord played over the intro.
+    expect(totalBeats([2, 3, 4], 120, 1)).toBeCloseTo(1, 6);
+    expect(totalBeats([2, 3, 4], 120, 2)).toBeCloseTo(2, 6); // beat 2 is the first onset
+    expect(totalBeats([2, 3, 4], 120, 0)).toBeCloseTo(0, 6); // t=0 is beat 0
   });
 
   test("duration exactly at the last onset yields that beat index", () => {
