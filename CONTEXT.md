@@ -5,9 +5,10 @@ Turn practice voice memos into editable chord charts.
 ## What it is
 
 A musician uploads a practice recording (voice memo / audio file). Tabit analyzes it
-into tempo (BPM), musical key, and a sequence of chord segments, then produces an
-**editable chord chart** the user can correct, re-segment, and transpose. The raw
-analysis result is kept immutable; the chart is the user's working copy.
+into tempo (BPM), musical key, a beat grid, and a sequence of chord segments, then
+produces an **editable chord chart** the user can correct, re-segment, re-time, and
+transpose. The raw analysis result is kept immutable; the chart is the user's working
+copy.
 
 ## Architecture
 
@@ -20,24 +21,64 @@ analysis result is kept immutable; the chart is the user's working copy.
   `/api` → `http://localhost:8000` to make this work.
 - **Background analysis** — uploads enqueue an in-process job (thread pool, default 1
   worker); the API stays responsive while analysis runs and is polled for status.
+- **Optional heavy ML** — Demucs source separation and the deep chord model live behind
+  the `[ml]` extra and are imported **lazily**, so the base app installs and runs
+  without torch. Same pattern for the `[chordino]` extra (native Vamp plugin).
+
+## Charts are beat-native
+
+The single most important thing to know before touching chart code: **a chord segment is
+stored in beats, not seconds.** `ChordSegment.start_beat` / `end_beat` are floats on a
+beat grid; wall-clock times are *derived*, never stored.
+
+- The **beat grid** (`Analysis.beat_times` → copied to `ChordChart.beat_times`) is an
+  ascending list of detected beat-onset times in seconds; index *i* is beat *i*.
+- `app/audio/beatgrid.py` is the only place beat↔time conversion lives
+  (`time_for_beat`, `beat_for_time`, `total_beats`, `snap_half`, `ensure_grid`).
+  Positions between/beyond onsets are linearly interpolated/extrapolated.
+- The API accepts **beats** on write (`start_beat`/`end_beat`) and returns **both** beats
+  and derived `start_time`/`end_time` seconds on read (`SegmentOut`).
+- Editing quantizes to the **half-beat** (eighth): `snap_half` on the backend,
+  `snapHalfBeat` in `frontend/src/chart/beatMath.ts`; minimum segment length 0.5 beats.
+- Derived times are **displayed** centisecond-quantized (`roundCs` / `formatTimeCs` in
+  `frontend/src/chart/timeMath.ts`).
+
+This replaced an older seconds-native model. Any doc, comment, or memory saying segments
+carry `start_time`/`end_time` *columns*, or that positions are millisecond-precision, is
+describing the old schema — see *Invariants*.
 
 ## Backend map (`app/`)
 
-- `main.py` — app construction, router wiring, lifespan (creates tables, warns if
-  ffmpeg missing, shuts down the job dispatcher). Health at `GET /api/health`.
-- `config.py` — `TABIT_`-prefixed settings via pydantic-settings.
+- `main.py` — app construction, router wiring, lifespan: `create_all`, then
+  `run_additive_migrations`, warns if ffmpeg is missing, shuts down the job dispatcher.
+  Health at `GET /api/health`.
+- `config.py` — `TABIT_`-prefixed settings via pydantic-settings (reads `.env`).
 - `db.py`, `models.py`, `schemas.py` — engine/session, ORM models, Pydantic I/O shapes.
-- `deps.py`, `security.py` — DB/session dependencies, current-user resolution, Argon2.
-- `storage.py` — stores uploaded recording files under `TABIT_STORAGE_DIR`.
-- `jobs.py` — `JobDispatcher`: in-process background analysis worker.
-- `music_theory.py` — pitch-class/key/transpose helpers.
+- `migrations.py` — additive, idempotent `ALTER TABLE ... ADD COLUMN` migrations.
+  Exists because `create_all` never adds columns to an existing table.
+- `deps.py`, `security.py` — DB/session dependencies, current-user + owned-recording
+  resolution, Argon2 hashing.
+- `storage.py` — uploaded audio under `TABIT_STORAGE_DIR` (atomic write via temp+rename).
+- `jobs.py` — `JobDispatcher` (thread pool), `analyze_recording`, and `_seed_chart`
+  (beat-native chart seeding). `_build_analyzer` picks the engine from config.
+- `music_theory.py` — pitch classes, `Quality`, key/transpose/roman-numeral helpers.
 - `routers/` — `auth.py`, `recordings.py`, `charts.py`.
 - `audio/` — the analysis pipeline:
-  - `decode.py` — decode to mono (uses ffmpeg); `ffmpeg_available()`.
-  - `analyzer.py` — orchestrates the pipeline; `ENGINE_VERSION = "template-v1"`.
+  - `decode.py` — ffmpeg → mono float32 PCM; `ffmpeg_available()`.
+  - `analyzer.py` — the three engines + `AnalysisResult`; silence trimming.
+  - `beatgrid.py` — pure beat↔time conversion over the grid.
   - `key_estimation.py` — tonic pitch class + mode from chroma.
-  - `recognizer.py` — template-matching chord recognition.
-  - `segments.py` — beat boundaries + segment merging.
+  - `recognizer.py` — extension-tolerant cosine template matching; per-frame emissions.
+  - `decoding.py` — Viterbi decode over those emissions (`change_penalty` self-stay bias).
+  - `segments.py` — `DetectedSegment` + merge / drop-short / shift helpers.
+  - `chordino.py` — parse Vamp Chordino labels into Tabit chords.
+  - `deep_chord.py` — `BTCChordEngine`, adapter over the vendored BTC model
+    (`vendor/btc/`, weights staged out of band). Deliberately **not** swappable.
+  - `separation.py` — `SeparationService`: Demucs stems (drives the released
+    `pretrained`/`apply` API, not `demucs.api`).
+  - `device.py` — resolves `TABIT_ANALYSIS_DEVICE` to `cuda` | `mps` | `cpu`.
+  - `labels.py`, `chord_eval.py` — MIREX `.lab` interchange + `mir_eval` scoring for the
+    Phase 0 accuracy harness.
 
 ## Data model (`app/models.py`)
 
@@ -46,58 +87,104 @@ analysis result is kept immutable; the chart is the user's working copy.
 - **Recording** — `original_filename`, `format`, `stored_path`, `duration_seconds`,
   `status` (default `uploaded`). 1:1 with Analysis and with ChordChart.
 - **Analysis** — immutable result: `status` (`pending`/`running`/`done`/`failed`),
-  `bpm`, `detected_key_tonic`, `detected_key_mode`, `engine_version`, `error`. 1:1 per
-  recording (`recording_id` unique).
-- **ChordChart** — the editable chart: `key_tonic`, `key_mode`. 1:1 per recording.
-- **ChordSegment** — `start_time`, `end_time` (seconds, float), `chord_root`,
-  `chord_quality`. Ordered by `start_time` within a chart.
+  `bpm`, `detected_key_tonic`, `detected_key_mode`, `engine_version`, `error`,
+  `beat_times` (JSON). 1:1 per recording (`recording_id` unique).
+- **ChordChart** — the editable chart: `key_tonic`, `key_mode`, `beats_per_measure`
+  (default 4), `measure_offset`, `beat_times` (JSON — the chart's own copy of the grid).
+  1:1 per recording.
+- **ChordSegment** — `start_beat`, `end_beat` (floats, **beats**), `chord_root`,
+  `chord_quality`. Ordered by `start_beat` within a chart. The output vocabulary is five
+  qualities: `maj`, `min`, `dom7`, `maj7`, `min7`.
+
+`Recording.duration_seconds` is overwritten at analysis time with the **server-decoded**
+length — the browser-reported value is not trusted.
 
 ## Analysis pipeline (`app/audio/analyzer.py`, `app/jobs.py`)
 
-1. Decode audio to mono (resampled to `TABIT_ANALYSIS_SAMPLE_RATE`, default 22050 Hz).
-2. Detect BPM via librosa beat tracking (`librosa.beat.beat_track`).
-3. Estimate key — tonic pitch class + mode — from mean chroma.
-4. Recognize chord labels via template matching, then merge into segments along beat
-   boundaries. Engine tag: `template-v1`.
-5. Write the immutable `Analysis` record.
-6. Seed a new editable `ChordChart` (+ `ChordSegment`s) from the detected chords.
+The engine is selected by `TABIT_ANALYSIS_ENGINE` (default **`chordino`**):
+
+| Engine | Class | `engine_version` | Notes |
+|---|---|---|---|
+| `chordino` | `ChordinoAnalyzer` | `chordino-v1` | **Default.** Vamp `nnls-chroma:chordino`. Needs the `[chordino]` extra + the native plugin; **falls back to librosa** when unavailable. |
+| `librosa` | `LibrosaAnalyzer` | `hmm-v3` | Built-in, no extra deps. HPSS chroma → template scoring → Viterbi. |
+| `btc` / `deep` | `BTCAnalyzer` | `btc-v1` (`+demucs-<stems>`) | Vendored BTC transformer, optionally fed a Demucs stem. Needs `[ml]` + staged weights. **Does not fall back** — a missing dep fails the recording rather than quietly using a weaker engine. |
+
+Common flow:
+
+1. Decode to mono at `TABIT_ANALYSIS_SAMPLE_RATE` (default 22050 Hz). The decoded PCM
+   length is the authoritative `duration`.
+2. Trim leading/trailing silence (`_trim_silence`), keeping the removed `lead` offset.
+   Sub-0.5s edge transients (a click before the real silence) are ignored.
+3. BPM + beat grid via `librosa.beat.beat_track`; onsets are **shifted back by `lead`**
+   so the grid is in original-audio time.
+4. Key: tonic pitch class + mode from mean chroma.
+5. Chords — engine-specific (template+Viterbi / Chordino / BTC). Segments shorter than
+   `TABIT_ANALYSIS_MIN_SEGMENT_SECONDS` (0.75) are dropped as false positives.
+6. Write the immutable `Analysis` (bpm, key, engine_version, beat_times).
+7. `_seed_chart` — build the grid, convert each segment's end to beats, `snap_half`,
+   clamp to `total_beats(grid, duration)`, and lay chords out contiguously from beat 0.
 
 Status lifecycle, polled via `GET /api/recordings/{id}/analysis`:
 `pending → running → done | failed` (on failure, `Analysis.error` carries the reason).
 
 ## API surface
 
+- **Health**: `GET /api/health`.
 - **Auth** (`/api/auth`): `POST /register`, `POST /login`, `POST /logout`, `GET /me`.
 - **Recordings** (`/api/recordings`): `GET ""` (list), `POST ""` (upload),
-  `GET /{id}`, `GET /{id}/analysis`, `POST /{id}/analyze` (202), `GET /{id}/audio`,
-  `DELETE /{id}`.
+  `GET /{id}`, `PATCH /{id}` (rename), `GET /{id}/analysis`, `POST /{id}/analyze` (202),
+  `GET /{id}/audio`, `DELETE /{id}`.
 - **Charts** (`/api`): `POST /recordings/{rid}/chart`, `GET /recordings/{rid}/chart`,
   `POST /charts/{cid}/segments`, `PATCH /charts/{cid}/segments/{sid}`,
-  `DELETE /charts/{cid}/segments/{sid}`, `POST /charts/{cid}/transpose`.
+  `PATCH /charts/{cid}/segments` (batch resize), `DELETE /charts/{cid}/segments/{sid}`,
+  `PATCH /charts/{cid}/settings` (beats-per-measure, measure offset),
+  `POST /charts/{cid}/transpose`.
+
+Segment writes are validated against the grid: start < end, no overlap with siblings, and
+`end_beat` must not exceed `total_beats(grid, duration)`.
 
 ## Frontend map (`frontend/src/`)
 
 - `api/` — typed REST client (`client.ts`), `types.ts`, `music.ts`.
 - `auth/` — `AuthContext` (session-cookie auth state).
 - `pages/` — `LibraryPage`, `ChartEditorPage`, `LoginPage`, `RegisterPage`.
-- `chart/` — `useChart` (state/query hook), `Timeline`, `SegmentEditor`,
-  `TransposeControl`, `chartLayout` (chart wrapping/layout), `timeMath` (time math).
-- `library/` — `useRecordings`, `UploadButton`, `audioDuration`.
-- `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`.
+- `chart/` — `useChart` (query/mutation hook), `useReanalyze`, `useMediaClock`
+  (playback clock), `Timeline`, `SegmentEditor`, `ScrubBar`, `TransposeControl`,
+  `TimeSignatureControl`, `chartLayout` (wrapping/layout), `beatGrid` + `beatMath`
+  (beat math, half-beat snapping), `timeMath` (pixel↔time, centisecond formatting).
+- `library/` — `useRecordings`, `UploadButton`, `audioDuration`, `filterSort`,
+  `formatDate`.
+- `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`, `Spinner`.
 
 ## Invariants (don't break these)
 
 - `Analysis` is **immutable**; `ChordChart` is the editable copy.
 - Re-running analysis (`POST /api/recordings/{id}/analyze`) creates a fresh `Analysis`
   and **re-seeds the chart, overwriting the user's manual edits.**
-- A chart's segments must **never exceed the recording's total duration**
-  (`Recording.duration_seconds`).
-- Start/end times are shown and configured to **centisecond precision** (round 2 #5),
-  universally — quantize via `roundCs`/`formatTimeCs`.
+- A chart must **never exceed the recording's duration** — `end_beat` is bounded by
+  `total_beats(grid, duration)`, and `duration` is the server-decoded length.
+- Chart positions are **beats**, snapped to the **half-beat**; derived times are
+  displayed to the **centisecond**. (`docs/TODO.md` #7 originally asked for millisecond
+  precision; Round 2 #5 reduced *display* to the centisecond, and the beat-native rewrite
+  made *editing* half-beat-quantized. The code is the contract.)
 - Chord boundaries should reflect the *actual* change point; leading/trailing silence
   is trimmed and ignored.
 - **ffmpeg must be on `PATH`** for analysis to run (uploads succeed without it; jobs
   then fail with a clear, logged error).
+- New DB columns need `app/migrations.py` — `create_all` will not add them to an existing
+  SQLite file.
 
-> Several of these are open work items — see `docs/TODO.md` — not yet fully enforced in
-> code. Treat them as the intended contract when changing analysis or chart behavior.
+## Multi-instrument work (Phase 0/1)
+
+North star: separate a recording into instrument stems, then produce a chord chart (and
+later tabs) per instrument, escaping the accuracy ceiling of chroma template matching.
+Separation is the foundation layer; everything else consumes stems.
+
+- Plans and records live in `docs/`: `multi-instrument-roadmap.md`,
+  `technical-plan-phase-0-1.md`, `phase-0-findings.md`.
+- The go/no-go gate is *measured*, not assumed — `scripts/eval_chords.py` scores an engine
+  against ground-truth `.lab` files in `tests/eval/` via `mir_eval`.
+- Status: the Demucs separation spike and the librosa-vs-chordino baseline are done; the
+  deep BTC engine — the thing the gate actually turns on — is still being evaluated, so
+  the decision is **not yet made**. Defaults keep the base app unchanged
+  (`TABIT_ENABLE_SEPARATION=false`).

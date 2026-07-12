@@ -16,6 +16,15 @@ for the architecture and data model; this file is the *how-to-work* manual.
     pip install -e ".[dev]"
     cd frontend && npm install
 
+Optional extras — **not** needed for the base app, tests, or most changes:
+
+    pip install --no-build-isolation -e ".[chordino]"  # Tier 2 engine; also needs the
+                                                       # native nnls-chroma Vamp plugin
+    pip install -e ".[ml]"                             # torch/demucs/mir_eval (Phase 0/1)
+
+`[ml]` is heavy and its torch wheels are installed from the PyTorch index first — see the
+comment in `pyproject.toml` and `docs/technical-plan-phase-0-1.md`.
+
 ## Run
 
 - Backend: `uvicorn app.main:app --reload` — API docs at http://localhost:8000/docs
@@ -37,29 +46,50 @@ for the architecture and data model; this file is the *how-to-work* manual.
 ## Conventions
 
 - **Config is env-driven**, prefix `TABIT_` (`app/config.py`). Don't hardcode paths or
-  secrets. Known vars: `TABIT_DATABASE_URL`, `TABIT_STORAGE_DIR`, `TABIT_COOKIE_SECURE`
-  (`true` behind HTTPS), `TABIT_ANALYSIS_SAMPLE_RATE` (default 22050),
-  `TABIT_ANALYSIS_MAX_WORKERS` (default 1). Session knobs also exist
-  (`TABIT_SESSION_COOKIE_NAME`, `TABIT_SESSION_MAX_AGE_SECONDS`).
+  secrets. Core vars: `TABIT_DATABASE_URL`, `TABIT_STORAGE_DIR`, `TABIT_COOKIE_SECURE`
+  (`true` behind HTTPS), `TABIT_ANALYSIS_SAMPLE_RATE` (22050),
+  `TABIT_ANALYSIS_MAX_WORKERS` (1), `TABIT_ANALYSIS_MIN_SEGMENT_SECONDS` (0.75),
+  `TABIT_ANALYSIS_CHANGE_PENALTY` (1.0), `TABIT_ANALYSIS_USE_HPSS` (true),
+  `TABIT_ANALYSIS_ENGINE` (`chordino` | `librosa` | `btc`). Session knobs:
+  `TABIT_SESSION_COOKIE_NAME`, `TABIT_SESSION_MAX_AGE_SECONDS`. Multi-instrument knobs:
+  `TABIT_ANALYSIS_DEVICE` (`auto`), `TABIT_ENABLE_SEPARATION` (false),
+  `TABIT_SEPARATION_MODEL`, `TABIT_SEPARATION_STEMS`, `TABIT_STEM_STORAGE`,
+  `TABIT_STEM_FORMAT`.
 - **Backend** — REST handlers in `app/routers/` (auth → `/api/auth`, recordings →
   `/api/recordings`, charts → `/api`); audio logic in `app/audio/`; Pydantic request/
   response shapes in `app/schemas.py`; ORM models in `app/models.py`. Keep `Analysis`
   immutable — never mutate an existing analysis record; create a new one.
-- **Frontend** — fetch/mutate through TanStack Query hooks (`useChart`,
-  `useRecordings`), not ad-hoc fetches. Time arithmetic belongs in `chart/timeMath.ts`;
-  chart wrapping/layout in `chart/chartLayout.ts`.
+- **Beat↔time conversion belongs in `app/audio/beatgrid.py`** (`time_for_beat`,
+  `beat_for_time`, `total_beats`, `snap_half`) — don't re-derive it inline, and don't
+  reintroduce seconds-valued segment columns.
+- **Frontend** — fetch/mutate through TanStack Query hooks (`useChart`, `useRecordings`),
+  not ad-hoc fetches. Beat math belongs in `chart/beatMath.ts` / `chart/beatGrid.ts`;
+  pixel↔time and time formatting in `chart/timeMath.ts`; chart wrapping/layout in
+  `chart/chartLayout.ts`.
+- **Heavy deps stay lazy.** torch/demucs/`vamp` are optional extras — import them inside
+  the function that needs them, never at module top level, so the base app keeps
+  installing and running without them.
 - New API fields: update `app/schemas.py` **and** `frontend/src/api/types.ts` together.
 
 ## Rules that bite (enforce in any chart/analysis change)
 
-- A chart's total length must **never exceed the recording's duration**
-  (`Recording.duration_seconds`).
-- All start/end times are **millisecond precision** — everywhere, no exceptions.
+- A chart's total length must **never exceed the recording's duration**. `end_beat` is
+  bounded by `total_beats(grid, duration)`, where `duration` is the *server-decoded*
+  length (`Recording.duration_seconds`), not the browser-reported one.
+- **Charts are beat-native.** Segments are stored as `start_beat`/`end_beat` on a beat
+  grid; seconds are derived, never persisted. Positions snap to the **half-beat**
+  (minimum segment 0.5 beats); derived times are **displayed to the centisecond**
+  (`roundCs`/`formatTimeCs`). If you see "millisecond precision" in an older note, it is
+  stale — `docs/TODO.md` #7 was superseded by Round 2 #5 (centisecond display) and then by
+  the beat-native rewrite.
 - Chord boundaries must reflect the real change point; trim leading/trailing silence.
 - Re-running analysis (`POST /api/recordings/{id}/analyze`, 202) **overwrites the user's
   manual chart edits** — call this out explicitly if your change touches that path.
 - ffmpeg is required at runtime for analysis; don't assume it's present in code paths
   that can run without it.
+- Engine fallback is deliberate and asymmetric: `chordino` **falls back** to librosa when
+  the native plugin is missing; `btc` **must not** — a missing dep fails the recording
+  rather than silently downgrading to a weaker engine. Don't "helpfully" add a fallback.
 
 ## Definition of done
 
@@ -92,3 +122,18 @@ A bug fix is **not done** until all of the following hold:
 > keeps its old schema and the ORM fails on the new column. New columns must be added via
 > `app/migrations.py` (`run_additive_migrations`, run automatically on startup and by
 > `scripts/migrate_beats.py`) — not by relying on `create_all`.
+
+## Chord-accuracy work (Phase 0/1)
+
+Changing a chord engine? **Measure it, don't eyeball it.** The harness scores predictions
+against hand-corrected MIREX `.lab` ground truth in `tests/eval/` using `mir_eval`
+(needs the `[ml]` extra):
+
+    python scripts/eval_chords.py --dataset tests/eval --engine librosa --baseline chordino
+    python scripts/bootstrap_labels.py path/to/clip.m4a --engine chordino  # starter .lab
+    python scripts/separation_spike.py path/to/song.m4a --out-dir /tmp/stems
+
+Report the per-clip **win rate** alongside the weighted mean — the eval set is small
+enough that a single clip can swing the average. Record findings in
+`docs/phase-0-findings.md`; the plan and gate live in `docs/technical-plan-phase-0-1.md`
+and `docs/multi-instrument-roadmap.md`.
