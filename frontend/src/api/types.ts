@@ -52,6 +52,8 @@ export interface ChartOut {
   key_mode: string;
   beats_per_measure: number;
   measure_offset: number;
+  // The chart's working tempo: seeded from the analysis, then owned by the user.
+  bpm: number | null;
   beat_times: number[];
   segments: SegmentOut[];
 }

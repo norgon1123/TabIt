@@ -88,6 +88,7 @@ class ChartOut(BaseModel):
     key_mode: str
     beats_per_measure: int
     measure_offset: int
+    bpm: float | None
     beat_times: list[float]
     segments: list[SegmentOut]
 
@@ -95,6 +96,11 @@ class ChartOut(BaseModel):
 class ChartSettingsUpdate(BaseModel):
     beats_per_measure: int | None = Field(default=None, ge=1, le=16)
     measure_offset: int | None = Field(default=None, ge=0)
+
+
+class TempoUpdate(BaseModel):
+    # 20-400 spans anything countable; outside it the grid rescale stops being meaningful.
+    bpm: float = Field(gt=20, le=400)
 
 
 class TransposeRequest(BaseModel):

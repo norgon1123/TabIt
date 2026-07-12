@@ -9,6 +9,7 @@ import { totalBeats } from "../chart/beatGrid";
 import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 // import ScrubBar from "../chart/ScrubBar"; // disabled with the scrub-bar block below
 import SegmentEditor from "../chart/SegmentEditor";
+import TempoControl from "../chart/TempoControl";
 import TransposeControl from "../chart/TransposeControl";
 import TimeSignatureControl from "../chart/TimeSignatureControl";
 import { useReanalyze } from "../chart/useReanalyze";
@@ -44,6 +45,7 @@ export default function ChartEditorPage() {
     resizeSegments,
     transpose,
     updateSettings,
+    setTempo,
   } = useChart(id, { poll: inProgress, awaitChart: analysis?.status === "done" });
 
   const { reanalyze, isPending: reanalyzing } = useReanalyze(id);
@@ -129,6 +131,12 @@ export default function ChartEditorPage() {
               busy={isMutating}
             />
 
+            <TempoControl
+              bpm={chart.bpm ?? analysis?.bpm ?? null}
+              onChange={(bpm) => setTempo(bpm)}
+              busy={isMutating}
+            />
+
             <TimeSignatureControl
               beatsPerMeasure={chart.beats_per_measure}
               measureOffset={chart.measure_offset}
@@ -155,7 +163,7 @@ export default function ChartEditorPage() {
               <SegmentEditor
                 segment={chart.segments.find((s) => s.id === selectedId)!}
                 allSegments={chart.segments}
-                maxTotalBeats={totalBeats(chart.beat_times, analysis?.bpm ?? null, duration)}
+                maxTotalBeats={totalBeats(chart.beat_times, chart.bpm ?? analysis?.bpm ?? null, duration)}
                 onResize={(windows) => resizeSegments(windows)}
                 onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
                 onDelete={() => {

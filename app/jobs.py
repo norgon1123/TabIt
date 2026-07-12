@@ -84,6 +84,7 @@ def _seed_chart(db: Session, recording: Recording, result: AnalysisResult) -> No
         key_tonic=tonic,
         key_mode=result.key_mode,
         beat_times=grid,
+        bpm=result.bpm,  # the user's starting tempo; they can re-count it (PATCH .../tempo)
     )
     db.add(chart)
     db.flush()
