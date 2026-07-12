@@ -26,6 +26,27 @@ from app.audio.device import resolve_device
 # of the usual drums/bass/other/vocals. Piano is known-weak — treat it as best-effort.
 DEFAULT_MODEL = "htdemucs_6s"
 
+# Named stem combinations to feed a downstream chord model: harmony without the drums and
+# vocals that pollute chroma/CQT. "full" re-sums every source (≈ the original mix) and is
+# the sanity condition in the A/B/C gate.
+STEM_PRESETS: dict[str, list[str]] = {
+    "harmonic": ["guitar", "piano", "other"],
+    "accomp": ["guitar", "piano", "other", "bass"],
+    "full": ["drums", "bass", "other", "vocals", "guitar", "piano"],
+}
+
+
+def resolve_stem_sources(stem: str, available: list[str]) -> list[str]:
+    """Resolve a preset name or comma-separated source list against a model's sources."""
+    chosen = STEM_PRESETS.get(stem) or [s.strip() for s in stem.split(",") if s.strip()]
+    unknown = [s for s in chosen if s not in available]
+    if unknown:
+        raise ValueError(
+            f"unknown stem source(s) {unknown}; available: {available}; "
+            f"or a preset: {sorted(STEM_PRESETS)}"
+        )
+    return chosen
+
 
 @dataclass(frozen=True)
 class SeparationResult:
@@ -119,26 +140,46 @@ class SeparationService:
         FLAC by default: separation is the expensive step and lossy re-encoding would add
         artifacts that hurt downstream chord/tab analysis (see the stem-storage decision
         in docs/technical-plan-phase-0-1.md). Returns instrument -> written path.
-
-        Written with ``soundfile`` (libsndfile) rather than ``demucs.save_audio`` /
-        ``torchaudio.save``: torchaudio 2.11 delegated its file I/O to an optional
-        ``torchcodec`` package, so writing through it would add a fragile extra dependency
-        for no benefit — libsndfile handles FLAC natively.
         """
-        import soundfile as sf
-
         result = self.separate(audio_path)
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
-        subtype = "PCM_24" if fmt.lower() == "flac" else None
         written: dict[str, str] = {}
         for instrument, tensor in result.stems.items():
             path = out / f"{instrument}.{fmt}"
-            # soundfile wants (frames, channels); demucs tensors are (channels, samples).
-            data = tensor.numpy().T
-            # Guard against inter-sample peaks >1 (separation can overshoot) clipping on
-            # the integer encode, without rescaling in-range audio.
-            peak = float(max(abs(data.min()), abs(data.max()), 1.0))
-            sf.write(str(path), data / peak, result.samplerate, subtype=subtype)
+            write_audio(str(path), tensor, result.samplerate, fmt)
             written[instrument] = str(path)
         return written
+
+    def separate_stem_mix(
+        self, audio_path: str, out_path: str, stem: str = "harmonic"
+    ) -> list[str]:
+        """Separate, sum the ``stem`` sources into one file at ``out_path``, return the sources.
+
+        The pre-processing step a chord engine wants: one audio file on the same timeline as
+        the input (Demucs preserves length) carrying only the harmonic sources. ``stem`` is a
+        :data:`STEM_PRESETS` key or a comma-separated source list.
+        """
+        result = self.separate(audio_path)
+        sources = resolve_stem_sources(stem, list(result.stems))
+        mix = sum(result.stems[s] for s in sources)  # (channels, samples) tensors
+        write_audio(out_path, mix, result.samplerate, Path(out_path).suffix.lstrip("."))
+        return sources
+
+
+def write_audio(path: str, tensor, samplerate: int, fmt: str = "flac") -> None:
+    """Write a demucs (channels x samples) CPU tensor to ``path``.
+
+    Uses ``soundfile`` (libsndfile) rather than ``demucs.save_audio`` / ``torchaudio.save``:
+    torchaudio 2.11 delegated its file I/O to an optional ``torchcodec`` package, so writing
+    through it would add a fragile extra dependency for no benefit.
+    """
+    import soundfile as sf
+
+    # soundfile wants (frames, channels); demucs tensors are (channels, samples).
+    data = tensor.numpy().T
+    # Guard against inter-sample peaks >1 (separation can overshoot) clipping on the integer
+    # encode, without rescaling in-range audio.
+    peak = float(max(abs(data.min()), abs(data.max()), 1.0))
+    subtype = "PCM_24" if fmt.lower() == "flac" else None
+    sf.write(path, data / peak, samplerate, subtype=subtype)
