@@ -78,3 +78,41 @@ test("shows a spinner while analysis is running", async () => {
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
   expect(await screen.findByRole("status")).toBeInTheDocument();
 });
+
+// The audio player is rendered with the chart, so a page opened while analysis is still
+// running has no player at all. A slow engine (demucs -> btc) is always still running when
+// you land here, so without polling the player never appears until a manual reload.
+test("player appears on its own once analysis finishes", async () => {
+  login();
+  let done = false;
+  server.use(
+    http.get("/api/recordings/r1", () =>
+      HttpResponse.json({
+        ...RECORDING,
+        analysis: { ...RECORDING.analysis, status: done ? "done" : "running" },
+      }),
+    ),
+    http.get("/api/recordings/r1/chart", () =>
+      done
+        ? HttpResponse.json(CHART)
+        : HttpResponse.json({ detail: "Chart not found" }, { status: 404 }),
+    ),
+  );
+  const { container } = renderWithProviders(<ChartEditorPage />, {
+    route: "/recordings/r1",
+    path: "/recordings/:recordingId",
+  });
+
+  // Both the header loading indicator and the body placeholder say "Analyzing…".
+  expect((await screen.findAllByText(/analyzing/i)).length).toBeGreaterThan(0);
+  expect(container.querySelector("audio")).toBeNull();
+
+  done = true; // the analysis job finishes server-side; nothing reloads the page
+
+  // The chart poll runs every 2s, so allow a few cycles — and keep the test's own budget
+  // (last arg) above that, or it dies on the default 5s timeout before waitFor can settle.
+  await waitFor(() => expect(container.querySelector("audio")).not.toBeNull(), { timeout: 10000 });
+  const player = container.querySelector("audio")!;
+  expect(player).toHaveAttribute("controls");
+  expect(player).toHaveAttribute("src", "/api/recordings/r1/audio");
+}, 15000);

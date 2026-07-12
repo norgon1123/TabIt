@@ -23,14 +23,23 @@ async function fetchChart(recordingId: string): Promise<ChartOut | null> {
   }
 }
 
-export function useChart(recordingId: string, options: { poll?: boolean } = {}) {
+export function useChart(
+  recordingId: string,
+  options: { poll?: boolean; awaitChart?: boolean } = {},
+) {
   const queryClient = useQueryClient();
   const key = ["chart", recordingId];
 
   const chartQuery = useQuery({
     queryKey: key,
     queryFn: () => fetchChart(recordingId),
-    refetchInterval: options.poll ? 2000 : false,
+    // `poll` goes false as soon as the recording query sees "done", which on its own would
+    // cancel this query's next tick before it ever fetched the chart the job had just
+    // written — leaving the page with no chart and no audio player. `awaitChart` keeps the
+    // poll alive across that hand-off until the chart actually lands (analysis only reports
+    // "done" once the chart is committed, so this terminates).
+    refetchInterval: (query) =>
+      options.poll || (options.awaitChart && query.state.data == null) ? 2000 : false,
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
   const chartId = chartQuery.data?.id;

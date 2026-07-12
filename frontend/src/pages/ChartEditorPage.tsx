@@ -44,7 +44,7 @@ export default function ChartEditorPage() {
     resizeSegments,
     transpose,
     updateSettings,
-  } = useChart(id, { poll: inProgress });
+  } = useChart(id, { poll: inProgress, awaitChart: analysis?.status === "done" });
 
   const { reanalyze, isPending: reanalyzing } = useReanalyze(id);
 
