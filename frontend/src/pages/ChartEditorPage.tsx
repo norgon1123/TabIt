@@ -19,7 +19,17 @@ export default function ChartEditorPage() {
   const recordingQuery = useQuery({
     queryKey: ["recording", id],
     queryFn: () => api.get<RecordingOut>(`/api/recordings/${id}`),
+    refetchInterval: (query) => {
+      const s = query.state.data?.analysis?.status;
+      return s === "pending" || s === "running" ? 2000 : false;
+    },
   });
+
+  const recording = recordingQuery.data;
+  const analysis = recording?.analysis ?? null;
+  const duration = recording?.duration_seconds ?? 0;
+  const inProgress = analysis?.status === "pending" || analysis?.status === "running";
+
   const {
     chart,
     isLoading: chartLoading,
@@ -28,11 +38,7 @@ export default function ChartEditorPage() {
     updateSegment,
     deleteSegment,
     transpose,
-  } = useChart(id);
-
-  const recording = recordingQuery.data;
-  const analysis = recording?.analysis ?? null;
-  const duration = recording?.duration_seconds ?? 0;
+  } = useChart(id, { poll: inProgress });
 
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow

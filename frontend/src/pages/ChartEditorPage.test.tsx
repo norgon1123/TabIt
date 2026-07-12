@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
 import { renderWithProviders } from "../test/utils";
@@ -43,4 +43,39 @@ test("shows analyzing state when the chart is not ready", async () => {
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
   expect(await screen.findByText(/analyzing/i)).toBeInTheDocument();
+});
+
+// The audio player is rendered with the chart, so a page opened while analysis is still
+// running has no player at all. A slow engine (demucs -> btc) is always still running when
+// you land here, so without polling the player never appears until a manual reload.
+test("player appears on its own once analysis finishes", async () => {
+  login();
+  let done = false;
+  server.use(
+    http.get("/api/recordings/r1", () =>
+      HttpResponse.json({
+        ...RECORDING,
+        analysis: { ...RECORDING.analysis, status: done ? "done" : "running" },
+      }),
+    ),
+    http.get("/api/recordings/r1/chart", () =>
+      done
+        ? HttpResponse.json(CHART)
+        : HttpResponse.json({ detail: "Chart not found" }, { status: 404 }),
+    ),
+  );
+  const { container } = renderWithProviders(<ChartEditorPage />, {
+    route: "/recordings/r1",
+    path: "/recordings/:recordingId",
+  });
+
+  expect(await screen.findByText(/analyzing/i)).toBeInTheDocument();
+  expect(container.querySelector("audio")).toBeNull();
+
+  done = true; // the analysis job finishes server-side; nothing reloads the page
+
+  await waitFor(() => expect(container.querySelector("audio")).not.toBeNull(), { timeout: 5000 });
+  const player = container.querySelector("audio")!;
+  expect(player).toHaveAttribute("controls");
+  expect(player).toHaveAttribute("src", "/api/recordings/r1/audio");
 });

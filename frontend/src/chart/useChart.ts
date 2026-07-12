@@ -19,11 +19,18 @@ async function fetchChart(recordingId: string): Promise<ChartOut | null> {
   }
 }
 
-export function useChart(recordingId: string) {
+export function useChart(recordingId: string, options: { poll?: boolean } = {}) {
   const queryClient = useQueryClient();
   const key = ["chart", recordingId];
 
-  const chartQuery = useQuery({ queryKey: key, queryFn: () => fetchChart(recordingId) });
+  // The chart is created by the analysis job, so until that finishes there is nothing to
+  // fetch. Poll while it runs, otherwise the page sits on "Analyzing..." until a manual
+  // reload — which is what a slow engine (demucs -> btc takes tens of seconds) always hits.
+  const chartQuery = useQuery({
+    queryKey: key,
+    queryFn: () => fetchChart(recordingId),
+    refetchInterval: options.poll ? 2000 : false,
+  });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
   const chartId = chartQuery.data?.id;
 
