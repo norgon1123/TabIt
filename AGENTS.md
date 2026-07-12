@@ -69,3 +69,26 @@ for the architecture and data model; this file is the *how-to-work* manual.
   `*.test.ts(x)`).
 - Env/config changes are reflected in `app/config.py` and documented in `README.md`.
 - Don't silently regress the open items in `docs/TODO.md`.
+
+### Bug fixes specifically
+
+A bug fix is **not done** until all of the following hold:
+
+1. **Reproduced.** You can trigger the reported failure yourself and have identified the
+   root cause — not just the symptom. State the root cause in the change.
+2. **Failing test first.** A test in the matching suite reproduces the bug and *fails for
+   the right reason* before the fix (watch it fail). The reproduction must exercise the
+   real failing path, not a mock of it.
+3. **Proven by that test.** The same test passes after the fix, and the full relevant
+   suite still passes.
+4. **Fixed at the root, not the symptom.** Patching one stale database or one call site
+   is not a fix — make the code self-correct so the failure can't recur (e.g. the bug is
+   fixed in the app, not by hand-editing data).
+5. **Regression locked in.** The new test stays in the suite so the bug can't silently
+   return.
+
+> Schema gotcha that has bitten deletes before: `Base.metadata.create_all()` creates
+> missing *tables* but never adds *columns* to existing ones, so a pre-existing SQLite DB
+> keeps its old schema and the ORM fails on the new column. New columns must be added via
+> `app/migrations.py` (`run_additive_migrations`, run automatically on startup and by
+> `scripts/migrate_beats.py`) — not by relying on `create_all`.

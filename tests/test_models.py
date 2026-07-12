@@ -29,8 +29,8 @@ def test_user_recording_chart_segment_relationships(db_session):
 
     seg = ChordSegment(
         chart_id=chart.id,
-        start_time=0.0,
-        end_time=2.0,
+        start_beat=0.0,
+        end_beat=2.0,
         chord_root="C",
         chord_quality="maj",
     )
@@ -51,6 +51,34 @@ def test_session_belongs_to_user(db_session):
     db_session.add(s)
     db_session.commit()
     assert s.user is user
+
+
+def test_chart_and_segment_have_beat_fields(db_session):
+    from app.models import ChordChart, ChordSegment, Recording, User
+
+    user = User(username="bob", password_hash="x")
+    db_session.add(user)
+    db_session.flush()
+    rec = Recording(
+        user_id=user.id, original_filename="m.m4a", format="m4a",
+        stored_path="/tmp/m.m4a", duration_seconds=8.0,
+    )
+    db_session.add(rec)
+    db_session.flush()
+    chart = ChordChart(
+        recording_id=rec.id, key_tonic="C", key_mode="major",
+        beat_times=[0.0, 0.5, 1.0], beats_per_measure=4, measure_offset=0,
+    )
+    db_session.add(chart)
+    db_session.flush()
+    seg = ChordSegment(chart_id=chart.id, start_beat=0.0, end_beat=4.0,
+                       chord_root="C", chord_quality="maj")
+    db_session.add(seg)
+    db_session.commit()
+
+    assert chart.beats_per_measure == 4
+    assert chart.beat_times == [0.0, 0.5, 1.0]
+    assert chart.segments[0].end_beat == 4.0
 
 
 def test_analysis_belongs_to_recording(db_session):

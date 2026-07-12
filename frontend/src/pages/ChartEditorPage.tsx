@@ -5,10 +5,14 @@ import { api } from "../api/client";
 import type { RecordingOut } from "../api/types";
 import { useChart } from "../chart/useChart";
 import { useMediaClock } from "../chart/useMediaClock";
+import { totalBeats } from "../chart/beatGrid";
 import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 // import ScrubBar from "../chart/ScrubBar"; // disabled with the scrub-bar block below
 import SegmentEditor from "../chart/SegmentEditor";
 import TransposeControl from "../chart/TransposeControl";
+import TimeSignatureControl from "../chart/TimeSignatureControl";
+import { useReanalyze } from "../chart/useReanalyze";
+import Spinner from "../components/Spinner";
 
 export default function ChartEditorPage() {
   const { recordingId } = useParams<{ recordingId: string }>();
@@ -37,8 +41,12 @@ export default function ChartEditorPage() {
     addSegment,
     updateSegment,
     deleteSegment,
+    resizeSegments,
     transpose,
-  } = useChart(id, { poll: inProgress });
+    updateSettings,
+  } = useChart(id, { poll: inProgress, awaitChart: analysis?.status === "done" });
+
+  const { reanalyze, isPending: reanalyzing } = useReanalyze(id);
 
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
@@ -49,7 +57,17 @@ export default function ChartEditorPage() {
   return (
     <div className="container">
       <p><Link to="/">&larr; Library</Link></p>
-      <h1>{recording?.original_filename ?? "Chart"}</h1>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <h1 style={{ margin: 0 }}>{recording?.original_filename ?? "Chart"}</h1>
+        <button onClick={() => reanalyze()} disabled={reanalyzing || inProgress}>
+          Re-analyze
+        </button>
+        {inProgress && (
+          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} className="muted">
+            <Spinner label="Analyzing" /> Analyzing&hellip;
+          </span>
+        )}
+      </div>
 
       {analysis?.status === "failed" && (
         <p className="error">Analysis failed: {analysis.error}</p>
@@ -91,7 +109,8 @@ export default function ChartEditorPage() {
           <div style={{ marginTop: 12 }}>
             <Timeline
               segments={chart.segments}
-              bpm={analysis?.bpm ?? null}
+              beatsPerMeasure={chart.beats_per_measure}
+              measureOffset={chart.measure_offset}
               duration={duration}
               currentTime={clock.currentTime}
               playing={clock.playing}
@@ -110,13 +129,20 @@ export default function ChartEditorPage() {
               busy={isMutating}
             />
 
+            <TimeSignatureControl
+              beatsPerMeasure={chart.beats_per_measure}
+              measureOffset={chart.measure_offset}
+              onChange={(patch) => updateSettings(patch)}
+              busy={isMutating}
+            />
+
             <button
               disabled={isMutating}
               onClick={() => {
-                const lastEnd = chart.segments[chart.segments.length - 1]?.end_time ?? 0;
+                const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
                 addSegment({
-                  start_time: lastEnd,
-                  end_time: Math.min(duration || lastEnd + 1, lastEnd + 1),
+                  start_beat: lastEnd,
+                  end_beat: lastEnd + chart.beats_per_measure,
                   chord_root: chart.key_tonic,
                   chord_quality: "maj",
                 });
@@ -128,6 +154,9 @@ export default function ChartEditorPage() {
             {selectedId && chart.segments.find((s) => s.id === selectedId) && (
               <SegmentEditor
                 segment={chart.segments.find((s) => s.id === selectedId)!}
+                allSegments={chart.segments}
+                maxTotalBeats={totalBeats(chart.beat_times, analysis?.bpm ?? null, duration)}
+                onResize={(windows) => resizeSegments(windows)}
                 onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
                 onDelete={() => {
                   deleteSegment(selectedId);

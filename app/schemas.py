@@ -22,6 +22,7 @@ class AnalysisOut(BaseModel):
     detected_key_mode: str | None
     engine_version: str | None
     error: str | None
+    beat_times: list[float] = Field(default_factory=list)
 
 
 class RecordingOut(BaseModel):
@@ -46,21 +47,33 @@ class ChartCreate(BaseModel):
 
 
 class SegmentCreate(BaseModel):
-    start_time: float = Field(ge=0)
-    end_time: float = Field(gt=0)
+    start_beat: float = Field(ge=0)
+    end_beat: float = Field(gt=0)
     chord_root: str = Field(pattern="^[A-G][b#]?$")
     chord_quality: str = Field(pattern="^(maj|min|dom7|maj7|min7)$")
 
 
 class SegmentUpdate(BaseModel):
-    start_time: float | None = Field(default=None, ge=0)
-    end_time: float | None = Field(default=None, gt=0)
+    start_beat: float | None = Field(default=None, ge=0)
+    end_beat: float | None = Field(default=None, gt=0)
     chord_root: str | None = Field(default=None, pattern="^[A-G][b#]?$")
     chord_quality: str | None = Field(default=None, pattern="^(maj|min|dom7|maj7|min7)$")
 
 
+class SegmentWindow(BaseModel):
+    id: str
+    start_beat: float = Field(ge=0)
+    end_beat: float = Field(gt=0)
+
+
+class SegmentBatchUpdate(BaseModel):
+    segments: list[SegmentWindow] = Field(min_length=1)
+
+
 class SegmentOut(BaseModel):
     id: str
+    start_beat: float
+    end_beat: float
     start_time: float
     end_time: float
     chord_root: str
@@ -73,7 +86,15 @@ class ChartOut(BaseModel):
     recording_id: str
     key_tonic: str
     key_mode: str
+    beats_per_measure: int
+    measure_offset: int
+    beat_times: list[float]
     segments: list[SegmentOut]
+
+
+class ChartSettingsUpdate(BaseModel):
+    beats_per_measure: int | None = Field(default=None, ge=1, le=16)
+    measure_offset: int | None = Field(default=None, ge=0)
 
 
 class TransposeRequest(BaseModel):

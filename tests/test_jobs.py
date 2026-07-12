@@ -114,8 +114,44 @@ def test_seeding_overwrites_browser_duration_and_clamps_segments(db_session):
     db_session.refresh(rec)
     assert rec.duration_seconds == 7.5  # authoritative server duration wins
     chart = db_session.query(ChordChart).filter_by(recording_id=rec.id).one()
-    ends = sorted(s.end_time for s in chart.segments)
-    assert max(ends) <= 7.5  # never exceeds the audio length
+    ends = sorted(s.end_beat for s in chart.segments)
+    # At 120 BPM over 7.5s the grid has 0.5s/beat -> 15 total beats; end_beat must not exceed it
+    assert max(ends) <= 15.0
+
+
+def test_seed_chart_assigns_whole_beats(db_session):
+    from app.audio.analyzer import AnalysisResult
+    from app.audio.segments import DetectedSegment
+    from app.jobs import _seed_chart
+    from app.models import Recording, User
+    from app.music_theory import Quality
+
+    user = User(username="seed", password_hash="x")
+    db_session.add(user)
+    db_session.flush()
+    rec = Recording(user_id=user.id, original_filename="m.m4a", format="m4a",
+                    stored_path="/tmp/m.m4a", duration_seconds=8.0)
+    db_session.add(rec)
+    db_session.flush()
+
+    # Steady 120 BPM -> 0.5s/beat. Two chords, each 4 beats (2.0s).
+    grid = [round(i * 0.5, 3) for i in range(17)]  # beats 0..16 over 8s
+    result = AnalysisResult(
+        bpm=120.0, key_tonic_pc=0, key_mode="major", duration=8.0,
+        segments=[
+            DetectedSegment(0.0, 2.0, 0, Quality.MAJ),
+            DetectedSegment(2.0, 4.0, 7, Quality.MAJ),
+        ],
+        beat_times=grid,
+    )
+    _seed_chart(db_session, rec, result)
+    db_session.commit()
+
+    segs = sorted(rec.chart.segments, key=lambda s: s.start_beat)
+    assert rec.chart.beat_times == grid
+    assert rec.chart.beats_per_measure == 4
+    assert (segs[0].start_beat, segs[0].end_beat) == (0.0, 4.0)
+    assert (segs[1].start_beat, segs[1].end_beat) == (4.0, 8.0)
 
 
 def test_dispatcher_uses_configured_min_segment_seconds(monkeypatch):
