@@ -6,7 +6,28 @@ from app.audio.decode import ffmpeg_available
 pytest.importorskip("librosa")
 pytestmark = pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg not installed")
 
-from app.audio.analyzer import AnalysisResult, LibrosaAnalyzer  # noqa: E402
+from app.audio.analyzer import AnalysisResult, LibrosaAnalyzer, _trim_silence  # noqa: E402
+
+
+def _tone(sr, seconds, hz=220.0, amp=0.3):
+    t = np.linspace(0.0, seconds, int(sr * seconds), endpoint=False)
+    return (amp * np.sin(2 * np.pi * hz * t)).astype(np.float32)
+
+
+def test_trim_silence_ignores_a_brief_leading_transient():
+    # A real file can open with a short loud click before the true silence, which
+    # anchors a naive first-frame trim at t~=0. Trimming must skip that transient and
+    # start at the music, judging content by sustained dB level, not the first blip.
+    sr = 22050
+    blip = _tone(sr, 0.2)  # 0.2s click at the very start
+    silence = np.zeros(int(sr * 1.0), dtype=np.float32)  # 1.0s of quiet
+    music = _tone(sr, 2.0)  # 2.0s of sustained content
+    y = np.concatenate([blip, silence, music])
+
+    trimmed, lead = _trim_silence(y, sr, top_db=30.0)
+
+    assert lead == pytest.approx(1.2, abs=0.15)  # past the blip + silence
+    assert len(trimmed) / sr == pytest.approx(2.0, abs=0.15)  # only the music survives
 
 
 def _chord_block(pcs, sr, seconds, base_hz=261.63):
@@ -81,3 +102,51 @@ def test_leading_and_trailing_silence_is_trimmed(tmp_path):
     assert result.segments
     assert result.segments[0].start_time >= 0.7  # chart starts at the first sound, not 0
     assert result.segments[-1].end_time <= 3.3  # and ends before the trailing silence
+
+
+def test_analysis_result_has_beat_times_field():
+    from app.audio.analyzer import AnalysisResult
+    r = AnalysisResult(bpm=120.0, key_tonic_pc=0, key_mode="major", duration=2.0)
+    assert r.beat_times == []
+
+
+def test_librosa_analyzer_returns_ascending_beat_times(tmp_path):
+    path = tmp_path / "song.wav"
+    _write_chord_song(path, [(0, 4, 7), (7, 11, 2)])  # C major, then G major
+    from app.audio.analyzer import LibrosaAnalyzer
+    result = LibrosaAnalyzer(sample_rate=22050).analyze(str(path))
+    assert len(result.beat_times) > 0
+    assert result.beat_times == sorted(result.beat_times)
+    assert all(t >= 0 for t in result.beat_times)
+
+
+def test_btc_analyzer_returns_beat_times_past_the_leading_silence(tmp_path, monkeypatch):
+    # The deep model only emits chords, so the chart's beat grid comes from librosa here.
+    # Beat-tracking the untrimmed mix would anchor the grid inside the lead-in silence and
+    # skew every chord's beat count; the onsets must land on the music and stay in
+    # original-audio time (the frame the BTC segments are already in).
+    from app.audio.analyzer import BTCAnalyzer
+    from app.audio.segments import DetectedSegment
+    from app.music_theory import Quality
+
+    path = tmp_path / "song.wav"
+    chords = [(0, 4, 7), (7, 11, 2), (9, 0, 4), (5, 9, 0)]
+    _write_chord_song(path, chords, lead_silence=1.5)
+
+    analyzer = BTCAnalyzer(sample_rate=22050)
+    # Stub the deep engine: weights/torch are not needed to exercise the beat wiring.
+    monkeypatch.setattr(
+        analyzer._engine,
+        "segments",
+        lambda _p: [DetectedSegment(1.5, 9.5, 0, Quality.MAJ)],
+    )
+
+    result = analyzer.analyze(str(path))
+
+    assert result.engine_version == "btc-v1"
+    # >= 2 onsets, or beatgrid.ensure_grid discards them for a synthetic uniform grid and
+    # the chart's beat counts stop tracking the music.
+    assert len(result.beat_times) >= 2
+    assert result.beat_times == sorted(result.beat_times)
+    assert result.beat_times[0] >= 1.0  # on the music, not anchored in the silence
+    assert result.beat_times[-1] <= result.duration

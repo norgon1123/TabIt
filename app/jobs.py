@@ -16,6 +16,7 @@ from app.audio.analyzer import (
     ChordinoAnalyzer,
     LibrosaAnalyzer,
 )
+from app.audio.beatgrid import beat_for_time, ensure_grid, snap_half, total_beats
 from app.audio.separation import SeparationService
 from app.config import get_settings
 from app.db import SessionLocal
@@ -69,29 +70,40 @@ def _seed_chart(db: Session, recording: Recording, result: AnalysisResult) -> No
         db.delete(existing)
         db.flush()
 
-    # #1: trust the server-decoded length over the browser-reported duration, which is
-    # unreliable for VBR mp3/m4a and let charts run past the end of the audio.
+    # #1: trust the server-decoded length over the browser-reported duration.
     duration = result.duration
     recording.duration_seconds = duration
 
+    grid = ensure_grid(result.beat_times, result.bpm, duration)
+    max_beat = total_beats(grid, duration)
+
     tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
     prefer_flats = key_prefers_flats(tonic, result.key_mode)
-    chart = ChordChart(recording_id=recording.id, key_tonic=tonic, key_mode=result.key_mode)
+    chart = ChordChart(
+        recording_id=recording.id,
+        key_tonic=tonic,
+        key_mode=result.key_mode,
+        beat_times=grid,
+    )
     db.add(chart)
     db.flush()
+
+    cursor = 0.0  # beats; chords are laid out contiguously from beat 0
     for segment in result.segments:
-        end_time = min(segment.end_time, duration)
-        if end_time <= segment.start_time:  # fully past the end of the audio; drop it
+        end_beat = snap_half(beat_for_time(min(segment.end_time, duration), grid))
+        end_beat = min(end_beat, max_beat)
+        if end_beat - cursor < 0.5:  # too short after snapping; skip
             continue
         db.add(
             ChordSegment(
                 chart_id=chart.id,
-                start_time=segment.start_time,
-                end_time=end_time,
+                start_beat=cursor,
+                end_beat=end_beat,
                 chord_root=pitch_class_to_note(segment.root_pc, prefer_flats=prefer_flats),
                 chord_quality=segment.quality.value,
             )
         )
+        cursor = end_beat
 
 
 class JobDispatcher:
