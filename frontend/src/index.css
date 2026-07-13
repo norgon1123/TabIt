@@ -4,6 +4,11 @@
   --text: #e6e8ec;
   --muted: #9aa0a8;
   --accent: #4f8cff;
+  /* Chart rules: --line is the divider between chords, --bar-line the heavier
+     rule at a measure start. Both stay neutral — the accent means "selected or
+     playing", and nothing else may borrow it. */
+  --line: #2c313a;
+  --bar-line: #5a6270;
   --danger: #ff5d5d;
   --ok: #46c98b;
   font-family: system-ui, -apple-system, sans-serif;

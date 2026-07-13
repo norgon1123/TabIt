@@ -61,6 +61,20 @@ test("fills the active chord's progress bar to the current fraction when paused"
   expect(bar.style.transform).toBe("scaleX(0.5)");
 });
 
+test("measure bar lines are neutral — the accent marks only selection/playback", () => {
+  // s1 and s2 both start a measure (beats 0 and 4, beatsPerMeasure 4), so both get a
+  // bar line on their left edge. Only the selected one may wear the accent colour.
+  const { container } = renderTimeline({ selectedId: "s1" });
+  const cellStyle = (id: string) =>
+    (container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement).getAttribute("style")!;
+
+  expect(cellStyle("s2")).toContain("border-left: 3px solid var(--bar-line)");
+  expect(cellStyle("s2")).not.toContain("var(--accent)");
+  // The selected cell's bar line gives way to the accent, so its box stays even.
+  expect(cellStyle("s1")).toContain("border-left: 2px solid var(--accent)");
+  expect(cellStyle("s1")).not.toContain("var(--bar-line)");
+});
+
 it("renders slash marks for a 4-beat chord", () => {
   const segs = [{
     id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2,
