@@ -57,7 +57,7 @@ test("transpose +1 posts to the chart", async () => {
   expect(body).toEqual({ semitones: 1 });
 });
 
-test("transpose, tempo, beats/measure, and add-segment stay behind Advanced options", async () => {
+test("transpose, beats/measure, and add-segment stay behind Advanced options", async () => {
   login();
   server.use(
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
@@ -66,8 +66,12 @@ test("transpose, tempo, beats/measure, and add-segment stay behind Advanced opti
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
   await screen.findByText("I");
 
+  // Tempo and key are the exception: they are read above the player, so they are edited
+  // there too — no Advanced options detour to correct a double-time count or a wrong key.
+  expect(screen.getByRole("button", { name: /tempo:/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /key:/i })).toBeInTheDocument();
+
   expect(screen.queryByRole("button", { name: /\+1/ })).not.toBeInTheDocument();
-  expect(screen.queryByLabelText(/tempo/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/beats \/ measure/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/bar-line shift/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
@@ -75,7 +79,6 @@ test("transpose, tempo, beats/measure, and add-segment stay behind Advanced opti
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
 
   expect(screen.getByRole("button", { name: /\+1/ })).toBeInTheDocument();
-  expect(screen.getByLabelText(/tempo/i)).toBeInTheDocument();
   expect(screen.getByText(/beats \/ measure/i)).toBeInTheDocument();
   expect(screen.getByText(/bar-line shift/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /add segment/i })).toBeInTheDocument();
