@@ -63,6 +63,13 @@ export function useChart(
       api.postJson<ChartOut>(`/api/charts/${chartId}/transpose`, { semitones }),
     onSuccess: invalidate,
   });
+  // Setting the tempo rewrites the grid and every segment, so the server's chart is the
+  // source of truth: drop its response straight into the cache and the sheet re-lays out
+  // immediately, rather than waiting on a refetch.
+  const tempoMut = useMutation({
+    mutationFn: (bpm: number) => api.patchJson<ChartOut>(`/api/charts/${chartId}/tempo`, { bpm }),
+    onSuccess: (chart) => queryClient.setQueryData(key, chart),
+  });
   const settingsMut = useMutation({
     mutationFn: (patch: ChartSettingsPatch) =>
       api.patchJson<ChartOut>(`/api/charts/${chartId}/settings`, patch),
@@ -101,6 +108,7 @@ export function useChart(
       deleteMut.isPending ||
       transposeMut.isPending ||
       settingsMut.isPending ||
+      tempoMut.isPending ||
       resizeMut.isPending,
     addSegment: (input: SegmentInput) => addMut.mutateAsync(input),
     updateSegment: (segmentId: string, patch: SegmentPatch) =>
@@ -108,6 +116,7 @@ export function useChart(
     deleteSegment: (segmentId: string) => deleteMut.mutateAsync(segmentId),
     transpose: (semitones: number) => transposeMut.mutateAsync(semitones),
     updateSettings: (patch: ChartSettingsPatch) => settingsMut.mutateAsync(patch),
+    setTempo: (bpm: number) => tempoMut.mutateAsync(bpm),
     resizeSegments: (windows: SegmentWindowInput[]) => resizeMut.mutateAsync(windows),
   };
 }

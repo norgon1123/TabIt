@@ -90,8 +90,9 @@ describing the old schema — see *Invariants*.
   `bpm`, `detected_key_tonic`, `detected_key_mode`, `engine_version`, `error`,
   `beat_times` (JSON). 1:1 per recording (`recording_id` unique).
 - **ChordChart** — the editable chart: `key_tonic`, `key_mode`, `beats_per_measure`
-  (default 4), `measure_offset`, `beat_times` (JSON — the chart's own copy of the grid).
-  1:1 per recording.
+  (default 4), `measure_offset`, `beat_times` (JSON — the chart's own copy of the grid),
+  `bpm` (the working tempo — seeded from the analysis, then the user's to change; falls
+  back to `Analysis.bpm` while null). 1:1 per recording.
 - **ChordSegment** — `start_beat`, `end_beat` (floats, **beats**), `chord_root`,
   `chord_quality`. Ordered by `start_beat` within a chart. The output vocabulary is five
   qualities: `maj`, `min`, `dom7`, `maj7`, `min7`.
@@ -138,6 +139,7 @@ Status lifecycle, polled via `GET /api/recordings/{id}/analysis`:
   `POST /charts/{cid}/segments`, `PATCH /charts/{cid}/segments/{sid}`,
   `PATCH /charts/{cid}/segments` (batch resize), `DELETE /charts/{cid}/segments/{sid}`,
   `PATCH /charts/{cid}/settings` (beats-per-measure, measure offset),
+  `PATCH /charts/{cid}/tempo` (set BPM — re-indexes the grid, rescales every segment),
   `POST /charts/{cid}/transpose`.
 
 Segment writes are validated against the grid: start < end, no overlap with siblings, and

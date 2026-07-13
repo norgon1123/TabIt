@@ -3,6 +3,8 @@ import pytest
 from app.audio.beatgrid import (
     beat_for_time,
     ensure_grid,
+    rescale_grid,
+    rescale_windows,
     snap_half,
     time_for_beat,
     total_beats,
@@ -80,3 +82,47 @@ def test_backfilled_grid_separates_chords_in_the_intro():
 
 def test_total_beats():
     assert total_beats(GRID, 1.0) == pytest.approx(2.0)
+
+
+def test_rescale_grid_halving_keeps_every_second_onset():
+    # Halving the tempo means one beat where there were two: the new grid is the old one's
+    # even beats, so it stays on the onsets the tracker actually found.
+    grid = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    assert rescale_grid(grid, 0.5, duration=3.0) == pytest.approx([0.0, 1.0, 2.0, 3.0])
+
+
+def test_rescale_grid_doubling_inserts_midpoints():
+    grid = [0.0, 0.5, 1.0]
+    assert rescale_grid(grid, 2.0, duration=1.0) == pytest.approx(
+        [0.0, 0.25, 0.5, 0.75, 1.0]
+    )
+
+
+def test_rescale_grid_follows_a_drifting_grid_rather_than_a_metronome():
+    # The tracked grid slows down (0.5s, then 0.6s between beats). Halving keeps the drift
+    # instead of laying a rigid click at the requested BPM.
+    grid = [0.0, 0.5, 1.0, 1.6, 2.2]
+    assert rescale_grid(grid, 0.5, duration=2.2) == pytest.approx([0.0, 1.0, 2.2])
+
+
+def test_rescale_grid_rejects_a_non_positive_factor():
+    with pytest.raises(ValueError):
+        rescale_grid(GRID, 0.0, duration=2.0)
+
+
+def test_rescale_windows_halves_beat_counts_over_the_same_audio():
+    # Two 8-beat chords at the detected tempo become two 4-beat chords when the player
+    # counts the song at half that tempo — the audio each chord covers is unchanged.
+    windows = rescale_windows([(0.0, 8.0), (8.0, 16.0)], 0.5, max_beat=8.0)
+    assert windows == [(0.0, 4.0), (4.0, 8.0)]
+
+
+def test_rescale_windows_holds_the_half_beat_minimum():
+    # A 0.5-beat chord cannot halve to 0.25; it keeps the minimum length and pushes on.
+    windows = rescale_windows([(0.0, 0.5), (0.5, 4.0)], 0.5, max_beat=4.0)
+    assert windows == [(0.0, 0.5), (0.5, 2.0)]
+
+
+def test_rescale_windows_drops_a_window_with_no_room_left():
+    windows = rescale_windows([(0.0, 4.0), (4.0, 4.5)], 0.5, max_beat=2.0)
+    assert windows == [(0.0, 2.0), None]

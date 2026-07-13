@@ -26,6 +26,9 @@ ADDITIONS: dict[str, list[tuple[str, str]]] = {
         ("beats_per_measure", "INTEGER NOT NULL DEFAULT 4"),
         ("measure_offset", "INTEGER NOT NULL DEFAULT 0"),
         ("beat_times", "TEXT NOT NULL DEFAULT '[]'"),
+        # Nullable: an existing chart has no user tempo yet, and falls back to the
+        # detected Analysis.bpm until one is set.
+        ("bpm", "REAL"),
     ],
     "chord_segments": [
         ("start_beat", "REAL NOT NULL DEFAULT 0"),
