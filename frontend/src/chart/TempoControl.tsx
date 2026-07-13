@@ -15,17 +15,19 @@ function clamp(bpm: number): number {
 }
 
 /**
- * Set the tempo the chart is counted in.
+ * Set the tempo the chart is counted in — the BPM in the line above the player, edited in
+ * place: click the number, type, and it saves on Enter or on clicking away.
  *
  * Beat trackers land an octave out often enough — a 74 BPM song read as 144 BPM, every
  * chord counted as eight beats instead of four — that the metrical level has to be the
  * player's call. Halving the tempo does not move a chord in time; it re-counts the beats
- * under it, so ÷2 and ×2 are the two buttons that matter and get their own shortcuts.
+ * under it, so ÷2 and ×2 stay one click away, beside the input while you're editing.
  *
  * Tempo is a whole number here and on the server: a count you can tap out, not 143.6.
  */
 export default function TempoControl({ bpm, onChange, busy }: Props) {
   const whole = bpm == null ? null : Math.round(bpm);
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(whole == null ? "" : String(whole));
 
   // The server may hand back a tempo we didn't type (a ÷2, or another tab's edit).
@@ -36,8 +38,9 @@ export default function TempoControl({ bpm, onChange, busy }: Props) {
   if (whole == null) return null; // no detected tempo yet — nothing to rescale from
 
   const commit = () => {
+    setEditing(false);
     const parsed = Math.round(Number(draft));
-    if (!Number.isFinite(parsed) || parsed < MIN_BPM || parsed > MAX_BPM) {
+    if (!draft.trim() || !Number.isFinite(parsed) || parsed < MIN_BPM || parsed > MAX_BPM) {
       setDraft(String(whole)); // reject: snap back to the real tempo
       return;
     }
@@ -45,33 +48,69 @@ export default function TempoControl({ bpm, onChange, busy }: Props) {
     else setDraft(String(whole)); // e.g. a typed "72.4" is the tempo we already have
   };
 
+  const rescale = (factor: number) => {
+    setEditing(false);
+    onChange(clamp(whole * factor));
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="inline-edit"
+        disabled={busy}
+        aria-label={`Tempo: ${whole} BPM`}
+        title="Click to set the tempo (re-counts the beats under each chord; the audio doesn't move)"
+        onClick={() => setEditing(true)}
+      >
+        {whole} BPM
+      </button>
+    );
+  }
+
   return (
-    <div className="card" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <label htmlFor="tempo-bpm">Tempo:</label>
+    <span className="inline-edit inline-edit--editing">
       <input
-        id="tempo-bpm"
+        autoFocus
+        aria-label="Tempo"
         type="number"
         min={MIN_BPM}
         max={MAX_BPM}
         step="1"
         value={draft}
-        disabled={busy}
-        style={{ width: 80 }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();
-          if (e.key === "Escape") setDraft(String(whole));
+          if (e.key === "Escape") {
+            setDraft(String(whole));
+            setEditing(false);
+          }
         }}
       />
       <span className="muted">BPM</span>
-      <button onClick={() => onChange(clamp(whole / 2))} disabled={busy} title="Half-time">
+      {/* Keep the pointer press off the input: blurring it would commit the draft and close
+          the editor before the click ever landed on the button. These stay enabled while a
+          save is in flight — `busy` goes up for any edit on the sheet, and disabling the
+          control under the user's hands would take the focus with it. */}
+      <button
+        type="button"
+        className="inline-edit__btn"
+        title="Half-time"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => rescale(0.5)}
+      >
         ÷2
       </button>
-      <button onClick={() => onChange(clamp(whole * 2))} disabled={busy} title="Double-time">
+      <button
+        type="button"
+        className="inline-edit__btn"
+        title="Double-time"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => rescale(2)}
+      >
         ×2
       </button>
-      <span className="muted">(re-counts the beats under each chord; the audio doesn't move)</span>
-    </div>
+    </span>
   );
 }

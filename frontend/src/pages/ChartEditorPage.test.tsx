@@ -28,8 +28,9 @@ test("shows BPM, key, and the chord timeline", async () => {
     http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
-  expect(await screen.findByText(/120 BPM/i)).toBeInTheDocument();
-  expect(screen.getByText(/key: C major/i)).toBeInTheDocument();
+  // Tempo and key sit above the player as editable text, not as a panel of form fields.
+  expect(await screen.findByRole("button", { name: /tempo: 120 BPM/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /key: C major/i })).toBeInTheDocument();
   expect(screen.getByText("I")).toBeInTheDocument();
   expect(screen.getByText("V")).toBeInTheDocument();
 });

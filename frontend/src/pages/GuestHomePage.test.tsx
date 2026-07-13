@@ -163,9 +163,11 @@ test("a chord edit saved after re-counting the tempo reaches the server, and the
   fireEvent.change(await screen.findByLabelText(/root/i), { target: { value: "A" } });
   fireEvent.change(screen.getByLabelText(/quality/i), { target: { value: "min7" } });
 
-  // Re-count the tempo (commits on blur), then save the chord that is still on screen.
-  fireEvent.change(screen.getByLabelText(/tempo/i), { target: { value: "60" } });
-  fireEvent.blur(screen.getByLabelText(/tempo/i));
+  // Re-count the tempo (click the BPM to edit it; commits on blur), then save the chord
+  // that is still on screen.
+  fireEvent.click(screen.getByRole("button", { name: /tempo:/i }));
+  fireEvent.change(screen.getByLabelText("Tempo"), { target: { value: "60" } });
+  fireEvent.blur(screen.getByLabelText("Tempo"));
   await waitFor(() => expect(chart.bpm).toBe(60));
   fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 

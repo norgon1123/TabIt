@@ -63,12 +63,23 @@ export default function ChartSheet({
     );
   }
 
+  const bpm = chart.bpm ?? analysis?.bpm ?? null;
+
   return (
     <>
-      <p className="muted">
-        {analysis?.bpm != null && <>{analysis.bpm} BPM &middot; </>}
-        Key: {chart.key_tonic} {chart.key_mode}
-      </p>
+      {/* Tempo and key read as a sentence about the song and are edited where they are
+          read — click the BPM or the key to change it, no separate panel of form fields. */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+        <TempoControl bpm={bpm} onChange={(next) => setTempo(next)} busy={isMutating} />
+        {bpm != null && <span className="muted">&middot;</span>}
+        <span className="muted" style={{ marginLeft: 6 }}>Key:</span>
+        <KeyControl
+          keyTonic={chart.key_tonic}
+          keyMode={chart.key_mode}
+          onChange={(patch) => updateSettings(patch)}
+          busy={isMutating}
+        />
+      </div>
 
       <audio ref={clock.ref} controls style={{ width: "100%" }} src={audioSrc} />
 
@@ -104,20 +115,7 @@ export default function ChartSheet({
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-        <KeyControl
-          keyTonic={chart.key_tonic}
-          keyMode={chart.key_mode}
-          onChange={(patch) => updateSettings(patch)}
-          busy={isMutating}
-        />
-
         <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
-
-        <TempoControl
-          bpm={chart.bpm ?? analysis?.bpm ?? null}
-          onChange={(bpm) => setTempo(bpm)}
-          busy={isMutating}
-        />
 
         <TimeSignatureControl
           beatsPerMeasure={chart.beats_per_measure}
@@ -145,7 +143,7 @@ export default function ChartSheet({
           <SegmentEditor
             segment={chart.segments.find((s) => s.id === selectedId)!}
             allSegments={chart.segments}
-            maxTotalBeats={totalBeats(chart.beat_times, chart.bpm ?? analysis?.bpm ?? null, duration)}
+            maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
             onResize={(windows) => resizeSegments(windows)}
             onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
             onDelete={() => {
