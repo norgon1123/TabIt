@@ -11,6 +11,7 @@ interface Props {
   onResize: (windows: SegmentWindowInput[]) => void;
   onSave: (patch: SegmentPatch) => Promise<void>;
   onDelete: () => void;
+  onClose?: () => void;
   busy: boolean;
   debounceMs?: number;
 }
@@ -22,6 +23,7 @@ export default function SegmentEditor({
   onResize,
   onSave,
   onDelete,
+  onClose,
   busy,
   debounceMs = 400,
 }: Props) {
@@ -77,8 +79,15 @@ export default function SegmentEditor({
   }
 
   return (
-    <div className="card" style={{ display: "grid", gap: 8 }}>
-      <strong>Edit segment</strong>
+    <div className="card segment-editor" style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <strong>Edit segment</strong>
+        {onClose && (
+          <button className="icon" aria-label="Close segment editor" onClick={onClose}>
+            &times;
+          </button>
+        )}
+      </div>
       <label>
         Root
         <select value={root} onChange={(e) => setRoot(e.target.value)}>

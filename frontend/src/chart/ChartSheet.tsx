@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AnalysisOut } from "../api/types";
 import { useChart } from "./useChart";
 import { useMediaClock } from "./useMediaClock";
@@ -31,6 +31,7 @@ export default function ChartSheet({
   inProgress: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const clock = useMediaClock();
 
   const {
@@ -49,6 +50,28 @@ export default function ChartSheet({
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
+
+  // Clicking off the selected chord closes the editor. The editor is a floating rail rather
+  // than part of the page flow, so "off" is anything outside both it and a chord cell —
+  // pressing another chord re-selects instead (the cell swallows the dismissal here and
+  // Timeline's own click handler picks the new one).
+  useEffect(() => {
+    if (!selectedId) return;
+    const dismiss = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".segment-editor, [data-segment-id]")) return;
+      setSelectedId(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedId(null);
+    };
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [selectedId]);
 
   if (analysis?.status === "failed") {
     return <p className="error">Analysis failed: {analysis.error}</p>;
@@ -114,46 +137,62 @@ export default function ChartSheet({
         />
       </div>
 
+      {/* Tempo and key are edited in the line above the player, so Advanced options is what
+          is left: the counts and shifts you reach for rarely. */}
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-        <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
-
-        <TimeSignatureControl
-          beatsPerMeasure={chart.beats_per_measure}
-          measureOffset={chart.measure_offset}
-          onChange={(patch) => updateSettings(patch)}
-          busy={isMutating}
-        />
-
         <button
-          disabled={isMutating}
-          onClick={() => {
-            const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
-            addSegment({
-              start_beat: lastEnd,
-              end_beat: lastEnd + chart.beats_per_measure,
-              chord_root: chart.key_tonic,
-              chord_quality: "maj",
-            });
-          }}
+          aria-expanded={showAdvanced}
+          style={{ justifySelf: "start" }}
+          onClick={() => setShowAdvanced((open) => !open)}
         >
-          Add segment
+          {showAdvanced ? "▾" : "▸"} Advanced options
         </button>
 
-        {selectedId && chart.segments.find((s) => s.id === selectedId) && (
-          <SegmentEditor
-            segment={chart.segments.find((s) => s.id === selectedId)!}
-            allSegments={chart.segments}
-            maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
-            onResize={(windows) => resizeSegments(windows)}
-            onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
-            onDelete={() => {
-              deleteSegment(selectedId);
-              setSelectedId(null);
-            }}
-            busy={isMutating}
-          />
+        {showAdvanced && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <TimeSignatureControl
+              beatsPerMeasure={chart.beats_per_measure}
+              measureOffset={chart.measure_offset}
+              onChange={(patch) => updateSettings(patch)}
+              busy={isMutating}
+            />
+
+            <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
+
+            <button
+              disabled={isMutating}
+              style={{ justifySelf: "start" }}
+              onClick={() => {
+                const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
+                addSegment({
+                  start_beat: lastEnd,
+                  end_beat: lastEnd + chart.beats_per_measure,
+                  chord_root: chart.key_tonic,
+                  chord_quality: "maj",
+                });
+              }}
+            >
+              Add segment
+            </button>
+          </div>
         )}
       </div>
+
+      {selectedId && chart.segments.find((s) => s.id === selectedId) && (
+        <SegmentEditor
+          segment={chart.segments.find((s) => s.id === selectedId)!}
+          allSegments={chart.segments}
+          maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
+          onResize={(windows) => resizeSegments(windows)}
+          onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
+          onDelete={() => {
+            deleteSegment(selectedId);
+            setSelectedId(null);
+          }}
+          onClose={() => setSelectedId(null)}
+          busy={isMutating}
+        />
+      )}
     </>
   );
 }
