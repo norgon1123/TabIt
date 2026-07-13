@@ -134,13 +134,6 @@ export default function ChartSheet({
           busy={isMutating}
         />
 
-        <TimeSignatureControl
-          beatsPerMeasure={chart.beats_per_measure}
-          measureOffset={chart.measure_offset}
-          onChange={(patch) => updateSettings(patch)}
-          busy={isMutating}
-        />
-
         <button
           aria-expanded={showAdvanced}
           style={{ justifySelf: "start" }}
@@ -151,6 +144,13 @@ export default function ChartSheet({
 
         {showAdvanced && (
           <div style={{ display: "grid", gap: 12 }}>
+            <TimeSignatureControl
+              beatsPerMeasure={chart.beats_per_measure}
+              measureOffset={chart.measure_offset}
+              onChange={(patch) => updateSettings(patch)}
+              busy={isMutating}
+            />
+
             <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
 
             <TempoControl
