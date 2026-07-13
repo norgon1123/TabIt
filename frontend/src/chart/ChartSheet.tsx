@@ -31,6 +31,7 @@ export default function ChartSheet({
   inProgress: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const clock = useMediaClock();
 
   const {
@@ -111,14 +112,6 @@ export default function ChartSheet({
           busy={isMutating}
         />
 
-        <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
-
-        <TempoControl
-          bpm={chart.bpm ?? analysis?.bpm ?? null}
-          onChange={(bpm) => setTempo(bpm)}
-          busy={isMutating}
-        />
-
         <TimeSignatureControl
           beatsPerMeasure={chart.beats_per_measure}
           measureOffset={chart.measure_offset}
@@ -127,19 +120,40 @@ export default function ChartSheet({
         />
 
         <button
-          disabled={isMutating}
-          onClick={() => {
-            const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
-            addSegment({
-              start_beat: lastEnd,
-              end_beat: lastEnd + chart.beats_per_measure,
-              chord_root: chart.key_tonic,
-              chord_quality: "maj",
-            });
-          }}
+          aria-expanded={showAdvanced}
+          style={{ justifySelf: "start" }}
+          onClick={() => setShowAdvanced((open) => !open)}
         >
-          Add segment
+          {showAdvanced ? "▾" : "▸"} Advanced options
         </button>
+
+        {showAdvanced && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
+
+            <TempoControl
+              bpm={chart.bpm ?? analysis?.bpm ?? null}
+              onChange={(bpm) => setTempo(bpm)}
+              busy={isMutating}
+            />
+
+            <button
+              disabled={isMutating}
+              style={{ justifySelf: "start" }}
+              onClick={() => {
+                const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
+                addSegment({
+                  start_beat: lastEnd,
+                  end_beat: lastEnd + chart.beats_per_measure,
+                  chord_root: chart.key_tonic,
+                  chord_quality: "maj",
+                });
+              }}
+            >
+              Add segment
+            </button>
+          </div>
+        )}
 
         {selectedId && chart.segments.find((s) => s.id === selectedId) && (
           <SegmentEditor
