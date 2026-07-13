@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AnalysisOut } from "../api/types";
 import { useChart } from "./useChart";
 import { useMediaClock } from "./useMediaClock";
@@ -50,6 +50,28 @@ export default function ChartSheet({
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
+
+  // Clicking off the selected chord closes the editor. The editor is a floating rail rather
+  // than part of the page flow, so "off" is anything outside both it and a chord cell —
+  // pressing another chord re-selects instead (the cell swallows the dismissal here and
+  // Timeline's own click handler picks the new one).
+  useEffect(() => {
+    if (!selectedId) return;
+    const dismiss = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".segment-editor, [data-segment-id]")) return;
+      setSelectedId(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedId(null);
+    };
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [selectedId]);
 
   if (analysis?.status === "failed") {
     return <p className="error">Analysis failed: {analysis.error}</p>;
@@ -154,22 +176,23 @@ export default function ChartSheet({
             </button>
           </div>
         )}
-
-        {selectedId && chart.segments.find((s) => s.id === selectedId) && (
-          <SegmentEditor
-            segment={chart.segments.find((s) => s.id === selectedId)!}
-            allSegments={chart.segments}
-            maxTotalBeats={totalBeats(chart.beat_times, chart.bpm ?? analysis?.bpm ?? null, duration)}
-            onResize={(windows) => resizeSegments(windows)}
-            onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
-            onDelete={() => {
-              deleteSegment(selectedId);
-              setSelectedId(null);
-            }}
-            busy={isMutating}
-          />
-        )}
       </div>
+
+      {selectedId && chart.segments.find((s) => s.id === selectedId) && (
+        <SegmentEditor
+          segment={chart.segments.find((s) => s.id === selectedId)!}
+          allSegments={chart.segments}
+          maxTotalBeats={totalBeats(chart.beat_times, chart.bpm ?? analysis?.bpm ?? null, duration)}
+          onResize={(windows) => resizeSegments(windows)}
+          onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
+          onDelete={() => {
+            deleteSegment(selectedId);
+            setSelectedId(null);
+          }}
+          onClose={() => setSelectedId(null)}
+          busy={isMutating}
+        />
+      )}
     </>
   );
 }

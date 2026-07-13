@@ -103,6 +103,27 @@ test("beats/measure edits still reach the server from inside Advanced options", 
   await waitFor(() => expect(patched).toEqual({ beats_per_measure: 3 }));
 });
 
+test("clicking off the selected chord closes the editor, clicking another keeps it", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+
+  await userEvent.click(await screen.findByText("I"));
+  expect(await screen.findByText("Edit segment")).toBeInTheDocument();
+
+  // Another chord: the editor stays, now editing that chord.
+  await userEvent.click(screen.getByText("IV"));
+  expect(screen.getByText("Edit segment")).toBeInTheDocument();
+  expect((screen.getByLabelText(/root/i) as HTMLSelectElement).value).toBe("F");
+
+  // Off the chart entirely: the editor goes away.
+  await userEvent.click(document.body);
+  await waitFor(() => expect(screen.queryByText("Edit segment")).not.toBeInTheDocument());
+});
+
 test("editing beats redistributes via the batch endpoint", async () => {
   login();
   let body: unknown = null;
