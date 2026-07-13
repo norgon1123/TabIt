@@ -33,6 +33,8 @@ API docs at http://localhost:8000/docs
 - `TABIT_COOKIE_SECURE` (`true` behind HTTPS)
 - `TABIT_ANALYSIS_SAMPLE_RATE` (default `22050` Hz; audio resample target for analysis)
 - `TABIT_ANALYSIS_MAX_WORKERS` (default `1`; background analysis worker threads)
+- `TABIT_MAX_RECORDING_SECONDS` (default `600`, i.e. 10 minutes; longer uploads are
+  rejected with `413`)
 
 ### Multi-instrument pipeline (Phase 0/1)
 
@@ -59,6 +61,11 @@ Phase 0 tools (see the roadmap and technical plan under `docs/`):
     python scripts/separation_spike.py path/to/song.m4a --out-dir /tmp/stems
 
 ## Analysis Flow
+
+Upload rejects anything longer than `TABIT_MAX_RECORDING_SECONDS` (10 minutes by default).
+The length is taken from `ffprobe` on the stored file, not from the browser — a client can
+under-report it. If ffprobe isn't on `PATH` the length can't be established and the upload
+is allowed through (analysis then fails with the usual missing-ffmpeg error).
 
 Uploading a recording enqueues an in-process background job that:
 

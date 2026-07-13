@@ -1,9 +1,15 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { vi } from "vitest";
 import { server } from "../test/server";
 import { renderWithProviders } from "../test/utils";
 import LibraryPage from "./LibraryPage";
+
+// jsdom never loads media, so the real reader would hang: report "duration unknown".
+vi.mock("../library/audioDuration", () => ({
+  readAudioDuration: () => Promise.resolve(null),
+}));
 
 function login() {
   server.use(http.get("/api/auth/me", () => HttpResponse.json({ id: "u1", username: "alice" })));
@@ -70,6 +76,28 @@ test("shows a no-match message when search excludes everything", async () => {
   await screen.findByText("Autumn Leaves.m4a");
   await userEvent.type(screen.getByPlaceholderText(/search recordings/i), "zzz");
   expect(screen.getByText(/no recordings match/i)).toBeInTheDocument();
+});
+
+test("shows the server's message when an upload is rejected as too long", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings", () => HttpResponse.json([])),
+    http.post("/api/recordings", () =>
+      HttpResponse.json(
+        { detail: "Recording is 12.5 minutes long; the maximum is 10 minutes." },
+        { status: 413 },
+      ),
+    ),
+  );
+  const { container } = renderWithProviders(<LibraryPage />);
+  await screen.findByText(/no recordings yet/i);
+
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+  await userEvent.upload(input, new File([new Uint8Array([1, 2, 3])], "epic.m4a", { type: "audio/mp4" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Recording is 12.5 minutes long; the maximum is 10 minutes.",
+  );
 });
 
 test("toggling sort reverses recording order", async () => {

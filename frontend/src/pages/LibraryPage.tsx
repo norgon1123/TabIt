@@ -74,7 +74,8 @@ function RecordingName({
 }
 
 export default function LibraryPage() {
-  const { recordings, isLoading, upload, remove, reanalyze, rename, isUploading } = useRecordings();
+  const { recordings, isLoading, upload, remove, reanalyze, rename, isUploading, uploadError } =
+    useRecordings();
   const [query, setQuery] = useState("");
   const [sortDir, setSortDir] = useState<SortDir>("newest");
   const visible = filterAndSortRecordings(recordings, query, sortDir);
@@ -83,8 +84,17 @@ export default function LibraryPage() {
     <div className="container">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Library</h1>
-        <UploadButton onUpload={upload} busy={isUploading} />
+        <UploadButton
+          onUpload={(file) => {
+            // A rejected upload lands in uploadError below; swallow it here so it doesn't
+            // surface as an unhandled rejection.
+            void upload(file).catch(() => {});
+          }}
+          busy={isUploading}
+        />
       </div>
+
+      {uploadError && <p className="error" role="alert">{uploadError}</p>}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
         <input

@@ -5,10 +5,16 @@ import type { ReactNode } from "react";
 import { vi } from "vitest";
 import { server } from "../test/server";
 import { useRecordings } from "./useRecordings";
+import { MAX_RECORDING_SECONDS } from "./uploadLimits";
 
+const audio = vi.hoisted(() => ({ duration: null as number | null }));
 vi.mock("./audioDuration", () => ({
-  readAudioDuration: () => Promise.resolve(null),
+  readAudioDuration: () => Promise.resolve(audio.duration),
 }));
+
+beforeEach(() => {
+  audio.duration = null;
+});
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -47,4 +53,23 @@ test("upload posts multipart form with the file", async () => {
   await result.current.upload(file);
   expect(received).not.toBeNull();
   expect((received!.get("file") as File).name).toBe("new.m4a");
+});
+
+test("upload rejects a recording over ten minutes without posting it", async () => {
+  audio.duration = MAX_RECORDING_SECONDS + 60; // 11 minutes
+  let posted = false;
+  server.use(
+    http.get("/api/recordings", () => HttpResponse.json([])),
+    http.post("/api/recordings", () => {
+      posted = true;
+      return HttpResponse.json({}, { status: 201 });
+    }),
+  );
+  const { result } = renderHook(() => useRecordings(), { wrapper });
+  await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+  const file = new File([new Uint8Array([1, 2, 3])], "epic.m4a", { type: "audio/mp4" });
+  await expect(result.current.upload(file)).rejects.toThrow(/maximum is 10 minutes/);
+  expect(posted).toBe(false);
+  await waitFor(() => expect(result.current.uploadError).toMatch(/11\.0 minutes long/));
 });
