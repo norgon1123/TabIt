@@ -81,8 +81,9 @@ test("dropping a song shows its chord sheet below the upload area, on the same p
   // The chord cells, and the controls that edit them — the signed-in chord sheet, verbatim.
   expect(await screen.findByLabelText("Resize end of C")).toBeInTheDocument();
   expect(screen.getByLabelText("Resize end of G")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /add segment/i })).toBeInTheDocument();
   expect(screen.getByText(/120 BPM/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+  expect(screen.getByRole("button", { name: /add segment/i })).toBeInTheDocument();
   // ...still on the upload page, not a separate route.
   expect(screen.getByRole("region", { name: /upload a recording/i })).toBeInTheDocument();
 });
@@ -164,6 +165,7 @@ test("a chord edit saved after re-counting the tempo reaches the server, and the
   fireEvent.change(screen.getByLabelText(/quality/i), { target: { value: "min7" } });
 
   // Re-count the tempo (commits on blur), then save the chord that is still on screen.
+  fireEvent.click(screen.getByRole("button", { name: /advanced options/i }));
   fireEvent.change(screen.getByLabelText(/tempo/i), { target: { value: "60" } });
   fireEvent.blur(screen.getByLabelText(/tempo/i));
   await waitFor(() => expect(chart.bpm).toBe(60));
