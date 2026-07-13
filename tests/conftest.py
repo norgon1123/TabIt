@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.db import Base, get_db
 from app.jobs import get_job_dispatcher
 from app.main import app
@@ -29,9 +30,13 @@ def db_session():
 class _FakeDispatcher:
     def __init__(self):
         self.dispatched: list[str] = []
+        self.guest_dispatched: list[object] = []
 
     def dispatch(self, recording_id: str) -> None:
         self.dispatched.append(recording_id)
+
+    def dispatch_guest(self, recording) -> None:
+        self.guest_dispatched.append(recording)
 
     def shutdown(self) -> None:
         pass
@@ -45,6 +50,10 @@ def client(db_session):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_job_dispatcher] = lambda: _FakeDispatcher()
     with TestClient(app) as c:
+        # Startup reads settings (storage dir, for the guest-audio sweep), which warms the
+        # lru_cache. Tests monkeypatch TABIT_* env vars *after* this fixture runs, so drop
+        # the cached copy or those vars would silently do nothing.
+        get_settings.cache_clear()
         yield c
     app.dependency_overrides.clear()
 
@@ -59,7 +68,15 @@ def fake_dispatcher(client):
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
-    from app.config import get_settings
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_guest_store():
+    """The guest store is a process-wide singleton; one test's guest must not be another's."""
+    from app.guest import get_guest_store
+    get_guest_store.cache_clear()
+    yield
+    get_guest_store.cache_clear()

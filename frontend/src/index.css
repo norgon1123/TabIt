@@ -4,6 +4,11 @@
   --text: #e6e8ec;
   --muted: #9aa0a8;
   --accent: #4f8cff;
+  /* Chart rules: --line is the divider between chords, --bar-line the heavier
+     rule at a measure start. Both stay neutral — the accent means "selected or
+     playing", and nothing else may borrow it. */
+  --line: #2c313a;
+  --bar-line: #5a6270;
   --danger: #ff5d5d;
   --ok: #46c98b;
   font-family: system-ui, -apple-system, sans-serif;
@@ -22,10 +27,53 @@ a { color: var(--accent); }
 .card { background: var(--panel); border: 1px solid #2c313a; border-radius: 12px; padding: 12px; }
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
+button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color: var(--muted); }
 
+/* The segment editor sits just off the right edge of the chord chart, its top aligned
+   with the row of the chord it edits — near the click, not across the page. It is
+   absolutely positioned (not fixed) against `.chart-area`, so it stays pinned to that
+   chord's line and scrolls away with it rather than trailing the viewport. Selecting a
+   chord therefore never reflows the chart under the pointer.
+
+   The panel is narrow, but the 880px container only leaves room beside it on a wide
+   screen; below that it drops back into the flow, directly under the chart. */
+.chart-area { position: relative; }
+.segment-editor {
+  position: absolute;
+  z-index: 10;
+  left: calc(100% + 16px);
+  width: 190px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+.segment-editor label { display: grid; gap: 4px; }
+.segment-editor select, .segment-editor input { width: 100%; }
+.segment-editor .primary, .segment-editor .danger { flex: 1; }
+
+@media (max-width: 1320px) {
+  .segment-editor {
+    position: static;
+    width: auto;
+    margin-top: 12px;
+    box-shadow: none;
+  }
+}
 @media (max-width: 600px) { .container { padding: 12px; } }
 
 .scrub-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Click-to-edit chart settings (tempo, key) sitting above the player. At rest they read
+   as plain text; the box only appears under the pointer, so the line stays a sentence
+   about the song rather than a row of form controls. */
+.inline-edit { display: inline-flex; align-items: center; gap: 6px; font: inherit;
+  color: var(--text); background: transparent; border: 1px solid transparent;
+  border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+button.inline-edit:hover:not(:disabled) { background: var(--panel); border-color: var(--line); }
+button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inline-edit--editing { background: var(--panel); border-color: var(--line); padding: 3px 6px;
+  cursor: default; }
+.inline-edit--editing input, .inline-edit--editing select { padding: 3px 4px; border-radius: 6px; }
+.inline-edit--editing input { width: 4.5rem; }
+.inline-edit__btn { padding: 2px 6px; border-radius: 6px; font-size: 0.85em; }
 
 @keyframes tabit-spin {
   to {

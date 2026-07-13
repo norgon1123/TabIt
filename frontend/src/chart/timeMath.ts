@@ -15,6 +15,14 @@ export function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+// Track length, zero-padded to MM:SS (no recording is expected to reach an hour).
+export function formatDuration(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}
+
 // Round 2 #5: times are universally quantized to (and displayed at) the centisecond.
 export function roundCs(seconds: number): number {
   return Math.round(seconds * 100) / 100;

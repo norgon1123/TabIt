@@ -62,6 +62,7 @@ def test_analyzes_a_two_chord_song(tmp_path):
 
     assert isinstance(result, AnalysisResult)
     assert result.bpm > 0
+    assert result.bpm == int(result.bpm)  # tempo is detected as a whole number of BPM
     assert result.key_mode in ("major", "minor")
     assert result.engine_version == "hmm-v3"
     assert result.duration == pytest.approx(4.0, abs=0.05)
@@ -118,3 +119,35 @@ def test_librosa_analyzer_returns_ascending_beat_times(tmp_path):
     assert len(result.beat_times) > 0
     assert result.beat_times == sorted(result.beat_times)
     assert all(t >= 0 for t in result.beat_times)
+
+
+def test_btc_analyzer_returns_beat_times_past_the_leading_silence(tmp_path, monkeypatch):
+    # The deep model only emits chords, so the chart's beat grid comes from librosa here.
+    # Beat-tracking the untrimmed mix would anchor the grid inside the lead-in silence and
+    # skew every chord's beat count; the onsets must land on the music and stay in
+    # original-audio time (the frame the BTC segments are already in).
+    from app.audio.analyzer import BTCAnalyzer
+    from app.audio.segments import DetectedSegment
+    from app.music_theory import Quality
+
+    path = tmp_path / "song.wav"
+    chords = [(0, 4, 7), (7, 11, 2), (9, 0, 4), (5, 9, 0)]
+    _write_chord_song(path, chords, lead_silence=1.5)
+
+    analyzer = BTCAnalyzer(sample_rate=22050)
+    # Stub the deep engine: weights/torch are not needed to exercise the beat wiring.
+    monkeypatch.setattr(
+        analyzer._engine,
+        "segments",
+        lambda _p: [DetectedSegment(1.5, 9.5, 0, Quality.MAJ)],
+    )
+
+    result = analyzer.analyze(str(path))
+
+    assert result.engine_version == "btc-v1"
+    # >= 2 onsets, or beatgrid.ensure_grid discards them for a synthetic uniform grid and
+    # the chart's beat counts stop tracking the music.
+    assert len(result.beat_times) >= 2
+    assert result.beat_times == sorted(result.beat_times)
+    assert result.beat_times[0] >= 1.0  # on the music, not anchored in the silence
+    assert result.beat_times[-1] <= result.duration

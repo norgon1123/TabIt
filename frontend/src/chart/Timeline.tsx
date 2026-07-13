@@ -7,6 +7,7 @@ import {
   type SegmentUpdate,
 } from "./chartLayout";
 import { beatSlashMarks, clampBeatBoundary } from "./beatMath";
+import { paintChordFill } from "./chordProgress";
 
 export type { SegmentUpdate };
 
@@ -83,17 +84,13 @@ export default function Timeline({
     if (!fill) return;
     const seg = ordered.find((s) => s.id === activeId);
     if (!seg) return;
-    const span = Math.max(0.01, seg.end_time - seg.start_time);
-    const frac = Math.min(1, Math.max(0, (currentTime - seg.start_time) / span));
-    fill.style.transition = "none";
-    fill.style.transform = `scaleX(${frac})`;
-    if (!playing) return;
-    const remaining = Math.max(0, (seg.end_time - currentTime) / (rate || 1));
-    const raf = requestAnimationFrame(() => {
-      fill.style.transition = `transform ${remaining}s linear`;
-      fill.style.transform = "scaleX(1)";
+    paintChordFill(fill, {
+      startTime: seg.start_time,
+      endTime: seg.end_time,
+      currentTime,
+      playing,
+      rate,
     });
-    return () => cancelAnimationFrame(raf);
   }, [activeId, ordered, currentTime, playing, rate]);
 
   function startResize(index: number, edge: "left" | "right", e: React.PointerEvent) {
@@ -164,12 +161,12 @@ export default function Timeline({
                   justifyContent: "center",
                   cursor: "pointer",
                   overflow: "hidden",
-                  border: selected ? "2px solid var(--accent)" : "1px solid #2c313a",
-                  borderLeft: onMeasure
-                    ? "3px solid var(--accent)"
-                    : selected
-                      ? "2px solid var(--accent)"
-                      : "1px solid #2c313a",
+                  border: selected ? "2px solid var(--accent)" : "1px solid var(--line)",
+                  borderLeft: selected
+                    ? "2px solid var(--accent)"
+                    : onMeasure
+                      ? "3px solid var(--bar-line)"
+                      : "1px solid var(--line)",
                   background: isActive ? "#26303f" : "var(--panel)",
                 }}
               >

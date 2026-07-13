@@ -52,8 +52,96 @@ test("transpose +1 posts to the chart", async () => {
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
   await screen.findByText("I");
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
   await userEvent.click(screen.getByRole("button", { name: /\+1/ }));
   expect(body).toEqual({ semitones: 1 });
+});
+
+test("transpose, beats/measure, and add-segment stay behind Advanced options", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await screen.findByText("I");
+
+  // Tempo and key are the exception: they are read above the player, so they are edited
+  // there too — no Advanced options detour to correct a double-time count or a wrong key.
+  expect(screen.getByRole("button", { name: /tempo:/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /key:/i })).toBeInTheDocument();
+
+  expect(screen.queryByRole("button", { name: /\+1/ })).not.toBeInTheDocument();
+  expect(screen.queryByText(/beats \/ measure/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/bar-line shift/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+
+  expect(screen.getByRole("button", { name: /\+1/ })).toBeInTheDocument();
+  expect(screen.getByText(/beats \/ measure/i)).toBeInTheDocument();
+  expect(screen.getByText(/bar-line shift/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /add segment/i })).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i })); // collapses again
+  expect(screen.queryByText(/beats \/ measure/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
+});
+
+test("beats/measure edits still reach the server from inside Advanced options", async () => {
+  login();
+  let patched: unknown = null;
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+    http.patch("/api/charts/c1/settings", async ({ request }) => {
+      patched = await request.json();
+      return HttpResponse.json({ ...CHART, beats_per_measure: 3 });
+    }),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await screen.findByText("I");
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+  await userEvent.click(screen.getByRole("button", { name: "−" })); // 4 → 3 beats per measure
+  await waitFor(() => expect(patched).toEqual({ beats_per_measure: 3 }));
+});
+
+test("the editor is positioned against the chart area, not the viewport", async () => {
+  // It must anchor to the chord's row inside the chart (and scroll with it), so it has to
+  // render inside the positioned .chart-area rather than as a page-level floating rail.
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await userEvent.click(await screen.findByText("I"));
+
+  const editor = (await screen.findByText("Edit segment")).closest(".segment-editor");
+  expect(editor).not.toBeNull();
+  expect(editor!.closest(".chart-area")).not.toBeNull();
+  expect((editor as HTMLElement).style.top).not.toBe("");
+});
+
+test("clicking off the selected chord closes the editor, clicking another keeps it", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+
+  await userEvent.click(await screen.findByText("I"));
+  expect(await screen.findByText("Edit segment")).toBeInTheDocument();
+
+  // Another chord: the editor stays, now editing that chord.
+  await userEvent.click(screen.getByText("IV"));
+  expect(screen.getByText("Edit segment")).toBeInTheDocument();
+  expect((screen.getByLabelText(/root/i) as HTMLSelectElement).value).toBe("F");
+
+  // Off the chart entirely: the editor goes away.
+  await userEvent.click(document.body);
+  await waitFor(() => expect(screen.queryByText("Edit segment")).not.toBeInTheDocument());
 });
 
 test("editing beats redistributes via the batch endpoint", async () => {

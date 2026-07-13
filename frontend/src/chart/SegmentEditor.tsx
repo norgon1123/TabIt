@@ -8,9 +8,13 @@ interface Props {
   segment: SegmentOut;
   allSegments: SegmentOut[];
   maxTotalBeats: number;
+  /** Offset, in px, from the top of the chart area to the row of the chord being edited.
+   *  Ignored below the breakpoint where the panel drops back into the flow. */
+  top?: number;
   onResize: (windows: SegmentWindowInput[]) => void;
   onSave: (patch: SegmentPatch) => Promise<void>;
   onDelete: () => void;
+  onClose?: () => void;
   busy: boolean;
   debounceMs?: number;
 }
@@ -19,9 +23,11 @@ export default function SegmentEditor({
   segment,
   allSegments,
   maxTotalBeats,
+  top = 0,
   onResize,
   onSave,
   onDelete,
+  onClose,
   busy,
   debounceMs = 400,
 }: Props) {
@@ -31,12 +37,20 @@ export default function SegmentEditor({
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
+  // Each field re-seeds from the server values that feed *it*, and no others. Re-counting the
+  // tempo (or resizing a neighbour) rewrites every segment's beats while leaving its chord
+  // alone: if that also reset the chord selects, it would quietly undo the chord the player
+  // had picked but not yet saved, and Save would PATCH the old chord straight back — a 200
+  // that changes nothing and leaves the chord sheet looking stuck.
   useEffect(() => {
     setRoot(segment.chord_root);
     setQuality(segment.chord_quality);
-    setBeats(segment.end_beat - segment.start_beat);
     setError(null);
-  }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_beat, segment.end_beat]);
+  }, [segment.id, segment.chord_root, segment.chord_quality]);
+
+  useEffect(() => {
+    setBeats(segment.end_beat - segment.start_beat);
+  }, [segment.id, segment.start_beat, segment.end_beat]);
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, [segment.id]);
 
@@ -69,8 +83,15 @@ export default function SegmentEditor({
   }
 
   return (
-    <div className="card" style={{ display: "grid", gap: 8 }}>
-      <strong>Edit segment</strong>
+    <div className="card segment-editor" style={{ display: "grid", gap: 8, top }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <strong>Edit segment</strong>
+        {onClose && (
+          <button className="icon" aria-label="Close segment editor" onClick={onClose}>
+            &times;
+          </button>
+        )}
+      </div>
       <label>
         Root
         <select value={root} onChange={(e) => setRoot(e.target.value)}>

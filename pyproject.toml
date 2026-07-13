@@ -31,6 +31,27 @@ dev = [
 chordino = [
     "vamp>=1.1",
 ]
+# ML stack for source separation (Demucs) + the deep chord model + eval scoring
+# (Phase 0/1). Heavy (torch); deliberately kept out of the base install so the app
+# still installs and runs without it — heavy imports are lazy throughout.
+# torch/torchaudio are NOT on PyPI for the Blackwell CUDA build — install them from the
+# PyTorch index first, then this extra. Verified working stack on the 5070 Ti inference
+# box (Blackwell / sm_120):
+#   pip install --index-url https://download.pytorch.org/whl/cu130 \
+#       "torch==2.11.0" "torchaudio==2.11.0"   # matched pair; 2.12 has no torchaudio yet
+#   pip install -e ".[ml]"                     # demucs + mir_eval + soundfile from PyPI
+# Python 3.14 works (cp314 cu130 wheels ship); the plan's ≈3.12 note was conservative.
+# NB: the published demucs 4.0.x wheel lacks demucs.api — separation.py uses the stable
+# pretrained/apply API instead. See docs/technical-plan-phase-0-1.md.
+ml = [
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "demucs>=4.0",
+    "mir_eval>=0.7",
+    # Stem writing goes through libsndfile, not torchaudio.save (which needs the optional
+    # torchcodec package as of torchaudio 2.11). libsndfile handles FLAC natively.
+    "soundfile>=0.12",
+]
 
 # Only `app` is a distributable Python package. Declare it explicitly so
 # setuptools' flat-layout auto-discovery doesn't trip over sibling dirs

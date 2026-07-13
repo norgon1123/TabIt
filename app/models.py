@@ -95,6 +95,11 @@ class ChordChart(Base):
     beats_per_measure: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     measure_offset: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     beat_times: Mapped[list[float]] = mapped_column(JSON, default=list, nullable=False)
+    # The chart's working tempo. Seeded from the analysis, then owned by the user: beat
+    # trackers routinely land an octave out (double-time), and only the player can say which
+    # pulse they count. Editing it re-indexes `beat_times` and rescales the segments; the
+    # detected `Analysis.bpm` stays immutable as the record of what the engine heard.
+    bpm: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     recording: Mapped[Recording] = relationship(back_populates="chart")
     segments: Mapped[list["ChordSegment"]] = relationship(

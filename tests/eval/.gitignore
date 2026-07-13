@@ -1,0 +1,8 @@
+# Audio clips are local-only (large / possibly personal). Track only .lab + README.
+*.wav
+*.flac
+*.m4a
+*.mp3
+*.ogg
+*.aif
+*.aiff
