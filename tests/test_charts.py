@@ -136,6 +136,48 @@ def test_update_chart_settings(client, tmp_path, monkeypatch):
     assert body["measure_offset"] == 1
 
 
+def test_correcting_key_rewrites_numerals_but_not_chords(client, tmp_path, monkeypatch):
+    """The mirror image of /transpose: chords stay put, numerals move."""
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)  # C major
+    for root, sb, eb in (("C", 0.0, 4.0), ("F", 4.0, 8.0), ("G", 8.0, 12.0)):
+        client.post(
+            f"/api/charts/{chart_id}/segments",
+            json={"start_beat": sb, "end_beat": eb, "chord_root": root, "chord_quality": "maj"},
+        )
+    resp = client.patch(
+        f"/api/charts/{chart_id}/settings", json={"key_tonic": "G", "key_mode": "major"}
+    )
+    assert resp.status_code == 200
+    chart = resp.json()
+    assert (chart["key_tonic"], chart["key_mode"]) == ("G", "major")
+    assert [s["chord_root"] for s in chart["segments"]] == ["C", "F", "G"]
+    assert [s["chord_quality"] for s in chart["segments"]] == ["maj", "maj", "maj"]
+    assert [s["roman_numeral"] for s in chart["segments"]] == ["IV", "bVII", "I"]
+    # Persisted, not just echoed back.
+    assert client.get(f"/api/recordings/{rec_id}/chart").json()["key_tonic"] == "G"
+
+
+def test_correcting_key_mode_alone_rewrites_numerals(client, tmp_path, monkeypatch):
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)  # C major
+    client.post(f"/api/charts/{chart_id}/segments",
+                json={"start_beat": 0.0, "end_beat": 4.0, "chord_root": "Eb", "chord_quality": "maj"})
+    chart = client.patch(f"/api/charts/{chart_id}/settings", json={"key_mode": "minor"}).json()
+    assert (chart["key_tonic"], chart["key_mode"]) == ("C", "minor")
+    seg = chart["segments"][0]
+    assert seg["chord_root"] == "Eb"          # bIII in C major...
+    assert seg["roman_numeral"] == "III"      # ...is the diatonic III in C minor
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"key_tonic": "H"}, {"key_tonic": "Cbb"}, {"key_mode": "dorian"}, {"key_mode": "Major"}],
+)
+def test_invalid_key_correction_rejected(client, tmp_path, monkeypatch, payload):
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)
+    assert client.patch(f"/api/charts/{chart_id}/settings", json=payload).status_code == 422
+    assert client.get(f"/api/recordings/{rec_id}/chart").json()["key_tonic"] == "C"
+
+
 def test_add_segment_on_null_duration_chart(client, db_session, tmp_path, monkeypatch):
     """Segments must be addable even when recording.duration_seconds is NULL (regression)."""
     from sqlalchemy import select as sa_select

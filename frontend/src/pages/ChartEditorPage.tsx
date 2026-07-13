@@ -10,6 +10,7 @@ import Timeline, { type SegmentUpdate } from "../chart/Timeline";
 // import ScrubBar from "../chart/ScrubBar"; // disabled with the scrub-bar block below
 import SegmentEditor from "../chart/SegmentEditor";
 import TempoControl from "../chart/TempoControl";
+import KeyControl from "../chart/KeyControl";
 import TransposeControl from "../chart/TransposeControl";
 import TimeSignatureControl from "../chart/TimeSignatureControl";
 import { useReanalyze } from "../chart/useReanalyze";
@@ -125,8 +126,14 @@ export default function ChartEditorPage() {
           </div>
 
           <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+            <KeyControl
+              keyTonic={chart.key_tonic}
+              keyMode={chart.key_mode}
+              onChange={(patch) => updateSettings(patch)}
+              busy={isMutating}
+            />
+
             <TransposeControl
-              keyLabel={`${chart.key_tonic} ${chart.key_mode}`}
               onTranspose={(semitones) => transpose(semitones)}
               busy={isMutating}
             />

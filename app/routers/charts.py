@@ -249,6 +249,10 @@ def update_chart_settings(
         chart.beats_per_measure = payload.beats_per_measure
     if payload.measure_offset is not None:
         chart.measure_offset = payload.measure_offset
+    if payload.key_tonic is not None:
+        chart.key_tonic = payload.key_tonic
+    if payload.key_mode is not None:
+        chart.key_mode = payload.key_mode
     db.commit()
     db.refresh(chart)
     return _chart_out(chart)

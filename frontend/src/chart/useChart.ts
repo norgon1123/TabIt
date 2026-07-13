@@ -12,6 +12,8 @@ export type SegmentPatch = Partial<SegmentInput>;
 export interface ChartSettingsPatch {
   beats_per_measure?: number;
   measure_offset?: number;
+  key_tonic?: string;
+  key_mode?: string;
 }
 
 async function fetchChart(recordingId: string): Promise<ChartOut | null> {
@@ -73,7 +75,9 @@ export function useChart(
   const settingsMut = useMutation({
     mutationFn: (patch: ChartSettingsPatch) =>
       api.patchJson<ChartOut>(`/api/charts/${chartId}/settings`, patch),
-    onSuccess: invalidate,
+    // The response is the full chart with roman numerals already re-derived against the
+    // new key, so adopt it directly — a refetch would only re-fetch what we just got.
+    onSuccess: (chart) => queryClient.setQueryData<ChartOut>(key, chart),
   });
   const resizeMut = useMutation({
     mutationFn: (windows: SegmentWindowInput[]) =>

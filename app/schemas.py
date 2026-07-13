@@ -96,6 +96,10 @@ class ChartOut(BaseModel):
 class ChartSettingsUpdate(BaseModel):
     beats_per_measure: int | None = Field(default=None, ge=1, le=16)
     measure_offset: int | None = Field(default=None, ge=0)
+    # Correcting a misdetected key re-reads the numerals against a new tonic/mode;
+    # it never touches chord_root. Use /transpose to move the chords themselves.
+    key_tonic: str | None = Field(default=None, pattern="^[A-G][b#]?$")
+    key_mode: str | None = Field(default=None, pattern="^(major|minor)$")
 
 
 class TempoUpdate(BaseModel):
