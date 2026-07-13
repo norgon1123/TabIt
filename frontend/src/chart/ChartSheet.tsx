@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AnalysisOut } from "../api/types";
 import { useChart } from "./useChart";
 import { useMediaClock } from "./useMediaClock";
@@ -32,6 +32,8 @@ export default function ChartSheet({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [editorTop, setEditorTop] = useState(0);
+  const chartArea = useRef<HTMLDivElement | null>(null);
   const clock = useMediaClock();
 
   const {
@@ -51,10 +53,29 @@ export default function ChartSheet({
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
 
-  // Clicking off the selected chord closes the editor. The editor is a floating rail rather
-  // than part of the page flow, so "off" is anything outside both it and a chord cell —
-  // pressing another chord re-selects instead (the cell swallows the dismissal here and
-  // Timeline's own click handler picks the new one).
+  // Line the editor up with the chord it edits: its top matches the top of the selected
+  // cell, measured against the chart area it is positioned inside. The chart wraps to
+  // however many lines fit, so the offset has to be read from the DOM — nothing about the
+  // beat grid predicts which line a chord lands on at a given width. Re-measure on resize,
+  // and whenever the chart changes (a re-count or a neighbour's resize can push the chord
+  // onto a different line under a stationary pointer).
+  useLayoutEffect(() => {
+    if (!selectedId) return;
+    const measure = () => {
+      const area = chartArea.current;
+      const cell = area?.querySelector<HTMLElement>(`[data-segment-id="${selectedId}"]`);
+      if (!area || !cell) return;
+      setEditorTop(cell.getBoundingClientRect().top - area.getBoundingClientRect().top);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [selectedId, chart]);
+
+  // Clicking off the selected chord closes the editor. The editor is out of the page flow,
+  // so "off" is anything outside both it and a chord cell — pressing another chord
+  // re-selects instead (the cell swallows the dismissal here and Timeline's own click
+  // handler picks the new one).
   useEffect(() => {
     if (!selectedId) return;
     const dismiss = (e: MouseEvent) => {
@@ -121,7 +142,7 @@ export default function ChartSheet({
         />
       </div> */}
 
-      <div style={{ marginTop: 12 }}>
+      <div className="chart-area" ref={chartArea} style={{ marginTop: 12 }}>
         <Timeline
           segments={chart.segments}
           beatsPerMeasure={chart.beats_per_measure}
@@ -135,6 +156,23 @@ export default function ChartSheet({
           onSeek={clock.seek}
           onResizeCommit={applyResize}
         />
+
+        {selectedId && chart.segments.find((s) => s.id === selectedId) && (
+          <SegmentEditor
+            segment={chart.segments.find((s) => s.id === selectedId)!}
+            allSegments={chart.segments}
+            maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
+            top={editorTop}
+            onResize={(windows) => resizeSegments(windows)}
+            onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
+            onDelete={() => {
+              deleteSegment(selectedId);
+              setSelectedId(null);
+            }}
+            onClose={() => setSelectedId(null)}
+            busy={isMutating}
+          />
+        )}
       </div>
 
       {/* Tempo and key are edited in the line above the player, so Advanced options is what
@@ -177,22 +215,6 @@ export default function ChartSheet({
           </div>
         )}
       </div>
-
-      {selectedId && chart.segments.find((s) => s.id === selectedId) && (
-        <SegmentEditor
-          segment={chart.segments.find((s) => s.id === selectedId)!}
-          allSegments={chart.segments}
-          maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
-          onResize={(windows) => resizeSegments(windows)}
-          onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
-          onDelete={() => {
-            deleteSegment(selectedId);
-            setSelectedId(null);
-          }}
-          onClose={() => setSelectedId(null)}
-          busy={isMutating}
-        />
-      )}
     </>
   );
 }
