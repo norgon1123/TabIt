@@ -18,6 +18,14 @@ export interface AnalysisOut {
   beat_times: number[];
 }
 
+// A chart's working tempo and key, without its segments. `AnalysisOut` is what the engine
+// heard; this is what the player says the song is, and it wins wherever both are on screen.
+export interface ChartSummaryOut {
+  bpm: number | null;
+  key_tonic: string;
+  key_mode: string;
+}
+
 export interface RecordingOut {
   id: string;
   original_filename: string;
@@ -26,6 +34,7 @@ export interface RecordingOut {
   status: string;
   created_at: string;
   analysis: AnalysisOut | null;
+  chart: ChartSummaryOut | null;
 }
 
 export interface SegmentOut {

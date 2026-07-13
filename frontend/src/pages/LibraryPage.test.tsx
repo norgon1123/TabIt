@@ -51,6 +51,22 @@ test("shows each recording's length in MM:SS", async () => {
   expect(await screen.findByText(/· 03:15/)).toBeInTheDocument();
 });
 
+test("lists the tempo and key the player set, not the ones the engine detected", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings", () =>
+      HttpResponse.json([
+        // The engine heard 144 BPM in C; the player re-counted it as 72 in A minor.
+        { ...TWO[0], analysis: { ...TWO[0].analysis, bpm: 144, detected_key_tonic: "C", detected_key_mode: "major" },
+          chart: { bpm: 72, key_tonic: "A", key_mode: "minor" } },
+      ]),
+    ),
+  );
+  renderWithProviders(<LibraryPage />);
+  expect(await screen.findByText(/· 72 BPM · A minor/)).toBeInTheDocument();
+  expect(screen.queryByText(/144 BPM/)).not.toBeInTheDocument();
+});
+
 test("shows an empty state when there are no recordings", async () => {
   login();
   server.use(http.get("/api/recordings", () => HttpResponse.json([])));

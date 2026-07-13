@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { server } from "../test/server";
+import { useRecordings } from "../library/useRecordings";
 import { useChart } from "./useChart";
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -134,4 +135,56 @@ test("resizeSegments posts the windows and optimistically updates the cache", as
   await waitFor(() => expect(result.current.chart!.segments[0].end_beat).toBe(6));
   await promise;
   expect(body).toEqual({ segments: windows });
+});
+
+/** A server whose library listing reflects the chart edits made against it. */
+function serveLibraryAndChart() {
+  const chart = { ...CHART_BEATS, bpm: 144, key_tonic: "C", key_mode: "major" };
+  server.use(
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(chart)),
+    http.patch("/api/charts/c1/tempo", async ({ request }) => {
+      chart.bpm = ((await request.json()) as { bpm: number }).bpm;
+      return HttpResponse.json(chart);
+    }),
+    http.patch("/api/charts/c1/settings", async ({ request }) => {
+      Object.assign(chart, (await request.json()) as object);
+      return HttpResponse.json(chart);
+    }),
+    http.get("/api/recordings", () =>
+      HttpResponse.json([
+        {
+          id: "r1", original_filename: "song.m4a", format: "m4a", duration_seconds: 30,
+          status: "uploaded", created_at: "2026-06-01T00:00:00Z",
+          analysis: { status: "done", bpm: 144, detected_key_tonic: "C", detected_key_mode: "major", engine_version: "v1", error: null, beat_times: [] },
+          chart: { bpm: chart.bpm, key_tonic: chart.key_tonic, key_mode: chart.key_mode },
+        },
+      ]),
+    ),
+  );
+}
+
+// The library and the chart sheet are separate caches over the same song. An edit the
+// player makes on the sheet has to reach the library, or the song reads one tempo in one
+// place and another in the other.
+test("setting the tempo refreshes the library listing", async () => {
+  serveLibraryAndChart();
+  const { result } = renderHook(() => ({ chart: useChart("r1"), library: useRecordings() }), { wrapper });
+  await waitFor(() => expect(result.current.library.recordings[0]?.chart?.bpm).toBe(144));
+
+  await result.current.chart.setTempo(72);
+
+  await waitFor(() => expect(result.current.library.recordings[0]!.chart!.bpm).toBe(72));
+});
+
+test("correcting the key refreshes the library listing", async () => {
+  serveLibraryAndChart();
+  const { result } = renderHook(() => ({ chart: useChart("r1"), library: useRecordings() }), { wrapper });
+  await waitFor(() => expect(result.current.library.recordings[0]?.chart?.key_tonic).toBe("C"));
+
+  await result.current.chart.updateSettings({ key_tonic: "A", key_mode: "minor" });
+
+  await waitFor(() => {
+    const listed = result.current.library.recordings[0]!.chart!;
+    expect([listed.key_tonic, listed.key_mode]).toEqual(["A", "minor"]);
+  });
 });

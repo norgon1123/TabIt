@@ -394,3 +394,46 @@ def test_tempo_on_another_users_chart_is_404(client, db_session, tmp_path, monke
     assert client.patch(
         f"/api/charts/{chart_id}/tempo", json={"bpm": 90}
     ).status_code == 404
+
+
+def test_library_listing_carries_the_edited_tempo_and_key(
+    client, db_session, tmp_path, monkeypatch
+):
+    """Correcting a chart has to change how the song reads in the library.
+
+    The library lists each song's tempo and key. `Analysis` is immutable, so once the player
+    has re-counted a double-time tempo or fixed a misheard key, only the chart knows what
+    the song is — the listing has to carry those values, not the engine's first guess.
+    """
+    from sqlalchemy import select as sa_select
+
+    from app.models import Analysis
+
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)  # 144 BPM
+    analysis = db_session.execute(
+        sa_select(Analysis).where(Analysis.recording_id == rec_id)
+    ).scalar_one()
+    analysis.status = "done"
+    analysis.bpm = 144
+    analysis.detected_key_tonic = "C"
+    analysis.detected_key_mode = "major"
+    db_session.commit()
+
+    client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 72})
+    client.patch(f"/api/charts/{chart_id}/settings", json={"key_tonic": "A", "key_mode": "minor"})
+
+    row = next(r for r in client.get("/api/recordings").json() if r["id"] == rec_id)
+    assert row["chart"]["bpm"] == 72
+    assert (row["chart"]["key_tonic"], row["chart"]["key_mode"]) == ("A", "minor")
+    # The engine's record of what it heard is untouched by the correction.
+    assert row["analysis"]["bpm"] == 144
+    assert row["analysis"]["detected_key_tonic"] == "C"
+    assert row["analysis"]["detected_key_mode"] == "major"
+
+
+def test_library_listing_carries_a_transposed_key(client, db_session, tmp_path, monkeypatch):
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)  # key of C
+    client.post(f"/api/charts/{chart_id}/transpose", json={"semitones": 2})
+
+    row = next(r for r in client.get("/api/recordings").json() if r["id"] == rec_id)
+    assert row["chart"]["key_tonic"] == "D"

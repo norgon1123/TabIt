@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../api/client";
 import type { ChartOut, SegmentOut, SegmentWindowInput } from "../api/types";
+import { RECORDINGS_KEY } from "../library/useRecordings";
 
 export interface SegmentInput {
   start_beat: number;
@@ -44,6 +45,9 @@ export function useChart(
       options.poll || (options.awaitChart && query.state.data == null) ? 2000 : false,
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
+  // The library lists every song's tempo and key, so an edit that moves either has to reach
+  // that cache as well — otherwise the library keeps showing the old values until a reload.
+  const invalidateLibrary = () => queryClient.invalidateQueries({ queryKey: RECORDINGS_KEY });
   const chartId = chartQuery.data?.id;
 
   const addMut = useMutation({
@@ -63,21 +67,31 @@ export function useChart(
   const transposeMut = useMutation({
     mutationFn: (semitones: number) =>
       api.postJson<ChartOut>(`/api/charts/${chartId}/transpose`, { semitones }),
-    onSuccess: invalidate,
+    // Transposing moves the tonic, which the library shows.
+    onSuccess: () => {
+      invalidate();
+      invalidateLibrary();
+    },
   });
   // Setting the tempo rewrites the grid and every segment, so the server's chart is the
   // source of truth: drop its response straight into the cache and the sheet re-lays out
   // immediately, rather than waiting on a refetch.
   const tempoMut = useMutation({
     mutationFn: (bpm: number) => api.patchJson<ChartOut>(`/api/charts/${chartId}/tempo`, { bpm }),
-    onSuccess: (chart) => queryClient.setQueryData(key, chart),
+    onSuccess: (chart) => {
+      queryClient.setQueryData(key, chart);
+      invalidateLibrary();
+    },
   });
   const settingsMut = useMutation({
     mutationFn: (patch: ChartSettingsPatch) =>
       api.patchJson<ChartOut>(`/api/charts/${chartId}/settings`, patch),
     // The response is the full chart with roman numerals already re-derived against the
     // new key, so adopt it directly — a refetch would only re-fetch what we just got.
-    onSuccess: (chart) => queryClient.setQueryData<ChartOut>(key, chart),
+    onSuccess: (chart) => {
+      queryClient.setQueryData<ChartOut>(key, chart);
+      invalidateLibrary();
+    },
   });
   const resizeMut = useMutation({
     mutationFn: (windows: SegmentWindowInput[]) =>

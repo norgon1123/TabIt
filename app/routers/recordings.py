@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm import Session as DbSession, selectinload
 
 from app.audio.decode import probe_duration
 from app.config import get_settings
@@ -59,9 +59,14 @@ def list_recordings(
     db: DbSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> list[Recording]:
     # A library of songs is what an account buys you; a guest has one recording and no list.
+    # Each row renders its analysis and its chart's tempo/key, so load both up front rather
+    # than lazily paying two queries per recording.
     return list(
         db.execute(
-            select(Recording).where(Recording.user_id == user.id).order_by(Recording.created_at.desc())
+            select(Recording)
+            .options(selectinload(Recording.analysis), selectinload(Recording.chart))
+            .where(Recording.user_id == user.id)
+            .order_by(Recording.created_at.desc())
         ).scalars()
     )
 

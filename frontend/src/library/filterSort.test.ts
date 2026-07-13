@@ -10,6 +10,7 @@ function rec(id: string, name: string, createdAt: string): RecordingOut {
     status: "uploaded",
     created_at: createdAt,
     analysis: null,
+    chart: null,
   };
 }
 

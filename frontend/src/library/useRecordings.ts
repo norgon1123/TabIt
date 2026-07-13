@@ -3,7 +3,9 @@ import { api } from "../api/client";
 import type { RecordingOut } from "../api/types";
 import { uploadRecording } from "./uploadRecording";
 
-const KEY = ["recordings"];
+// Exported because chart edits move what the library shows (tempo, key) and so have to
+// invalidate this cache too — see `useChart`.
+export const RECORDINGS_KEY = ["recordings"];
 
 function anyInProgress(list: RecordingOut[] | undefined): boolean {
   return !!list?.some((r) => r.analysis?.status === "pending" || r.analysis?.status === "running");
@@ -13,12 +15,12 @@ export function useRecordings() {
   const queryClient = useQueryClient();
 
   const listQuery = useQuery({
-    queryKey: KEY,
+    queryKey: RECORDINGS_KEY,
     queryFn: () => api.get<RecordingOut[]>("/api/recordings"),
     refetchInterval: (query) => (anyInProgress(query.state.data) ? 2000 : false),
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: KEY });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RECORDINGS_KEY });
 
   const uploadMut = useMutation({
     mutationFn: (file: File) => uploadRecording(file),

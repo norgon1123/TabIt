@@ -43,6 +43,21 @@ class AnalysisOut(BaseModel):
     beat_times: list[float] = Field(default_factory=list)
 
 
+class ChartSummaryOut(BaseModel):
+    """A chart's working tempo and key, without its segments — enough to list a song.
+
+    `AnalysisOut` reports what the engine heard; this reports what the player says the song
+    is. Once someone re-counts a double-time tempo or fixes a misheard key, that correction
+    is the song, so any listing showing a tempo or key should prefer these fields and fall
+    back to the detected ones only where there is no chart yet.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+    bpm: Bpm
+    key_tonic: str
+    key_mode: str
+
+
 class RecordingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -52,6 +67,7 @@ class RecordingOut(BaseModel):
     status: str
     created_at: datetime
     analysis: AnalysisOut | None = None
+    chart: ChartSummaryOut | None = None
 
 
 class RecordingUpdate(BaseModel):

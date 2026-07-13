@@ -187,6 +187,17 @@ def test_recording_payload_includes_analysis(client, tmp_path, monkeypatch, fake
     assert body["analysis"]["status"] == "pending"
 
 
+def test_recording_has_no_chart_until_analysis_writes_one(
+    client, tmp_path, monkeypatch, fake_dispatcher
+):
+    """A song still being analysed has nothing but the engine to speak for it."""
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    _upload(client)
+
+    assert client.get("/api/recordings").json()[0]["chart"] is None
+
+
 def test_reanalyze_resets_status_and_dispatches(client, tmp_path, monkeypatch, fake_dispatcher):
     monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
     _register(client)
