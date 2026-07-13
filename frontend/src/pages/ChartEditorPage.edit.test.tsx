@@ -57,7 +57,7 @@ test("transpose +1 posts to the chart", async () => {
   expect(body).toEqual({ semitones: 1 });
 });
 
-test("transpose, tempo, and add-segment stay behind Advanced options", async () => {
+test("transpose, tempo, beats/measure, and add-segment stay behind Advanced options", async () => {
   login();
   server.use(
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
@@ -68,16 +68,39 @@ test("transpose, tempo, and add-segment stay behind Advanced options", async () 
 
   expect(screen.queryByRole("button", { name: /\+1/ })).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/tempo/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/beats \/ measure/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/bar-line shift/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
 
   expect(screen.getByRole("button", { name: /\+1/ })).toBeInTheDocument();
   expect(screen.getByLabelText(/tempo/i)).toBeInTheDocument();
+  expect(screen.getByText(/beats \/ measure/i)).toBeInTheDocument();
+  expect(screen.getByText(/bar-line shift/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /add segment/i })).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i })); // collapses again
+  expect(screen.queryByText(/beats \/ measure/i)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
+});
+
+test("beats/measure edits still reach the server from inside Advanced options", async () => {
+  login();
+  let patched: unknown = null;
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+    http.patch("/api/charts/c1/settings", async ({ request }) => {
+      patched = await request.json();
+      return HttpResponse.json({ ...CHART, beats_per_measure: 3 });
+    }),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await screen.findByText("I");
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+  await userEvent.click(screen.getByRole("button", { name: "−" })); // 4 → 3 beats per measure
+  await waitFor(() => expect(patched).toEqual({ beats_per_measure: 3 }));
 });
 
 test("editing beats redistributes via the batch endpoint", async () => {
