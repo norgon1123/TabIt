@@ -8,6 +8,7 @@ from app.audio.beatgrid import (
     snap_half,
     time_for_beat,
     total_beats,
+    whole_bpm,
 )
 
 # A steady 120 BPM grid: one beat every 0.5s, beat 0 at t=0.
@@ -126,3 +127,14 @@ def test_rescale_windows_holds_the_half_beat_minimum():
 def test_rescale_windows_drops_a_window_with_no_room_left():
     windows = rescale_windows([(0.0, 4.0), (4.0, 4.5)], 0.5, max_beat=2.0)
     assert windows == [(0.0, 2.0), None]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(143.6, 144), (71.8, 72), (120.0, 120), (72.5, 72), (0.4, None), (0.0, None), (None, None)],
+)
+def test_whole_bpm_rounds_to_a_countable_tempo(raw, expected):
+    # A tempo is something a player counts; the fraction is noise, and a tempo that rounds
+    # to zero is no tempo at all. (72.5 -> 72: banker's rounding, and nothing depends on
+    # which way a .5 goes.)
+    assert whole_bpm(raw) == expected

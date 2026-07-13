@@ -66,7 +66,7 @@ export default function ChartSheet({
   return (
     <>
       <p className="muted">
-        {analysis?.bpm != null && <>{Math.round(analysis.bpm)} BPM &middot; </>}
+        {analysis?.bpm != null && <>{analysis.bpm} BPM &middot; </>}
         Key: {chart.key_tonic} {chart.key_mode}
       </p>
 

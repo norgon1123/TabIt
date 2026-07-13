@@ -18,6 +18,21 @@ def snap_half(beat: float) -> float:
     return round(beat * 2.0) / 2.0
 
 
+def whole_bpm(bpm: float | None) -> int | None:
+    """A tempo as a whole number of beats per minute — the only form we store or show.
+
+    BPM is a number the player reads off a chart and counts in; 143.6 is a precision no
+    one can act on. Nothing downstream needs the fraction either: the beat grid rides on
+    the detected onset times in `beat_times`, not on this number, so rounding it costs no
+    timing accuracy. Applied on the way in (detection), on the way out (legacy rows that
+    still hold a fractional tempo) and to anything a client PATCHes.
+    """
+    if bpm is None:
+        return None
+    rounded = round(bpm)
+    return rounded if rounded > 0 else None
+
+
 def ensure_grid(beat_times: list[float], bpm: float | None, duration: float) -> list[float]:
     """Return a usable grid (>= 2 ascending entries) covering the audio from t=0.
 

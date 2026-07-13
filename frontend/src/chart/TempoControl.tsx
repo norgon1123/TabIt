@@ -6,38 +6,43 @@ interface Props {
   busy: boolean;
 }
 
-const MIN_BPM = 20;
+const MIN_BPM = 21; // the lowest whole tempo the API accepts (it requires > 20)
 const MAX_BPM = 400;
 
+/** A tempo the API will take: a whole number inside the countable range. */
 function clamp(bpm: number): number {
-  return Math.min(MAX_BPM, Math.max(MIN_BPM + 0.01, bpm));
+  return Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(bpm)));
 }
 
 /**
  * Set the tempo the chart is counted in.
  *
- * Beat trackers land an octave out often enough — a 74 BPM song read as 143 BPM, every
+ * Beat trackers land an octave out often enough — a 74 BPM song read as 144 BPM, every
  * chord counted as eight beats instead of four — that the metrical level has to be the
  * player's call. Halving the tempo does not move a chord in time; it re-counts the beats
  * under it, so ÷2 and ×2 are the two buttons that matter and get their own shortcuts.
+ *
+ * Tempo is a whole number here and on the server: a count you can tap out, not 143.6.
  */
 export default function TempoControl({ bpm, onChange, busy }: Props) {
-  const [draft, setDraft] = useState(bpm == null ? "" : String(Math.round(bpm * 10) / 10));
+  const whole = bpm == null ? null : Math.round(bpm);
+  const [draft, setDraft] = useState(whole == null ? "" : String(whole));
 
   // The server may hand back a tempo we didn't type (a ÷2, or another tab's edit).
   useEffect(() => {
-    setDraft(bpm == null ? "" : String(Math.round(bpm * 10) / 10));
-  }, [bpm]);
+    setDraft(whole == null ? "" : String(whole));
+  }, [whole]);
 
-  if (bpm == null) return null; // no detected tempo yet — nothing to rescale from
+  if (whole == null) return null; // no detected tempo yet — nothing to rescale from
 
   const commit = () => {
-    const parsed = Number(draft);
-    if (!Number.isFinite(parsed) || parsed <= MIN_BPM || parsed > MAX_BPM) {
-      setDraft(String(Math.round(bpm * 10) / 10)); // reject: snap back to the real tempo
+    const parsed = Math.round(Number(draft));
+    if (!Number.isFinite(parsed) || parsed < MIN_BPM || parsed > MAX_BPM) {
+      setDraft(String(whole)); // reject: snap back to the real tempo
       return;
     }
-    if (Math.abs(parsed - bpm) > 0.005) onChange(parsed);
+    if (parsed !== whole) onChange(parsed);
+    else setDraft(String(whole)); // e.g. a typed "72.4" is the tempo we already have
   };
 
   return (
@@ -48,7 +53,7 @@ export default function TempoControl({ bpm, onChange, busy }: Props) {
         type="number"
         min={MIN_BPM}
         max={MAX_BPM}
-        step="0.1"
+        step="1"
         value={draft}
         disabled={busy}
         style={{ width: 80 }}
@@ -56,14 +61,14 @@ export default function TempoControl({ bpm, onChange, busy }: Props) {
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();
-          if (e.key === "Escape") setDraft(String(Math.round(bpm * 10) / 10));
+          if (e.key === "Escape") setDraft(String(whole));
         }}
       />
       <span className="muted">BPM</span>
-      <button onClick={() => onChange(clamp(bpm / 2))} disabled={busy} title="Half-time">
+      <button onClick={() => onChange(clamp(whole / 2))} disabled={busy} title="Half-time">
         ÷2
       </button>
-      <button onClick={() => onChange(clamp(bpm * 2))} disabled={busy} title="Double-time">
+      <button onClick={() => onChange(clamp(whole * 2))} disabled={busy} title="Double-time">
         ×2
       </button>
       <span className="muted">(re-counts the beats under each chord; the audio doesn't move)</span>

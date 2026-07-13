@@ -62,6 +62,7 @@ def test_analyzes_a_two_chord_song(tmp_path):
 
     assert isinstance(result, AnalysisResult)
     assert result.bpm > 0
+    assert result.bpm == int(result.bpm)  # tempo is detected as a whole number of BPM
     assert result.key_mode in ("major", "minor")
     assert result.engine_version == "hmm-v3"
     assert result.duration == pytest.approx(4.0, abs=0.05)

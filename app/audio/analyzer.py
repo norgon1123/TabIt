@@ -10,6 +10,7 @@ from typing import Protocol
 import librosa
 import numpy as np
 
+from app.audio.beatgrid import whole_bpm
 from app.audio.chordino import chordino_segments
 from app.audio.decode import decode_to_mono
 from app.audio.decoding import viterbi_decode
@@ -32,7 +33,7 @@ _CHORDINO_PLUGIN = "nnls-chroma:chordino"
 
 @dataclass(frozen=True)
 class AnalysisResult:
-    bpm: float
+    bpm: float  # always a whole number: every engine rounds through `whole_bpm`
     key_tonic_pc: int
     key_mode: str
     duration: float
@@ -81,7 +82,7 @@ def _tempo_key_beats(
     frame the chart is laid out in (see app/audio/beatgrid.py).
     """
     tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, units="time")
-    bpm = float(np.atleast_1d(tempo)[0])
+    bpm = float(whole_bpm(float(np.atleast_1d(tempo)[0])) or 0.0)
     beat_times = [float(t) + lead for t in np.atleast_1d(beat_frames)]
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
     tonic_pc, mode = estimate_key(chroma.mean(axis=1))
@@ -132,7 +133,7 @@ class LibrosaAnalyzer:
         trimmed_dur = float(len(y_trim) / self._sr)
 
         tempo, beat_frames = librosa.beat.beat_track(y=y_trim, sr=self._sr, units="time")
-        bpm = float(np.atleast_1d(tempo)[0])
+        bpm = float(whole_bpm(float(np.atleast_1d(tempo)[0])) or 0.0)
         beat_times = [float(t) + lead for t in np.atleast_1d(beat_frames)]
 
         chroma = _chroma_features(y_trim, self._sr, self._hop, self._use_hpss)
