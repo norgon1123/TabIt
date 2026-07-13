@@ -31,12 +31,20 @@ export default function SegmentEditor({
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
+  // Each field re-seeds from the server values that feed *it*, and no others. Re-counting the
+  // tempo (or resizing a neighbour) rewrites every segment's beats while leaving its chord
+  // alone: if that also reset the chord selects, it would quietly undo the chord the player
+  // had picked but not yet saved, and Save would PATCH the old chord straight back — a 200
+  // that changes nothing and leaves the chord sheet looking stuck.
   useEffect(() => {
     setRoot(segment.chord_root);
     setQuality(segment.chord_quality);
-    setBeats(segment.end_beat - segment.start_beat);
     setError(null);
-  }, [segment.id, segment.chord_root, segment.chord_quality, segment.start_beat, segment.end_beat]);
+  }, [segment.id, segment.chord_root, segment.chord_quality]);
+
+  useEffect(() => {
+    setBeats(segment.end_beat - segment.start_beat);
+  }, [segment.id, segment.start_beat, segment.end_beat]);
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, [segment.id]);
 
