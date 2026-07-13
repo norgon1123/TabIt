@@ -34,6 +34,17 @@ test("lists recordings with their analysis status", async () => {
   expect(screen.getByText(/done/i)).toBeInTheDocument();
 });
 
+test("shows each recording's length in MM:SS", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings", () =>
+      HttpResponse.json([{ ...TWO[0], duration_seconds: 195 }]),
+    ),
+  );
+  renderWithProviders(<LibraryPage />);
+  expect(await screen.findByText(/· 03:15/)).toBeInTheDocument();
+});
+
 test("shows an empty state when there are no recordings", async () => {
   login();
   server.use(http.get("/api/recordings", () => HttpResponse.json([])));

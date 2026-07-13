@@ -114,7 +114,7 @@ export default function LibraryPage() {
                 <div className="muted" style={{ fontSize: "0.85em", marginTop: 4 }}>
                   Uploaded {formatUploadedAt(r.created_at)}
                 </div>
-                <div><AnalysisStatusBadge analysis={r.analysis} /></div>
+                <div><AnalysisStatusBadge analysis={r.analysis} durationSeconds={r.duration_seconds} /></div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 {r.analysis?.status === "done" && <Link to={`/recordings/${r.id}`}>Open chart</Link>}
