@@ -6,6 +6,7 @@ from app.audio.beatgrid import (
     rescale_windows,
     time_for_beat,
     total_beats,
+    whole_bpm,
 )
 from app.chart_store import ChartLike, ChartStore, SegmentLike
 from app.deps import get_chart_store, get_recording_for_principal
@@ -29,11 +30,15 @@ router = APIRouter(prefix="/api", tags=["charts"])
 # same beat grid, the same chord sheet.
 
 
-def _chart_bpm(chart: ChartLike) -> float | None:
-    """The chart's working tempo: the user's if they set one, else what analysis detected."""
+def _chart_bpm(chart: ChartLike) -> int | None:
+    """The chart's working tempo: the user's if they set one, else what analysis detected.
+
+    Always a whole number — rounding here also cleans up charts analysed before that rule
+    (`whole_bpm`), so their rescale factor is computed against the tempo we actually show.
+    """
     if chart.bpm:
-        return chart.bpm
-    return chart.recording.analysis.bpm if chart.recording.analysis else None
+        return whole_bpm(chart.bpm)
+    return whole_bpm(chart.recording.analysis.bpm) if chart.recording.analysis else None
 
 
 def _chart_grid(chart: ChartLike) -> tuple[list[float], float]:
@@ -234,10 +239,11 @@ def update_chart_tempo(
 ) -> ChartOut:
     """Set the chart's tempo, re-indexing the beat grid and rescaling every segment.
 
-    Beat trackers land an octave out often enough (this chart's engine heard 143.6 BPM in a
-    73.8 BPM song) that the metrical level has to be the player's call. Setting the BPM does
+    Beat trackers land an octave out often enough (this chart's engine heard 144 BPM in a
+    72 BPM song) that the metrical level has to be the player's call. Setting the BPM does
     not move any chord in *time* — it changes how many beats that chord is counted as, so
     halving the tempo turns eight-beat chords into four-beat chords over the same audio.
+    The tempo is stored as a whole number; a fractional one is rounded (see `whole_bpm`).
     """
     chart = store.get(chart_id)
     current = _chart_bpm(chart)

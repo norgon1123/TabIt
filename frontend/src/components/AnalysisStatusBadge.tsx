@@ -31,7 +31,7 @@ export default function AnalysisStatusBadge({
       )}
       {analysis?.status === "done" && analysis.bpm != null && (
         <span className="muted" style={{ fontWeight: 400 }}>
-          {" "}· {Math.round(analysis.bpm)} BPM · {analysis.detected_key_tonic} {analysis.detected_key_mode}
+          {" "}· {analysis.bpm} BPM · {analysis.detected_key_tonic} {analysis.detected_key_mode}
         </span>
       )}
       {analysis?.status === "failed" && analysis.error && (

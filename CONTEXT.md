@@ -145,7 +145,8 @@ Common flow:
 2. Trim leading/trailing silence (`_trim_silence`), keeping the removed `lead` offset.
    Sub-0.5s edge transients (a click before the real silence) are ignored.
 3. BPM + beat grid via `librosa.beat.beat_track`; onsets are **shifted back by `lead`**
-   so the grid is in original-audio time.
+   so the grid is in original-audio time. The BPM is rounded to a whole number
+   (`whole_bpm`) — timing lives in `beat_times`, so the fraction buys nothing.
 4. Key: tonic pitch class + mode from mean chroma.
 5. Chords — engine-specific (template+Viterbi / Chordino / BTC). Segments shorter than
    `TABIT_ANALYSIS_MIN_SEGMENT_SECONDS` (0.75) are dropped as false positives.
@@ -167,7 +168,8 @@ Status lifecycle, polled via `GET /api/recordings/{id}/analysis`:
   `POST /charts/{cid}/segments`, `PATCH /charts/{cid}/segments/{sid}`,
   `PATCH /charts/{cid}/segments` (batch resize), `DELETE /charts/{cid}/segments/{sid}`,
   `PATCH /charts/{cid}/settings` (beats-per-measure, measure offset),
-  `PATCH /charts/{cid}/tempo` (set BPM — re-indexes the grid, rescales every segment),
+  `PATCH /charts/{cid}/tempo` (set BPM — a whole number, rounded if not; re-indexes the
+  grid, rescales every segment),
   `POST /charts/{cid}/transpose`.
 
 Segment writes are validated against the grid: start < end, no overlap with siblings, and

@@ -82,6 +82,11 @@ comment in `pyproject.toml` and `docs/technical-plan-phase-0-1.md`.
   (`roundCs`/`formatTimeCs`). If you see "millisecond precision" in an older note, it is
   stale — `docs/TODO.md` #7 was superseded by Round 2 #5 (centisecond display) and then by
   the beat-native rewrite.
+- **BPM is a whole number** everywhere it is detected, stored, sent or shown — a tempo is
+  something a player counts, not a measurement. Round through `whole_bpm`
+  (`app/audio/beatgrid.py`); the API rounds a fractional `PATCH .../tempo` rather than
+  rejecting it, and rounds charts analysed before this rule on the way out. Timing accuracy
+  lives in `beat_times`, never in this number, so rounding costs nothing.
 - Chord boundaries must reflect the real change point; trim leading/trailing silence.
 - Re-running analysis (`POST /api/recordings/{id}/analyze`, 202) **overwrites the user's
   manual chart edits** — call this out explicitly if your change touches that path.
