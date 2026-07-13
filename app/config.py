@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     session_cookie_name: str = "tabit_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 365  # 1 year ("stay logged in")
     cookie_secure: bool = False  # set True behind HTTPS in production
+    # Uploads longer than this are rejected outright (413) — analysis cost and chart size
+    # both scale with length, so a long file is refused at the door rather than half-processed.
+    max_recording_seconds: float = 600.0  # 10 minutes
     analysis_sample_rate: int = 22050  # Hz; resample target for analysis
     analysis_max_workers: int = 1  # background analysis threads
     # Round 2 #1: chord segments shorter than this are treated as false positives and

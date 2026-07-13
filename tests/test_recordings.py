@@ -1,16 +1,35 @@
 import io
+import shutil
+import wave
+
+import pytest
+
+needs_ffprobe = pytest.mark.skipif(
+    shutil.which("ffprobe") is None, reason="ffprobe not on PATH"
+)
 
 
 def _register(client, username="alice"):
     client.post("/api/auth/register", json={"username": username, "password": "password123"})
 
 
-def _upload(client, name="memo.m4a", duration=10.0):
+def _upload(client, name="memo.m4a", duration=10.0, content=b"fake-audio-bytes"):
     return client.post(
         "/api/recordings",
-        files={"file": (name, io.BytesIO(b"fake-audio-bytes"), "audio/mp4")},
+        files={"file": (name, io.BytesIO(content), "audio/mp4")},
         data={"duration_seconds": str(duration)},
     )
+
+
+def _wav_bytes(seconds: float, rate: int = 4000) -> bytes:
+    """A real, ffprobe-readable WAV of the given length (silence)."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(b"\x00\x00" * int(seconds * rate))
+    return buf.getvalue()
 
 
 def test_upload_creates_recording(client, tmp_path, monkeypatch):
@@ -28,6 +47,43 @@ def test_upload_creates_recording(client, tmp_path, monkeypatch):
 def test_upload_requires_auth(client):
     resp = _upload(client)
     assert resp.status_code == 401
+
+
+def test_upload_rejects_recording_longer_than_ten_minutes(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    resp = _upload(client, duration=10 * 60 + 1)
+    assert resp.status_code == 413
+    assert "10 minutes" in resp.json()["detail"]
+    assert client.get("/api/recordings").json() == []  # nothing persisted
+
+
+def test_upload_allows_recording_at_the_ten_minute_limit(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+    assert _upload(client, duration=10 * 60).status_code == 201
+
+
+@needs_ffprobe
+def test_upload_rejects_long_file_when_client_under_reports_duration(client, tmp_path, monkeypatch):
+    """The browser-reported duration is untrusted: ffprobe the stored file and reject on that."""
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("TABIT_MAX_RECORDING_SECONDS", "1")
+    _register(client)
+
+    resp = _upload(client, name="long.wav", duration=0.5, content=_wav_bytes(2.0))
+    assert resp.status_code == 413
+    assert client.get("/api/recordings").json() == []
+    assert list(tmp_path.rglob("*.wav")) == []  # the stored file is cleaned up too
+
+
+@needs_ffprobe
+def test_upload_stores_the_server_probed_duration(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+    _register(client)
+
+    body = _upload(client, name="short.wav", duration=99.0, content=_wav_bytes(2.0)).json()
+    assert body["duration_seconds"] == pytest.approx(2.0, abs=0.05)  # not the client's 99
 
 
 def test_recording_payload_includes_created_at(client, tmp_path, monkeypatch):
