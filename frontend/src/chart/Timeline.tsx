@@ -161,12 +161,12 @@ export default function Timeline({
                   justifyContent: "center",
                   cursor: "pointer",
                   overflow: "hidden",
-                  border: selected ? "2px solid var(--accent)" : "1px solid #2c313a",
-                  borderLeft: onMeasure
-                    ? "3px solid var(--accent)"
-                    : selected
-                      ? "2px solid var(--accent)"
-                      : "1px solid #2c313a",
+                  border: selected ? "2px solid var(--accent)" : "1px solid var(--line)",
+                  borderLeft: selected
+                    ? "2px solid var(--accent)"
+                    : onMeasure
+                      ? "3px solid var(--bar-line)"
+                      : "1px solid var(--line)",
                   background: isActive ? "#26303f" : "var(--panel)",
                 }}
               >
