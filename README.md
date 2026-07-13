@@ -35,6 +35,32 @@ API docs at http://localhost:8000/docs
 - `TABIT_ANALYSIS_MAX_WORKERS` (default `1`; background analysis worker threads)
 - `TABIT_MAX_RECORDING_SECONDS` (default `600`, i.e. 10 minutes; longer uploads are
   rejected with `413`)
+- `TABIT_GUEST_COOKIE_NAME` (default `tabit_guest`; names a logged-out visitor's in-memory
+  recording — see *Guest mode*)
+- `TABIT_GUEST_TTL_SECONDS` (default `3600`; a guest recording is dropped after this much
+  idle time, the timer sliding on each request)
+
+## Guest mode (no account)
+
+A logged-out visitor can upload one song, have it analyzed, and edit the resulting chord
+sheet — the same endpoints, the same chart, the same editing rules a signed-in user gets.
+The difference is what survives:
+
+- **Nothing is written to the database.** The recording, its analysis and its chart live in
+  an in-process store (`app/guest.py`), keyed by the hash of a `tabit_guest` browser-session
+  cookie.
+- **The uploaded audio is deleted the moment analysis ends**, success or failure. It exists
+  on disk (under `<storage>/_guest/`) only while the analyzer is reading it. Playback in the
+  chord sheet therefore comes from the browser's own copy of the file, not from the server;
+  `GET /api/recordings/{id}/audio` 404s for a guest once analysis is done, and re-analyzing
+  means re-uploading (`POST .../analyze` answers `409`). Startup sweeps `<storage>/_guest/`
+  in case a process died mid-analysis.
+- **One song at a time.** Uploading while an analysis is running is refused with `409`;
+  uploading after it finishes replaces the previous song. Entries also expire
+  (`TABIT_GUEST_TTL_SECONDS`).
+
+An account is what buys persistence: a library (`GET /api/recordings` is the one endpoint a
+guest cannot reach — `401`), stored audio, and several songs at once.
 
 ## Analysis Flow
 

@@ -8,6 +8,7 @@ from app.db import Base, engine
 from app.jobs import get_job_dispatcher
 from app.migrations import run_additive_migrations
 from app.routers import auth, charts, recordings
+from app.storage import purge_guest_audio
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,10 @@ async def lifespan(app: FastAPI):
         logger.error(
             "ffmpeg not found on PATH — audio analysis will fail until ffmpeg is installed"
         )
+    # Guest recordings live in memory and did not survive the restart; any guest audio still
+    # on disk is a leftover from a process that died mid-analysis, and must not outlive the
+    # processing it was uploaded for.
+    purge_guest_audio()
     try:
         yield
     finally:

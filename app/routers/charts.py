@@ -1,11 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session as DbSession
 
 from app.audio.beatgrid import ensure_grid, time_for_beat, total_beats
-from app.db import get_db
-from app.deps import get_current_user, get_owned_recording
-from app.models import ChordChart, ChordSegment, Recording, User
+from app.chart_store import ChartLike, ChartStore, SegmentLike
+from app.deps import get_chart_store, get_recording_for_principal
 from app.music_theory import Quality, key_prefers_flats, roman_numeral, transpose_key, transpose_note
 from app.schemas import (
     ChartCreate,
@@ -20,15 +17,19 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api", tags=["charts"])
 
+# Every handler here goes through a ChartStore (app/chart_store.py), so a guest's in-memory
+# chart and a signed-in user's rows follow the same editing rules — the same validation, the
+# same beat grid, the same chord sheet.
 
-def _chart_grid(chart: ChordChart) -> tuple[list[float], float]:
+
+def _chart_grid(chart: ChartLike) -> tuple[list[float], float]:
     duration = chart.recording.duration_seconds or 0.0
     bpm = chart.recording.analysis.bpm if chart.recording.analysis else None
     grid = ensure_grid(list(chart.beat_times or []), bpm, duration)
     return grid, duration
 
 
-def _segment_out(seg: ChordSegment, chart: ChordChart, grid: list[float], duration: float) -> SegmentOut:
+def _segment_out(seg: SegmentLike, chart: ChartLike, grid: list[float], duration: float) -> SegmentOut:
     return SegmentOut(
         id=seg.id,
         start_beat=seg.start_beat,
@@ -43,7 +44,7 @@ def _segment_out(seg: ChordSegment, chart: ChordChart, grid: list[float], durati
     )
 
 
-def _chart_out(chart: ChordChart) -> ChartOut:
+def _chart_out(chart: ChartLike) -> ChartOut:
     grid, duration = _chart_grid(chart)
     return ChartOut(
         id=chart.id,
@@ -57,19 +58,8 @@ def _chart_out(chart: ChordChart) -> ChartOut:
     )
 
 
-def _owned_chart(db: DbSession, user: User, chart_id: str) -> ChordChart:
-    chart = db.execute(
-        select(ChordChart)
-        .join(Recording, ChordChart.recording_id == Recording.id)
-        .where(ChordChart.id == chart_id, Recording.user_id == user.id)
-    ).scalar_one_or_none()
-    if chart is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chart not found")
-    return chart
-
-
 def _validate_segment_window(
-    chart: ChordChart, start: float, end: float, exclude_id: str | None
+    chart: ChartLike, start: float, end: float, exclude_id: str | None
 ) -> None:
     if start >= end:
         raise HTTPException(status_code=422, detail="start_beat must be before end_beat")
@@ -89,28 +79,19 @@ def _validate_segment_window(
     status_code=status.HTTP_201_CREATED,
 )
 def create_chart(
-    recording_id: str,
     payload: ChartCreate,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    rec=Depends(get_recording_for_principal),
+    store: ChartStore = Depends(get_chart_store),
 ) -> ChartOut:
-    rec = get_owned_recording(db, user, recording_id)
     if rec.chart is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Chart already exists")
-    chart = ChordChart(recording_id=rec.id, key_tonic=payload.key_tonic, key_mode=payload.key_mode)
-    db.add(chart)
-    db.commit()
-    db.refresh(chart)
+    chart = store.create(rec, payload.key_tonic, payload.key_mode)
+    store.commit(chart)
     return _chart_out(chart)
 
 
 @router.get("/recordings/{recording_id}/chart", response_model=ChartOut)
-def get_chart(
-    recording_id: str,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> ChartOut:
-    rec = get_owned_recording(db, user, recording_id)
+def get_chart(rec=Depends(get_recording_for_principal)) -> ChartOut:
     if rec.chart is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chart not found")
     return _chart_out(rec.chart)
@@ -122,21 +103,15 @@ def get_chart(
 def add_segment(
     chart_id: str,
     payload: SegmentCreate,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    store: ChartStore = Depends(get_chart_store),
 ) -> SegmentOut:
-    chart = _owned_chart(db, user, chart_id)
+    chart = store.get(chart_id)
     _validate_segment_window(chart, payload.start_beat, payload.end_beat, None)
-    seg = ChordSegment(
-        chart_id=chart.id,
-        start_beat=payload.start_beat,
-        end_beat=payload.end_beat,
-        chord_root=payload.chord_root,
-        chord_quality=payload.chord_quality,
+    seg = store.new_segment(
+        payload.start_beat, payload.end_beat, payload.chord_root, payload.chord_quality
     )
-    db.add(seg)
-    db.commit()
-    db.refresh(seg)
+    chart.segments.append(seg)
+    store.commit(chart)
     grid, duration = _chart_grid(chart)
     return _segment_out(seg, chart, grid, duration)
 
@@ -146,10 +121,9 @@ def update_segment(
     chart_id: str,
     segment_id: str,
     payload: SegmentUpdate,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    store: ChartStore = Depends(get_chart_store),
 ) -> SegmentOut:
-    chart = _owned_chart(db, user, chart_id)
+    chart = store.get(chart_id)
     seg = next((s for s in chart.segments if s.id == segment_id), None)
     if seg is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
@@ -162,8 +136,7 @@ def update_segment(
         seg.chord_root = payload.chord_root
     if payload.chord_quality is not None:
         seg.chord_quality = payload.chord_quality
-    db.commit()
-    db.refresh(seg)
+    store.commit(chart)
     grid, duration = _chart_grid(chart)
     return _segment_out(seg, chart, grid, duration)
 
@@ -172,10 +145,9 @@ def update_segment(
 def resize_segments(
     chart_id: str,
     payload: SegmentBatchUpdate,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    store: ChartStore = Depends(get_chart_store),
 ) -> ChartOut:
-    chart = _owned_chart(db, user, chart_id)
+    chart = store.get(chart_id)
     by_id = {s.id: s for s in chart.segments}
     for w in payload.segments:
         if w.id not in by_id:
@@ -201,8 +173,7 @@ def resize_segments(
         seg = by_id[w.id]
         seg.start_beat = w.start_beat
         seg.end_beat = w.end_beat
-    db.commit()
-    db.refresh(chart)
+    store.commit(chart)
     return _chart_out(chart)
 
 
@@ -212,25 +183,23 @@ def resize_segments(
 def delete_segment(
     chart_id: str,
     segment_id: str,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    store: ChartStore = Depends(get_chart_store),
 ) -> None:
-    chart = _owned_chart(db, user, chart_id)
+    chart = store.get(chart_id)
     seg = next((s for s in chart.segments if s.id == segment_id), None)
     if seg is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
-    db.delete(seg)
-    db.commit()
+    chart.segments.remove(seg)  # delete-orphan on the DB side; a list removal for a guest
+    store.commit(chart)
 
 
 @router.patch("/charts/{chart_id}/settings", response_model=ChartOut)
 def update_chart_settings(
     chart_id: str,
     payload: ChartSettingsUpdate,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    store: ChartStore = Depends(get_chart_store),
 ) -> ChartOut:
-    chart = _owned_chart(db, user, chart_id)
+    chart = store.get(chart_id)
     if payload.beats_per_measure is not None:
         chart.beats_per_measure = payload.beats_per_measure
     if payload.measure_offset is not None:
@@ -239,8 +208,7 @@ def update_chart_settings(
         chart.key_tonic = payload.key_tonic
     if payload.key_mode is not None:
         chart.key_mode = payload.key_mode
-    db.commit()
-    db.refresh(chart)
+    store.commit(chart)
     return _chart_out(chart)
 
 
@@ -248,15 +216,13 @@ def update_chart_settings(
 def transpose_chart(
     chart_id: str,
     payload: TransposeRequest,
-    db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    store: ChartStore = Depends(get_chart_store),
 ) -> ChartOut:
-    chart = _owned_chart(db, user, chart_id)
+    chart = store.get(chart_id)
     new_tonic = transpose_key(chart.key_tonic, chart.key_mode, payload.semitones)
     prefer_flats = key_prefers_flats(new_tonic, chart.key_mode)
     chart.key_tonic = new_tonic
     for seg in chart.segments:
         seg.chord_root = transpose_note(seg.chord_root, payload.semitones, prefer_flats=prefer_flats)
-    db.commit()
-    db.refresh(chart)
+    store.commit(chart)
     return _chart_out(chart)

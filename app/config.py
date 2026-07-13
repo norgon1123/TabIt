@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     session_cookie_name: str = "tabit_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 365  # 1 year ("stay logged in")
     cookie_secure: bool = False  # set True behind HTTPS in production
+    # Guest mode: try Tabit without an account. The cookie names the visitor's single
+    # in-memory recording (app/guest.py); it is a browser-session cookie (no max-age) and
+    # the entry is dropped after this much idle time. Nothing guest-related is ever written
+    # to the database, and the uploaded audio is deleted the moment analysis finishes.
+    guest_cookie_name: str = "tabit_guest"
+    guest_ttl_seconds: float = 60 * 60  # 1 hour idle, sliding on each request
     # Uploads longer than this are rejected outright (413) — analysis cost and chart size
     # both scale with length, so a long file is refused at the door rather than half-processed.
     max_recording_seconds: float = 600.0  # 10 minutes

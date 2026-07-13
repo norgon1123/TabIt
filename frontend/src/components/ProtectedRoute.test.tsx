@@ -6,7 +6,8 @@ import App from "../App";
 import ProtectedRoute from "./ProtectedRoute";
 
 test("redirects to /login when logged out", async () => {
-  renderWithProviders(<App />, { route: "/" });
+  // "/" is open to guests now; a saved recording's chart is what still needs an account.
+  renderWithProviders(<App />, { route: "/recordings/r1" });
   expect(await screen.findByRole("heading", { name: /log in/i })).toBeInTheDocument();
 });
 
