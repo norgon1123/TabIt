@@ -52,8 +52,32 @@ test("transpose +1 posts to the chart", async () => {
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
   await screen.findByText("I");
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
   await userEvent.click(screen.getByRole("button", { name: /\+1/ }));
   expect(body).toEqual({ semitones: 1 });
+});
+
+test("transpose, tempo, and add-segment stay behind Advanced options", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await screen.findByText("I");
+
+  expect(screen.queryByRole("button", { name: /\+1/ })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/tempo/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+
+  expect(screen.getByRole("button", { name: /\+1/ })).toBeInTheDocument();
+  expect(screen.getByLabelText(/tempo/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /add segment/i })).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: /advanced options/i })); // collapses again
+  expect(screen.queryByRole("button", { name: /add segment/i })).not.toBeInTheDocument();
 });
 
 test("clicking off the selected chord closes the editor, clicking another keeps it", async () => {
