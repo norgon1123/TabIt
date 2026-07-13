@@ -25,14 +25,23 @@ async function fetchChart(recordingId: string): Promise<ChartOut | null> {
   }
 }
 
-export function useChart(recordingId: string, options: { poll?: boolean } = {}) {
+export function useChart(
+  recordingId: string,
+  options: { poll?: boolean; awaitChart?: boolean } = {},
+) {
   const queryClient = useQueryClient();
   const key = ["chart", recordingId];
 
   const chartQuery = useQuery({
     queryKey: key,
     queryFn: () => fetchChart(recordingId),
-    refetchInterval: options.poll ? 2000 : false,
+    // `poll` goes false as soon as the recording query sees "done", which on its own would
+    // cancel this query's next tick before it ever fetched the chart the job had just
+    // written — leaving the page with no chart and no audio player. `awaitChart` keeps the
+    // poll alive across that hand-off until the chart actually lands (analysis only reports
+    // "done" once the chart is committed, so this terminates).
+    refetchInterval: (query) =>
+      options.poll || (options.awaitChart && query.state.data == null) ? 2000 : false,
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
   const chartId = chartQuery.data?.id;
@@ -55,6 +64,13 @@ export function useChart(recordingId: string, options: { poll?: boolean } = {}) 
     mutationFn: (semitones: number) =>
       api.postJson<ChartOut>(`/api/charts/${chartId}/transpose`, { semitones }),
     onSuccess: invalidate,
+  });
+  // Setting the tempo rewrites the grid and every segment, so the server's chart is the
+  // source of truth: drop its response straight into the cache and the sheet re-lays out
+  // immediately, rather than waiting on a refetch.
+  const tempoMut = useMutation({
+    mutationFn: (bpm: number) => api.patchJson<ChartOut>(`/api/charts/${chartId}/tempo`, { bpm }),
+    onSuccess: (chart) => queryClient.setQueryData(key, chart),
   });
   const settingsMut = useMutation({
     mutationFn: (patch: ChartSettingsPatch) =>
@@ -96,6 +112,7 @@ export function useChart(recordingId: string, options: { poll?: boolean } = {}) 
       deleteMut.isPending ||
       transposeMut.isPending ||
       settingsMut.isPending ||
+      tempoMut.isPending ||
       resizeMut.isPending,
     addSegment: (input: SegmentInput) => addMut.mutateAsync(input),
     updateSegment: (segmentId: string, patch: SegmentPatch) =>
@@ -103,6 +120,7 @@ export function useChart(recordingId: string, options: { poll?: boolean } = {}) 
     deleteSegment: (segmentId: string) => deleteMut.mutateAsync(segmentId),
     transpose: (semitones: number) => transposeMut.mutateAsync(semitones),
     updateSettings: (patch: ChartSettingsPatch) => settingsMut.mutateAsync(patch),
+    setTempo: (bpm: number) => tempoMut.mutateAsync(bpm),
     resizeSegments: (windows: SegmentWindowInput[]) => resizeMut.mutateAsync(windows),
   };
 }

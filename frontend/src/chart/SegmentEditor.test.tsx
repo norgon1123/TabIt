@@ -49,3 +49,37 @@ describe("SegmentEditor beats", () => {
     expect(await screen.findByText("nope")).toBeInTheDocument();
   });
 });
+
+describe("SegmentEditor chord", () => {
+  it("keeps the chord I picked when a tempo re-count rescales this segment's beats", () => {
+    // Re-counting the tempo rewrites every segment's start/end beat without touching its
+    // chord. That must not reach into the form and undo the chord the player just picked —
+    // saving would silently PATCH the old chord back and the sheet would never change.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<SegmentEditor {...baseProps} onSave={onSave} />);
+
+    fireEvent.change(screen.getByLabelText(/root/i), { target: { value: "A" } });
+    fireEvent.change(screen.getByLabelText(/quality/i), { target: { value: "min7" } });
+
+    // The tempo response lands: same chord, same segment, beats rescaled 4 -> 12.
+    const rescaled = { ...seg, start_beat: 0, end_beat: 12 };
+    rerender(
+      <SegmentEditor {...baseProps} onSave={onSave} segment={rescaled} allSegments={[rescaled, seg2]} />,
+    );
+
+    fireEvent.click(screen.getByText("Save"));
+
+    expect(onSave).toHaveBeenCalledWith({ chord_root: "A", chord_quality: "min7" });
+  });
+
+  it("adopts the chord the server reports when it really changed (a transpose)", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<SegmentEditor {...baseProps} onSave={onSave} />);
+
+    fireEvent.change(screen.getByLabelText(/root/i), { target: { value: "A" } });
+    const transposed = { ...seg, chord_root: "D", roman_numeral: "II" };
+    rerender(<SegmentEditor {...baseProps} onSave={onSave} segment={transposed} />);
+
+    expect((screen.getByLabelText(/root/i) as HTMLSelectElement).value).toBe("D");
+  });
+});

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
 import { beatSlashMarks } from "./beatMath";
@@ -73,6 +73,53 @@ test("measure bar lines are neutral — the accent marks only selection/playback
   // The selected cell's bar line gives way to the accent, so its box stays even.
   expect(cellStyle("s1")).toContain("border-left: 2px solid var(--accent)");
   expect(cellStyle("s1")).not.toContain("var(--bar-line)");
+});
+
+// A CSS transition only animates when the browser already holds a computed value to
+// interpolate *from*. The fill span is rendered fresh for each chord, so its start value
+// has to be flushed to style before the transition toward scaleX(1) is armed — otherwise
+// the browser resolves the element's style for the first time already at scaleX(1) and
+// the bar appears full the instant the chord begins. jsdom does not run transitions, so
+// the flush (a layout read) is what we can observe; record the fill's transform at each.
+function recordFillFlushes(): string[] {
+  const flushed: string[] = [];
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    if (this.classList.contains("chord-progress")) flushed.push(this.style.transform);
+    return 0;
+  });
+  return flushed;
+}
+
+test("a newly active chord's progress bar starts empty, not full", () => {
+  const flushed = recordFillFlushes();
+  // Playing, playhead just inside s2 [2,4) — the chord has only just begun.
+  const { container } = renderTimeline({ currentTime: 2, playing: true, rate: 1 });
+  const bar = container.querySelector('[data-segment-id="s2"] .chord-progress') as HTMLElement;
+  expect(bar).toBeInTheDocument();
+  // The empty start value must reach the browser before the fill is armed.
+  expect(flushed).toEqual(["scaleX(0)"]);
+  expect(bar.style.transition).toBe("transform 2s linear");
+  vi.restoreAllMocks();
+});
+
+test("the fill spans the whole chord even when the media clock lags the boundary", () => {
+  vi.useFakeTimers();
+  const flushed = recordFillFlushes();
+  // timeupdate only fires ~4Hz, so the chord can flip on the boundary timer while the last
+  // clock reading still sits inside s1. s2's bar must still start empty and run for s2's
+  // full 2s — not 2.2s measured from the stale reading.
+  const { container } = renderTimeline({ currentTime: 1.8, playing: true, rate: 1 });
+  flushed.length = 0; // drop s1's paint; we care about the hand-off to s2
+  act(() => void vi.advanceTimersByTime(250)); // boundary timer fires: active chord -> s2
+
+  const bar = container.querySelector('[data-segment-id="s2"] .chord-progress') as HTMLElement;
+  expect(bar).toBeInTheDocument();
+  expect(flushed).toEqual(["scaleX(0)"]);
+  expect(bar.style.transition).toBe("transform 2s linear");
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 it("renders slash marks for a 4-beat chord", () => {

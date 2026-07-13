@@ -4,10 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.audio.decode import ffmpeg_available
+from app.config import get_settings
 from app.db import Base, engine
 from app.jobs import get_job_dispatcher
 from app.migrations import run_additive_migrations
 from app.routers import auth, charts, recordings
+from app.storage import purge_guest_audio
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,22 @@ async def lifespan(app: FastAPI):
         logger.error(
             "ffmpeg not found on PATH — audio analysis will fail until ffmpeg is installed"
         )
+    # Settings are read once, at import. `uvicorn --reload` only watches *.py, so editing
+    # .env does not restart the worker and the engine you picked there silently does not
+    # take effect until the process is restarted. Log what this process actually resolved.
+    settings = get_settings()
+    logger.info(
+        "analysis engine=%s, separation=%s (model=%s, stems=%s), device=%s",
+        settings.analysis_engine,
+        settings.enable_separation,
+        settings.separation_model,
+        settings.separation_stems,
+        settings.analysis_device,
+    )
+    # Guest recordings live in memory and did not survive the restart; any guest audio still
+    # on disk is a leftover from a process that died mid-analysis, and must not outlive the
+    # processing it was uploaded for.
+    purge_guest_audio()
     try:
         yield
     finally:

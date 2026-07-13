@@ -259,3 +259,138 @@ def test_batch_resize_unknown_segment_404(client, tmp_path, monkeypatch):
         {"id": "nope", "start_beat": 0.0, "end_beat": 2.0},
     ]})
     assert resp.status_code == 404
+
+
+def _chart_with_grid(client, db_session, tmp_path, monkeypatch, bpm=144, interval=0.418):
+    """A chart on a tracked beat grid at `bpm`, the way analysis seeds one."""
+    from sqlalchemy import select as sa_select
+
+    from app.models import ChordChart
+
+    rec_id, chart_id = _make_chart(client, monkeypatch, tmp_path)  # duration=10.0
+    chart = db_session.execute(
+        sa_select(ChordChart).where(ChordChart.id == chart_id)
+    ).scalar_one()
+    chart.beat_times = [round(i * interval, 6) for i in range(25)]  # 0 .. 10.03s
+    chart.bpm = bpm
+    db_session.commit()
+    return rec_id, chart_id
+
+
+def test_tempo_halves_beat_counts_without_moving_chords_in_time(
+    client, db_session, tmp_path, monkeypatch
+):
+    """The double-time fix: the engine heard 144 BPM in a 72 BPM song.
+
+    Halving the tempo must re-count each chord — 8 beats becomes 4 — while leaving the audio
+    it covers exactly where it was. Beats are the chart's unit; seconds are the ground truth.
+    """
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    client.post(
+        f"/api/charts/{chart_id}/segments",
+        json={"start_beat": 0.0, "end_beat": 8.0, "chord_root": "B", "chord_quality": "maj"},
+    )
+    client.post(
+        f"/api/charts/{chart_id}/segments",
+        json={"start_beat": 8.0, "end_beat": 16.0, "chord_root": "F#", "chord_quality": "min"},
+    )
+    before = client.get(f"/api/recordings/{rec_id}/chart").json()
+    times_before = [(s["start_time"], s["end_time"]) for s in before["segments"]]
+
+    resp = client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 72})
+    assert resp.status_code == 200
+    after = resp.json()
+
+    assert after["bpm"] == 72
+    assert [(s["start_beat"], s["end_beat"]) for s in after["segments"]] == [
+        (0.0, 4.0), (4.0, 8.0),
+    ]
+    assert [s["chord_root"] for s in after["segments"]] == ["B", "F#"]
+    # Same audio, half the beats: every chord still covers the seconds it did before.
+    times_after = [(s["start_time"], s["end_time"]) for s in after["segments"]]
+    for (s0, e0), (s1, e1) in zip(times_before, times_after):
+        assert s1 == pytest.approx(s0, abs=0.02)
+        assert e1 == pytest.approx(e0, abs=0.02)
+    # The grid keeps the tracked onsets it had, one beat where there were two.
+    assert after["beat_times"] == pytest.approx(before["beat_times"][::2])
+
+
+def test_tempo_doubling_is_the_inverse_of_halving(client, db_session, tmp_path, monkeypatch):
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    client.post(
+        f"/api/charts/{chart_id}/segments",
+        json={"start_beat": 0.0, "end_beat": 4.0, "chord_root": "B", "chord_quality": "maj"},
+    )
+    client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 72})
+    resp = client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 144})
+
+    assert resp.status_code == 200
+    assert resp.json()["bpm"] == 144
+    seg = resp.json()["segments"][0]
+    assert (seg["start_beat"], seg["end_beat"]) == (0.0, 4.0)
+
+
+def test_tempo_persists_and_is_returned_by_get_chart(client, db_session, tmp_path, monkeypatch):
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 90})
+    assert client.get(f"/api/recordings/{rec_id}/chart").json()["bpm"] == 90
+
+
+def test_tempo_is_stored_and_returned_as_a_whole_number(
+    client, db_session, tmp_path, monkeypatch
+):
+    # A tempo is a count, not a measurement: a fractional request is rounded, not rejected,
+    # and what comes back is what the player will read off the chart.
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    resp = client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 71.8})
+
+    assert resp.status_code == 200
+    assert resp.json()["bpm"] == 72
+    assert client.get(f"/api/recordings/{rec_id}/chart").json()["bpm"] == 72
+
+
+def test_a_chart_analysed_before_whole_tempos_reads_back_whole(
+    client, db_session, tmp_path, monkeypatch
+):
+    # Charts already in the database carry the tracker's raw estimate. They must not show
+    # 143.6 BPM, and a halving from one must land on the tempo we showed: 144 -> 72.
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch, bpm=143.6)
+    before = client.get(f"/api/recordings/{rec_id}/chart").json()
+    assert before["bpm"] == 144
+
+    after = client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 72}).json()
+    assert after["bpm"] == 72
+    # 72/144 is an exact halving, so the grid keeps every second tracked onset. Had the
+    # rescale divided by the stored 143.6 the factor would have drifted off the beat.
+    assert after["beat_times"] == pytest.approx(before["beat_times"][::2])
+
+
+def test_tempo_keeps_segments_inside_the_recording(client, db_session, tmp_path, monkeypatch):
+    # The chart-never-exceeds-the-recording invariant has to survive a tempo change.
+    rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    chart = client.get(f"/api/recordings/{rec_id}/chart").json()
+    end = max(s["end_beat"] for s in chart["segments"]) if chart["segments"] else 0
+    client.post(
+        f"/api/charts/{chart_id}/segments",
+        json={"start_beat": 0.0, "end_beat": 20.0, "chord_root": "B", "chord_quality": "maj"},
+    )
+    after = client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": 288}).json()
+    for seg in after["segments"]:
+        assert seg["end_time"] <= 10.0 + 1e-6  # the recording is 10s long
+    assert end == 0
+
+
+@pytest.mark.parametrize("bpm", [0, -10, 20, 20.4, 401, 400.6])
+def test_tempo_rejects_implausible_values(client, db_session, tmp_path, monkeypatch, bpm):
+    # Rounding happens before the range check, so 20.4 (-> 20) and 400.6 (-> 401) are out.
+    _rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    assert client.patch(f"/api/charts/{chart_id}/tempo", json={"bpm": bpm}).status_code == 422
+
+
+def test_tempo_on_another_users_chart_is_404(client, db_session, tmp_path, monkeypatch):
+    _rec_id, chart_id = _chart_with_grid(client, db_session, tmp_path, monkeypatch)
+    client.post("/api/auth/logout")
+    _register(client, "mallory")
+    assert client.patch(
+        f"/api/charts/{chart_id}/tempo", json={"bpm": 90}
+    ).status_code == 404

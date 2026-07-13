@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RecordingOut } from "../api/types";
-import { readAudioDuration } from "./audioDuration";
-import { MAX_RECORDING_SECONDS, tooLongMessage } from "./uploadLimits";
+import { uploadRecording } from "./uploadRecording";
 
 const KEY = ["recordings"];
 
@@ -22,14 +21,7 @@ export function useRecordings() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: KEY });
 
   const uploadMut = useMutation({
-    mutationFn: async (file: File) => {
-      const form = new FormData();
-      form.append("file", file);
-      const duration = await readAudioDuration(file);
-      if (duration != null && duration > MAX_RECORDING_SECONDS) throw new Error(tooLongMessage(duration));
-      if (duration != null) form.append("duration_seconds", String(duration));
-      return api.postForm<RecordingOut>("/api/recordings", form);
-    },
+    mutationFn: (file: File) => uploadRecording(file),
     onSuccess: invalidate,
   });
 

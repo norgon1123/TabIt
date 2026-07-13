@@ -154,6 +154,49 @@ def test_seed_chart_assigns_whole_beats(db_session):
     assert (segs[1].start_beat, segs[1].end_beat) == (4.0, 8.0)
 
 
+def test_seed_chart_keeps_chords_that_end_before_the_first_detected_beat(db_session):
+    """Regression: a late-starting beat grid used to swallow the opening chords.
+
+    On "The Power of the 5 Minor" librosa found no beat until 7.918s, so every chord that
+    ended before that mapped to beat 0, was dropped as zero-length, and the chart opened on
+    the third chord (A) — which then covered the audio the dropped B and F#m were playing
+    over. The chords below are chordino's real output for that track; the chart must open on
+    B and keep all three.
+    """
+    from app.audio.analyzer import AnalysisResult
+    from app.audio.segments import DetectedSegment
+    from app.jobs import _seed_chart
+    from app.models import Recording, User
+    from app.music_theory import Quality
+
+    user = User(username="intro", password_hash="x")
+    db_session.add(user)
+    db_session.flush()
+    rec = Recording(user_id=user.id, original_filename="p.mp3", format="mp3",
+                    stored_path="/tmp/p.mp3", duration_seconds=20.0)
+    db_session.add(rec)
+    db_session.flush()
+
+    grid = [round(7.918 + i * 0.418, 3) for i in range(29)]  # first onset 7.9s in
+    result = AnalysisResult(
+        bpm=143.6, key_tonic_pc=11, key_mode="minor", duration=20.0,
+        segments=[
+            DetectedSegment(0.91, 4.81, 11, Quality.MAJ),  # B
+            DetectedSegment(4.81, 7.04, 6, Quality.MIN),   # F#m
+            DetectedSegment(7.04, 9.64, 9, Quality.MAJ),   # A
+        ],
+        beat_times=grid,
+    )
+    _seed_chart(db_session, rec, result)
+    db_session.commit()
+
+    segs = sorted(rec.chart.segments, key=lambda s: s.start_beat)
+    assert [s.chord_root for s in segs] == ["B", "F#", "A"]
+    assert segs[0].start_beat == 0.0
+    # Each chord keeps a plausible length instead of the first two collapsing to nothing.
+    assert all(s.end_beat - s.start_beat >= 4.0 for s in segs)
+
+
 def test_dispatcher_uses_configured_min_segment_seconds(monkeypatch):
     # Round 2 #1: the min-segment threshold is an easily-adjustable setting (default 0.75).
     from app.config import get_settings
@@ -161,6 +204,12 @@ def test_dispatcher_uses_configured_min_segment_seconds(monkeypatch):
 
     assert get_settings().analysis_min_segment_seconds == 0.75
 
+    # Pin the engine: this asserts on `_min_segment_seconds`, which the template-based
+    # analyzers keep but BTCAnalyzer does not (it hands the value to BTCChordEngine as
+    # `min_seconds`). Without pinning, the test reads whatever engine the developer's .env
+    # happens to select and fails on TABIT_ANALYSIS_ENGINE=btc — a property of the machine,
+    # not of the code under test, which is that the *setting* reaches the analyzer.
+    monkeypatch.setenv("TABIT_ANALYSIS_ENGINE", "librosa")
     monkeypatch.setenv("TABIT_ANALYSIS_MIN_SEGMENT_SECONDS", "1.5")
     get_settings.cache_clear()
     get_job_dispatcher.cache_clear()

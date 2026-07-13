@@ -9,12 +9,21 @@ from functools import lru_cache
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.audio.analyzer import Analyzer, AnalysisResult, ChordinoAnalyzer, LibrosaAnalyzer
-from app.audio.beatgrid import beat_for_time, ensure_grid, snap_half, total_beats
+from app.audio.analyzer import (
+    Analyzer,
+    AnalysisResult,
+    BTCAnalyzer,
+    ChordinoAnalyzer,
+    LibrosaAnalyzer,
+)
+from app.audio.separation import SeparationService
+from app.chart_seed import ChartSeed, build_chart_seed
 from app.config import get_settings
 from app.db import SessionLocal
+from app.guest import GuestChart, GuestRecording, GuestSegment
 from app.models import Analysis, ChordChart, ChordSegment, Recording
-from app.music_theory import key_prefers_flats, pitch_class_to_note, tonic_for_pitch_class
+from app.music_theory import tonic_for_pitch_class
+from app.storage import delete_audio
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +57,56 @@ def analyze_recording(db: Session, recording_id: str, analyzer: Analyzer) -> Non
         return
 
 
+def analyze_guest_recording(recording: GuestRecording, analyzer: Analyzer) -> None:
+    """Analyze a logged-out visitor's song entirely in memory, then delete the audio.
+
+    Same pipeline and same seeding as `analyze_recording` — the difference is where the
+    results land (the GuestRecording, never the DB) and that the uploaded file is scratch
+    space: it exists only while the analyzer is reading it, and is gone by the time this
+    returns, whether the analysis succeeded or failed.
+    """
+    analysis = recording.analysis
+    analysis.status = "running"
+    analysis.error = None
+    try:
+        result = analyzer.analyze(recording.stored_path)
+        analysis.bpm = result.bpm
+        analysis.detected_key_tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
+        analysis.detected_key_mode = result.key_mode
+        analysis.engine_version = result.engine_version
+        # Trust the server-decoded length over the browser-reported duration.
+        recording.duration_seconds = result.duration
+        recording.chart = _guest_chart(recording, build_chart_seed(result))
+        # Last: the frontend fetches the chart as soon as it sees "done".
+        analysis.status = "done"
+    except Exception as exc:
+        analysis.status = "failed"
+        analysis.error = str(exc)[:1000]
+        logger.exception("analysis failed for guest recording %s", recording.id)
+    finally:
+        delete_audio(recording.stored_path)
+        recording.stored_path = ""
+
+
+def _guest_chart(recording: GuestRecording, seed: ChartSeed) -> GuestChart:
+    return GuestChart(
+        recording=recording,
+        key_tonic=seed.key_tonic,
+        key_mode=seed.key_mode,
+        beat_times=seed.beat_times,
+        bpm=seed.bpm,
+        segments=[
+            GuestSegment(
+                start_beat=s.start_beat,
+                end_beat=s.end_beat,
+                chord_root=s.chord_root,
+                chord_quality=s.chord_quality,
+            )
+            for s in seed.segments
+        ],
+    )
+
+
 def _write_result(analysis: Analysis, result: AnalysisResult) -> None:
     analysis.bpm = result.bpm
     analysis.detected_key_tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
@@ -64,39 +123,29 @@ def _seed_chart(db: Session, recording: Recording, result: AnalysisResult) -> No
         db.flush()
 
     # #1: trust the server-decoded length over the browser-reported duration.
-    duration = result.duration
-    recording.duration_seconds = duration
+    recording.duration_seconds = result.duration
 
-    grid = ensure_grid(result.beat_times, result.bpm, duration)
-    max_beat = total_beats(grid, duration)
-
-    tonic = tonic_for_pitch_class(result.key_tonic_pc, result.key_mode)
-    prefer_flats = key_prefers_flats(tonic, result.key_mode)
+    seed = build_chart_seed(result)
     chart = ChordChart(
         recording_id=recording.id,
-        key_tonic=tonic,
-        key_mode=result.key_mode,
-        beat_times=grid,
+        key_tonic=seed.key_tonic,
+        key_mode=seed.key_mode,
+        beat_times=seed.beat_times,
+        bpm=seed.bpm,  # the user's starting tempo; they can re-count it (PATCH .../tempo)
     )
     db.add(chart)
     db.flush()
 
-    cursor = 0.0  # beats; chords are laid out contiguously from beat 0
-    for segment in result.segments:
-        end_beat = snap_half(beat_for_time(min(segment.end_time, duration), grid))
-        end_beat = min(end_beat, max_beat)
-        if end_beat - cursor < 0.5:  # too short after snapping; skip
-            continue
+    for segment in seed.segments:
         db.add(
             ChordSegment(
                 chart_id=chart.id,
-                start_beat=cursor,
-                end_beat=end_beat,
-                chord_root=pitch_class_to_note(segment.root_pc, prefer_flats=prefer_flats),
-                chord_quality=segment.quality.value,
+                start_beat=segment.start_beat,
+                end_beat=segment.end_beat,
+                chord_root=segment.chord_root,
+                chord_quality=segment.chord_quality,
             )
         )
-        cursor = end_beat
 
 
 class JobDispatcher:
@@ -110,6 +159,10 @@ class JobDispatcher:
 
     def dispatch(self, recording_id: str) -> None:
         self._pool.submit(self._run, recording_id)
+
+    def dispatch_guest(self, recording: GuestRecording) -> None:
+        """Guest jobs carry the recording itself — there is no row to look up."""
+        self._pool.submit(analyze_guest_recording, recording, self._analyzer)
 
     def _run(self, recording_id: str) -> None:
         db = SessionLocal()
@@ -131,8 +184,35 @@ def _build_librosa_analyzer(settings) -> Analyzer:
     )
 
 
+def _build_btc_analyzer(settings) -> Analyzer:
+    """The deep engine, fed a Demucs stem when separation is enabled.
+
+    Nothing heavy is imported here: Demucs and the BTC weights load on the first analyze()
+    call, on the worker thread. A missing dependency therefore surfaces as a failed analysis
+    with the real error, never as a silent downgrade — the deep model is the point of
+    selecting this engine (see the "not swappable" note in app/audio/deep_chord.py).
+    """
+    separator = (
+        SeparationService(
+            model=settings.separation_model, device=settings.analysis_device
+        )
+        if settings.enable_separation
+        else None
+    )
+    return BTCAnalyzer(
+        settings.analysis_sample_rate,
+        min_segment_seconds=settings.analysis_min_segment_seconds,
+        device=settings.analysis_device,
+        separator=separator,
+        stem=settings.separation_stems,
+    )
+
+
 def _build_analyzer(settings) -> Analyzer:
-    if settings.analysis_engine == "chordino":
+    engine = settings.analysis_engine.lower()
+    if engine in ("btc", "deep"):
+        return _build_btc_analyzer(settings)
+    if engine == "chordino":
         try:
             return ChordinoAnalyzer(
                 settings.analysis_sample_rate,

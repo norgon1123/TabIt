@@ -1,6 +1,24 @@
 from datetime import datetime
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+from app.audio.beatgrid import whole_bpm
+
+
+def _round_bpm(value: Any) -> Any:
+    """Round any tempo crossing the API to a whole number — see `whole_bpm`.
+
+    Runs on the way out (charts analysed before this rule still hold a fractional tempo in
+    the database, and 143.6 must not reach a player's screen) and on the way in (a client
+    PATCHing 71.8 gets 72, not a 422).
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value  # let pydantic reject it
+    return whole_bpm(value)
+
+
+Bpm = Annotated[int | None, BeforeValidator(_round_bpm)]
 
 
 class Credentials(BaseModel):
@@ -17,7 +35,7 @@ class UserOut(BaseModel):
 class AnalysisOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     status: str
-    bpm: float | None
+    bpm: Bpm
     detected_key_tonic: str | None
     detected_key_mode: str | None
     engine_version: str | None
@@ -88,6 +106,7 @@ class ChartOut(BaseModel):
     key_mode: str
     beats_per_measure: int
     measure_offset: int
+    bpm: Bpm
     beat_times: list[float]
     segments: list[SegmentOut]
 
@@ -99,6 +118,12 @@ class ChartSettingsUpdate(BaseModel):
     # it never touches chord_root. Use /transpose to move the chords themselves.
     key_tonic: str | None = Field(default=None, pattern="^[A-G][b#]?$")
     key_mode: str | None = Field(default=None, pattern="^(major|minor)$")
+
+
+class TempoUpdate(BaseModel):
+    # 20-400 spans anything countable; outside it the grid rescale stops being meaningful.
+    # The tempo is rounded before it is range-checked, so 71.8 sets 72 rather than failing.
+    bpm: Annotated[int, BeforeValidator(_round_bpm)] = Field(gt=20, le=400)
 
 
 class TransposeRequest(BaseModel):

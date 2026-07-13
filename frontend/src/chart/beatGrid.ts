@@ -4,12 +4,24 @@ const DEFAULT_BPM = 120;
 
 function ensureGrid(beatTimes: number[], bpm: number | null, duration: number): number[] {
   const clean = [...beatTimes].map(Number).sort((a, b) => a - b);
-  if (clean.length >= 2) return clean;
+  if (clean.length >= 2) return backfillHead(clean);
   const tempo = bpm && bpm > 0 ? bpm : DEFAULT_BPM;
   const interval = 60 / tempo;
   const span = Math.max(duration, interval * 2);
   const n = Math.floor(span / interval) + 2;
   return Array.from({ length: n }, (_, i) => i * interval);
+}
+
+// Beat trackers often emit no onset until the groove settles, leaving the head of the
+// recording off the grid; extend it back to t=0 so beat 0 is the start of the audio.
+// The backend stores grids that are already backfilled, so this only matters for charts
+// seeded before that fix; it is a no-op on a grid that already starts at 0.
+function backfillHead(grid: number[]): number[] {
+  const interval = grid[1] - grid[0];
+  if (interval <= 0 || grid[0] <= 0) return grid;
+  const n = Math.floor(grid[0] / interval);
+  const head = Array.from({ length: n }, (_, i) => grid[0] - (n - i) * interval);
+  return [...head, ...grid];
 }
 
 function intervalAt(grid: number[], i: number): number {
