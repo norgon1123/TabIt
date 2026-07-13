@@ -49,7 +49,7 @@ When updating, do a section-by-section diff in your head: keep prose the user cl
 
 **Never drop these on update (load-bearing best practices, carry them forward verbatim unless the user changed them):**
 - The **Bug fixes specifically** definition of done (reproduce → failing test first → prove → root-cause fix → regression lock).
-- The **`create_all` schema gotcha** (new columns need `app/migrations.py`, not `create_all`).
+- The **disposable-data rule** (early dev, no production data → data-breaking changes are fine, no migration scripts, drop and recreate the DB) — and the **`create_all` schema gotcha** that explains *why* a stale DB fails.
 
 These live in the AGENTS.md template below precisely so they survive regeneration. If a future best practice must persist the same way, add it to the template here — not only to the generated file.
 
@@ -62,6 +62,7 @@ These are the load-bearing truths that make the docs useful. Confirm, then fold 
 - **`Analysis` is immutable; `ChordChart` is editable.** Re-running analysis (`POST /api/recordings/{id}/analyze`, 202) creates a fresh `Analysis` and **re-seeds the chart, overwriting manual edits.** This is a sharp edge — say so.
 - **ffmpeg is a hard runtime dependency.** Without it, uploads succeed but analysis jobs fail with a clear error (logged at startup too).
 - **Config is env-driven, prefix `TABIT_`** (`app/config.py`): `TABIT_DATABASE_URL`, `TABIT_STORAGE_DIR`, `TABIT_COOKIE_SECURE`, `TABIT_ANALYSIS_SAMPLE_RATE`, `TABIT_ANALYSIS_MAX_WORKERS`.
+- **The data is disposable.** Tabit is in early development with **no production data**, so data-breaking changes are fine and expected. **No migration scripts** are required or wanted — when a schema change breaks an existing DB, it is dropped and recreated by `create_all`. `app/migrations.py` is dormant (it still runs on startup; no new migrations get written) until there is real data to preserve. This is a *policy the user set* — carry it into both files on every regeneration.
 - **Product rules from `docs/TODO.md`** that affect any chart/analysis change — treat as invariants:
   - Charts must **never exceed the audio file's total duration.**
   - Times are configured/displayed to **millisecond precision** — universal rule.
@@ -126,6 +127,11 @@ Status lifecycle: `pending → running → done | failed`
 - Charts must never exceed the audio's total duration.
 - All times use millisecond precision (universal rule).
 - ffmpeg must be on PATH for analysis to run.
+- **Stored data is disposable.** Early dev, no production data — the schema is free to
+  break, and the recovery for a stale DB is to drop and recreate it, not migrate it.
+  `create_all` adds missing *tables* but never *columns* to an existing SQLite file, so an
+  old `tabit.db` fails after a schema change; deleting it is the intended answer.
+  `app/migrations.py` still runs on startup but is dormant.
 ```
 
 ## AGENTS.md template
@@ -165,6 +171,18 @@ mental model.
 - Frontend: data fetching through TanStack Query hooks (`useChart`, `useRecordings`);
   time math lives in `chart/timeMath.ts`.
 
+## Schema changes: the data is disposable
+Tabit is in **early development with no production data**, so data-breaking changes are
+**fine and expected**. Don't contort a model to stay compatible with rows already on disk.
+- **Do not write migration scripts** — not Alembic, not new additive steps in
+  `app/migrations.py`. Not required, not wanted.
+- **The fix for a stale local DB is to delete it.** Drop the SQLite file (`tabit.db`, per
+  `TABIT_DATABASE_URL`) and restart; `create_all` rebuilds the schema from `app/models.py`.
+  Clear `TABIT_STORAGE_DIR` too if the change orphans stored recordings.
+- **Say so in the change** if existing rows break, so nobody meets it as an ORM error.
+- `app/migrations.py` still exists and runs on startup — leave its existing migrations
+  alone. It is dormant until Tabit has real data to preserve.
+
 ## Rules that bite (enforce in any chart/analysis change)
 - Chart total length must never exceed the audio file's duration.
 - All start/end times are millisecond-precision — everywhere, no exceptions.
@@ -192,9 +210,11 @@ A bug fix is **not done** until all of the following hold:
 
 > Schema gotcha that has bitten deletes before: `Base.metadata.create_all()` creates
 > missing *tables* but never adds *columns* to existing ones, so a pre-existing SQLite DB
-> keeps its old schema and the ORM fails on the new column. New columns must be added via
-> `app/migrations.py` (`run_additive_migrations`, run on startup and by
-> `scripts/migrate_beats.py`) — not by relying on `create_all`.
+> keeps its old schema and the ORM fails on the new column. The remedy is to **delete the DB
+> file and let it be recreated** (see *Schema changes: the data is disposable*) — not to
+> write a migration. Note the distinction from rule 4 above: recreating a dev DB whose
+> *schema* is stale is the intended workflow, but hand-editing *rows* to paper over a bug in
+> the code is not a fix.
 ```
 
 ## Common mistakes
@@ -205,4 +225,5 @@ A bug fix is **not done** until all of the following hold:
 - **Dropping the sharp edges** (immutable Analysis, re-analysis overwrites edits, ms precision, ffmpeg). These are exactly what saves the next agent.
 - **Overwriting hand-written prose on update.** Reconcile drift; preserve intentional human edits.
 - **Editing CLAUDE.md directly or committing it as a real file.** It's a symlink to AGENTS.md — edit AGENTS.md instead, and make sure the symlink (not a copied file) is what's committed.
-- **Dropping the load-bearing best practices** (Bug-fix definition of done, the `create_all` schema gotcha). They are baked into the template above so regeneration retains them — keep them.
+- **Dropping the load-bearing best practices** (Bug-fix definition of done, the disposable-data rule, the `create_all` schema gotcha). They are baked into the templates above so regeneration retains them — keep them.
+- **Reintroducing migration guidance.** Older notes (and `app/migrations.py` itself) say new columns need an additive migration. That was superseded: the DB is disposable, so a stale one gets dropped, not migrated. Don't let a code-verification pass "correct" the docs back.

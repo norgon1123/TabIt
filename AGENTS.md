@@ -71,6 +71,24 @@ comment in `pyproject.toml` and `docs/technical-plan-phase-0-1.md`.
   installing and running without them.
 - New API fields: update `app/schemas.py` **and** `frontend/src/api/types.ts` together.
 
+## Schema changes: the data is disposable
+
+Tabit is in **early development and has no production data.** Data-breaking changes are
+therefore **fine and expected** — schema is free to change shape whenever the design calls
+for it. Don't contort a model to stay backward-compatible with rows already on disk.
+
+- **Do not write migration scripts.** Not Alembic, not new additive `ALTER TABLE` steps in
+  `app/migrations.py`. They are not required and not wanted at this stage.
+- **The fix for a stale local DB is to delete it**, not to migrate it. Drop the SQLite file
+  (`tabit.db`, per `TABIT_DATABASE_URL`) and restart — `Base.metadata.create_all()` in the
+  `main.py` lifespan rebuilds the schema from `app/models.py`. Clear `TABIT_STORAGE_DIR`
+  too if stored recordings would be orphaned by the change.
+- **Say so in the change.** If your change breaks existing rows, state plainly that the dev
+  DB must be dropped and recreated — don't let a teammate discover it as an ORM error.
+- `app/migrations.py` still exists and still runs on startup; leave the migrations already
+  in it alone. It is dormant until Tabit has real data to preserve, at which point this rule
+  gets revisited (see `docs/multi-instrument-roadmap.md`).
+
 ## Rules that bite (enforce in any chart/analysis change)
 
 - A chart's total length must **never exceed the recording's duration**. `end_beat` is
@@ -124,9 +142,11 @@ A bug fix is **not done** until all of the following hold:
 
 > Schema gotcha that has bitten deletes before: `Base.metadata.create_all()` creates
 > missing *tables* but never adds *columns* to existing ones, so a pre-existing SQLite DB
-> keeps its old schema and the ORM fails on the new column. New columns must be added via
-> `app/migrations.py` (`run_additive_migrations`, run automatically on startup and by
-> `scripts/migrate_beats.py`) — not by relying on `create_all`.
+> keeps its old schema and the ORM fails on the new column. The remedy is to **delete the
+> DB file and let it be recreated** (see *Schema changes: the data is disposable*) — not to
+> write a migration. Note the distinction from rule 4 above: recreating a dev DB whose
+> *schema* is stale is the intended workflow, but hand-editing *rows* to paper over a bug in
+> the code is not a fix.
 
 ## Chord-accuracy work (Phase 0/1)
 

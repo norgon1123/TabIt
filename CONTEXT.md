@@ -77,8 +77,9 @@ guest gets a `401` from), audio kept on disk, and several songs at once.
   Health at `GET /api/health`.
 - `config.py` — `TABIT_`-prefixed settings via pydantic-settings (reads `.env`).
 - `db.py`, `models.py`, `schemas.py` — engine/session, ORM models, Pydantic I/O shapes.
-- `migrations.py` — additive, idempotent `ALTER TABLE ... ADD COLUMN` migrations.
-  Exists because `create_all` never adds columns to an existing table.
+- `migrations.py` — additive, idempotent `ALTER TABLE ... ADD COLUMN` migrations, kept from
+  before the DB became disposable. Still runs on startup, but **no new ones are written** —
+  a breaking schema change means dropping the DB (see *Invariants*).
 - `deps.py`, `security.py` — DB/session dependencies, `Principal` (signed-in user *or*
   guest), current-user + owned-recording resolution, Argon2 hashing.
 - `guest.py`, `chart_store.py`, `chart_seed.py` — the account-free path: the in-memory guest
@@ -214,8 +215,12 @@ finished and the file has been deleted).
   is trimmed and ignored.
 - **ffmpeg must be on `PATH`** for analysis to run (uploads succeed without it; jobs
   then fail with a clear, logged error).
-- New DB columns need `app/migrations.py` — `create_all` will not add them to an existing
-  SQLite file.
+- **Stored data is disposable.** Tabit is in early development with no production data, so
+  the schema is free to break: the recovery for a stale DB is to drop and recreate it, not
+  to migrate it. `create_all` builds missing *tables* but never adds *columns* to an
+  existing SQLite file, so a schema change makes an old `tabit.db` fail — deleting it is
+  the intended answer. `app/migrations.py` still runs on startup but is dormant; it comes
+  back into play once there is real data to preserve.
 - **A guest leaves nothing behind.** No guest data may be written to the database, and their
   audio must be deleted as soon as processing ends — that deletion is the feature, not a
   cleanup detail. Anything a guest can edit must go through `ChartStore` so the guest and
