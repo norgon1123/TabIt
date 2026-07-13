@@ -106,6 +106,23 @@ test("beats/measure edits still reach the server from inside Advanced options", 
   await waitFor(() => expect(patched).toEqual({ beats_per_measure: 3 }));
 });
 
+test("the editor is positioned against the chart area, not the viewport", async () => {
+  // It must anchor to the chord's row inside the chart (and scroll with it), so it has to
+  // render inside the positioned .chart-area rather than as a page-level floating rail.
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  await userEvent.click(await screen.findByText("I"));
+
+  const editor = (await screen.findByText("Edit segment")).closest(".segment-editor");
+  expect(editor).not.toBeNull();
+  expect(editor!.closest(".chart-area")).not.toBeNull();
+  expect((editor as HTMLElement).style.top).not.toBe("");
+});
+
 test("clicking off the selected chord closes the editor, clicking another keeps it", async () => {
   login();
   server.use(

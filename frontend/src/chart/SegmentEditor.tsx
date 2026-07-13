@@ -8,6 +8,9 @@ interface Props {
   segment: SegmentOut;
   allSegments: SegmentOut[];
   maxTotalBeats: number;
+  /** Offset, in px, from the top of the chart area to the row of the chord being edited.
+   *  Ignored below the breakpoint where the panel drops back into the flow. */
+  top?: number;
   onResize: (windows: SegmentWindowInput[]) => void;
   onSave: (patch: SegmentPatch) => Promise<void>;
   onDelete: () => void;
@@ -20,6 +23,7 @@ export default function SegmentEditor({
   segment,
   allSegments,
   maxTotalBeats,
+  top = 0,
   onResize,
   onSave,
   onDelete,
@@ -79,7 +83,7 @@ export default function SegmentEditor({
   }
 
   return (
-    <div className="card segment-editor" style={{ display: "grid", gap: 8 }}>
+    <div className="card segment-editor" style={{ display: "grid", gap: 8, top }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <strong>Edit segment</strong>
         {onClose && (
