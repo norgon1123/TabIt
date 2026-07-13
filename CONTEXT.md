@@ -24,6 +24,8 @@ copy.
 - **Optional heavy ML** — Demucs source separation and the deep chord model live behind
   the `[ml]` extra and are imported **lazily**, so the base app installs and runs
   without torch. Same pattern for the `[chordino]` extra (native Vamp plugin).
+- **Accounts are optional** — a logged-out visitor gets the whole experience for one song,
+  stored nowhere. See *Guest mode*.
 
 ## Charts are beat-native
 
@@ -47,6 +49,27 @@ This replaced an older seconds-native model. Any doc, comment, or memory saying 
 carry `start_time`/`end_time` *columns*, or that positions are millisecond-precision, is
 describing the old schema — see *Invariants*.
 
+## Guest mode (`app/guest.py`, `app/chart_store.py`)
+
+Anyone can upload a song and edit its chord sheet without registering. The point is a
+frictionless trial that leaves nothing behind, so a guest's data lives *only* in memory:
+
+- A `tabit_guest` browser-session cookie names one entry in the in-process `GuestStore`
+  (`GuestRecording` → `GuestAnalysis` → `GuestChart` → `GuestSegment` — dataclasses that
+  mirror the ORM models' attribute names). Nothing is written to the database.
+- The uploaded audio is scratch space for the analysis job: `analyze_guest_recording`
+  deletes it in a `finally`, so it is gone the moment processing ends either way. Playback
+  in the chord sheet uses the browser's own copy (an object URL), not the server.
+- One song at a time — a second upload during analysis is a `409`; after it, a new upload
+  replaces the entry. Entries expire on an idle TTL (`TABIT_GUEST_TTL_SECONDS`).
+- **`ChartStore` is the seam.** Every chart endpoint resolves a `Principal` (signed-in user
+  or guest) to a `DbChartStore` or a `GuestChartStore` and then runs the *same* handler, so
+  the two experiences cannot drift apart. `app/chart_seed.py` holds the seeding beat math
+  both analysis paths share.
+
+An account buys persistence: a stored library (`GET /api/recordings`, the one endpoint a
+guest gets a `401` from), audio kept on disk, and several songs at once.
+
 ## Backend map (`app/`)
 
 - `main.py` — app construction, router wiring, lifespan: `create_all`, then
@@ -56,11 +79,16 @@ describing the old schema — see *Invariants*.
 - `db.py`, `models.py`, `schemas.py` — engine/session, ORM models, Pydantic I/O shapes.
 - `migrations.py` — additive, idempotent `ALTER TABLE ... ADD COLUMN` migrations.
   Exists because `create_all` never adds columns to an existing table.
-- `deps.py`, `security.py` — DB/session dependencies, current-user + owned-recording
-  resolution, Argon2 hashing.
-- `storage.py` — uploaded audio under `TABIT_STORAGE_DIR` (atomic write via temp+rename).
-- `jobs.py` — `JobDispatcher` (thread pool), `analyze_recording`, and `_seed_chart`
-  (beat-native chart seeding). `_build_analyzer` picks the engine from config.
+- `deps.py`, `security.py` — DB/session dependencies, `Principal` (signed-in user *or*
+  guest), current-user + owned-recording resolution, Argon2 hashing.
+- `guest.py`, `chart_store.py`, `chart_seed.py` — the account-free path: the in-memory guest
+  store, the user/guest storage seam the chart router talks to, and the chart seeding both
+  analysis paths share.
+- `storage.py` — uploaded audio under `TABIT_STORAGE_DIR` (atomic write via temp+rename);
+  guest audio goes to `_guest/` and is swept at startup.
+- `jobs.py` — `JobDispatcher` (thread pool), `analyze_recording`, `analyze_guest_recording`
+  (in-memory, deletes the audio when done), and `_seed_chart`. `_build_analyzer` picks the
+  engine from config.
 - `music_theory.py` — pitch classes, `Quality`, key/transpose/roman-numeral helpers.
 - `routers/` — `auth.py`, `recordings.py`, `charts.py`.
 - `audio/` — the analysis pipeline:
@@ -145,16 +173,27 @@ Status lifecycle, polled via `GET /api/recordings/{id}/analysis`:
 Segment writes are validated against the grid: start < end, no overlap with siblings, and
 `end_beat` must not exceed `total_beats(grid, duration)`.
 
+Every one of these serves a guest as well as a signed-in user, with three exceptions that
+exist because a guest has no library and no stored audio: `GET /api/recordings` (401),
+`POST /{id}/analyze` (409 — re-upload instead), and `GET /{id}/audio` (404 once analysis has
+finished and the file has been deleted).
+
 ## Frontend map (`frontend/src/`)
 
 - `api/` — typed REST client (`client.ts`), `types.ts`, `music.ts`.
 - `auth/` — `AuthContext` (session-cookie auth state).
-- `pages/` — `LibraryPage`, `ChartEditorPage`, `LoginPage`, `RegisterPage`.
-- `chart/` — `useChart` (query/mutation hook), `useReanalyze`, `useMediaClock`
-  (playback clock), `Timeline`, `SegmentEditor`, `ScrubBar`, `TransposeControl`,
-  `TimeSignatureControl`, `chartLayout` (wrapping/layout), `beatGrid` + `beatMath`
-  (beat math, half-beat snapping), `timeMath` (pixel↔time, centisecond formatting).
-- `library/` — `useRecordings`, `UploadButton`, `audioDuration`, `filterSort`,
+- `pages/` — `HomePage` (the library when signed in, `GuestHomePage` when not),
+  `GuestHomePage` (upload + the chord sheet on one page), `LibraryPage`, `ChartEditorPage`,
+  `LoginPage`, `RegisterPage`.
+- `chart/` — `ChartSheet` (the chord sheet both pages render), `useChart` (query/mutation
+  hook), `useRecording`, `useReanalyze`, `useMediaClock` (playback clock), `Timeline`,
+  `SegmentEditor`, `ScrubBar`, `TransposeControl`, `TempoControl`, `TimeSignatureControl`,
+  `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat math, half-beat snapping),
+  `timeMath` (pixel↔time, centisecond formatting).
+- `guest/` — `useGuestSong`: holds the visitor's File for playback (the server deleted its
+  copy) and for re-analysis (which re-uploads it).
+- `library/` — `useRecordings`, `uploadRecording` (the one upload path, guest or not),
+  `UploadDropzone` (drag-and-drop or file picker), `audioDuration`, `filterSort`,
   `formatDate`.
 - `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`, `Spinner`.
 
@@ -175,6 +214,10 @@ Segment writes are validated against the grid: start < end, no overlap with sibl
   then fail with a clear, logged error).
 - New DB columns need `app/migrations.py` — `create_all` will not add them to an existing
   SQLite file.
+- **A guest leaves nothing behind.** No guest data may be written to the database, and their
+  audio must be deleted as soon as processing ends — that deletion is the feature, not a
+  cleanup detail. Anything a guest can edit must go through `ChartStore` so the guest and
+  signed-in chord sheets stay identical by construction.
 
 ## Multi-instrument work (Phase 0/1)
 

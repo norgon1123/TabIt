@@ -204,6 +204,12 @@ def test_dispatcher_uses_configured_min_segment_seconds(monkeypatch):
 
     assert get_settings().analysis_min_segment_seconds == 0.75
 
+    # Pin the engine: this asserts on `_min_segment_seconds`, which the template-based
+    # analyzers keep but BTCAnalyzer does not (it hands the value to BTCChordEngine as
+    # `min_seconds`). Without pinning, the test reads whatever engine the developer's .env
+    # happens to select and fails on TABIT_ANALYSIS_ENGINE=btc — a property of the machine,
+    # not of the code under test, which is that the *setting* reaches the analyzer.
+    monkeypatch.setenv("TABIT_ANALYSIS_ENGINE", "librosa")
     monkeypatch.setenv("TABIT_ANALYSIS_MIN_SEGMENT_SECONDS", "1.5")
     get_settings.cache_clear()
     get_job_dispatcher.cache_clear()

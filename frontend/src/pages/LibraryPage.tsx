@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import AnalysisStatusBadge from "../components/AnalysisStatusBadge";
-import UploadButton from "../library/UploadButton";
+import UploadDropzone from "../library/UploadDropzone";
 import { useRecordings } from "../library/useRecordings";
 import { formatUploadedAt } from "../library/formatDate";
 import { filterAndSortRecordings, type SortDir } from "../library/filterSort";
@@ -82,17 +82,15 @@ export default function LibraryPage() {
 
   return (
     <div className="container">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Library</h1>
-        <UploadButton
-          onUpload={(file) => {
-            // A rejected upload lands in uploadError below; swallow it here so it doesn't
-            // surface as an unhandled rejection.
-            void upload(file).catch(() => {});
-          }}
-          busy={isUploading}
-        />
-      </div>
+      <h1>Library</h1>
+      <UploadDropzone
+        onUpload={(file) => {
+          // A rejected upload lands in uploadError below; swallow it here so it doesn't
+          // surface as an unhandled rejection.
+          void upload(file).catch(() => {});
+        }}
+        busy={isUploading}
+      />
 
       {uploadError && <p className="error" role="alert">{uploadError}</p>}
 

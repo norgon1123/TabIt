@@ -44,9 +44,18 @@ def test_upload_creates_recording(client, tmp_path, monkeypatch):
     assert body["status"] == "uploaded"
 
 
-def test_upload_requires_auth(client):
+def test_upload_without_an_account_is_a_guest_upload(client, tmp_path, monkeypatch):
+    """Uploading logged-out no longer 401s — it starts a guest analysis, which owns no row.
+
+    The rest of that path is tests/test_guest.py; what matters here is that it stays out of
+    the recordings table.
+    """
+    monkeypatch.setenv("TABIT_STORAGE_DIR", str(tmp_path))
+
     resp = _upload(client)
-    assert resp.status_code == 401
+
+    assert resp.status_code == 201
+    assert client.get("/api/recordings").status_code == 401  # still no library without login
 
 
 def test_upload_rejects_recording_longer_than_ten_minutes(client, tmp_path, monkeypatch):
