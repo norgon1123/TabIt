@@ -5,6 +5,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from app.audio.decode import probe_duration
+from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user, get_owned_recording
 from app.jobs import JobDispatcher, get_job_dispatcher
@@ -20,6 +22,19 @@ _AUDIO_MEDIA_TYPES = {
     "mp3": "audio/mpeg",
     "wav": "audio/wav",
 }
+
+
+def _enforce_length_limit(seconds: float | None, limit: float) -> None:
+    """Reject a recording longer than the limit. Unknown length (None) passes."""
+    if seconds is None or seconds <= limit:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        detail=(
+            f"Recording is {seconds / 60:.1f} minutes long; "
+            f"the maximum is {limit / 60:g} minutes."
+        ),
+    )
 
 
 @router.get("", response_model=list[RecordingOut])
@@ -41,6 +56,11 @@ def upload_recording(
     user: User = Depends(get_current_user),
     dispatcher: JobDispatcher = Depends(get_job_dispatcher),
 ) -> Recording:
+    limit = get_settings().max_recording_seconds
+    # The browser-reported duration is untrusted, but when it already exceeds the limit we
+    # can say no before writing anything to disk.
+    _enforce_length_limit(duration_seconds, limit)
+
     filename = file.filename or "recording"
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
     rec = Recording(
@@ -55,6 +75,12 @@ def upload_recording(
     rec.stored_path = save_audio(user.id, rec.id, ext, file.file.read())
     db.add(Analysis(recording_id=rec.id, status="pending"))
     try:
+        # ffprobe the stored file: the server-decoded length is the authoritative one, and
+        # a client can under-report (or omit) the duration to slip a long file past us.
+        probed = probe_duration(rec.stored_path)
+        if probed is not None:
+            rec.duration_seconds = probed
+        _enforce_length_limit(probed, limit)
         db.commit()
     except Exception:
         # Roll back the row and remove the just-written file so neither is orphaned.
