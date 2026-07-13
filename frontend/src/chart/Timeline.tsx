@@ -8,6 +8,7 @@ import {
 } from "./chartLayout";
 import { beatSlashMarks, clampBeatBoundary } from "./beatMath";
 import { paintChordFill } from "./chordProgress";
+import { chordLabel } from "../api/music";
 
 export type { SegmentUpdate };
 
@@ -20,6 +21,10 @@ interface Props {
   playing?: boolean;
   rate?: number;
   selectedId: string | null;
+  /** Chords the player has yet to name (practice mode). A masked cell keeps its beats — the
+   *  rhythm is the question's context — but shows "?" for the chord, and drops the roman
+   *  numeral, which against a known key would hand over the answer. */
+  maskedIds?: ReadonlySet<string>;
   onSelect: (segmentId: string) => void;
   onSeek?: (time: number) => void;
   onResizeCommit?: (updates: SegmentUpdate[]) => void;
@@ -28,10 +33,7 @@ interface Props {
 // Horizontal pointer movement -> beats for the resize handles.
 const BEATS_PER_PIXEL = 0.05;
 
-function chordLabel(s: SegmentOut): string {
-  const q = s.chord_quality === "maj" ? "" : s.chord_quality === "min" ? "m" : s.chord_quality;
-  return `${s.chord_root}${q}`;
-}
+const NO_MASK: ReadonlySet<string> = new Set();
 
 export default function Timeline({
   segments,
@@ -41,6 +43,7 @@ export default function Timeline({
   playing = false,
   rate = 1,
   selectedId,
+  maskedIds = NO_MASK,
   onSelect,
   onSeek,
   onResizeCommit,
@@ -127,6 +130,7 @@ export default function Timeline({
             const i = indexById.get(s.id)!;
             const selected = s.id === selectedId;
             const isActive = s.id === activeId;
+            const masked = maskedIds.has(s.id);
             const beats = Math.max(0.5, s.end_beat - s.start_beat);
             // A bar line is drawn on the left edge of cells that start a measure.
             const onMeasure =
@@ -137,7 +141,13 @@ export default function Timeline({
                 role="button"
                 tabIndex={0}
                 aria-pressed={selected}
-                className={["chord-cell", isActive && "playing", selected && "selected"]
+                aria-label={masked ? `Hidden chord, ${beats} beats` : undefined}
+                className={[
+                  "chord-cell",
+                  isActive && "playing",
+                  selected && "selected",
+                  masked && "chord-cell--masked",
+                ]
                   .filter(Boolean)
                   .join(" ")}
                 data-segment-id={s.id}
@@ -172,19 +182,21 @@ export default function Timeline({
               >
                 {onResizeCommit && (
                   <span
-                    aria-label={`Resize start of ${chordLabel(s)}`}
+                    aria-label={`Resize start of ${chordLabel(s.chord_root, s.chord_quality)}`}
                     draggable={false}
                     onPointerDown={(e) => startResize(i, "left", e)}
                     onClick={(e) => e.stopPropagation()}
                     style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
                   />
                 )}
-                <strong>{chordLabel(s)}</strong>
+                <strong>{masked ? "?" : chordLabel(s.chord_root, s.chord_quality)}</strong>
                 <span className="muted slash-marks">{beatSlashMarks(beats)}</span>
-                <span className="muted">{s.roman_numeral}</span>
+                {/* The roman numeral names the chord's degree — against a key the player can
+                    see, that is the answer. Masked cells go without it. */}
+                <span className="muted">{masked ? "" : s.roman_numeral}</span>
                 {onResizeCommit && (
                   <span
-                    aria-label={`Resize end of ${chordLabel(s)}`}
+                    aria-label={`Resize end of ${chordLabel(s.chord_root, s.chord_quality)}`}
                     draggable={false}
                     onPointerDown={(e) => startResize(i, "right", e)}
                     onClick={(e) => e.stopPropagation()}

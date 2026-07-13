@@ -197,7 +197,36 @@ finished and the file has been deleted).
 - `library/` — `useRecordings`, `uploadRecording` (the one upload path, guest or not),
   `UploadDropzone` (drag-and-drop or file picker), `audioDuration`, `filterSort`,
   `formatDate`.
+- `practice/` — learning mode: `ModeChoice` (the chart-or-practice question), `ChordGuess`
+  (the answer form), `usePracticeSession` (what has been named), `answer` (marking),
+  `gate` (**who may practise — the one place that decides**). See *Practice mode*.
 - `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`, `Spinner`.
+
+## Practice mode (`frontend/src/practice/`)
+
+The chart with the answers taken away: the chords render as `?`, and the player names each
+one to reveal it. Analysis is unchanged — the same chart, shown differently.
+
+- **Every song is opened through a question.** `ModeChoice` asks *chart, or practice?* on the
+  chart page (`?mode=edit|practice`, so a reload keeps the answer) and on the guest home page
+  (per-song state — a new upload is a new question). Neither page decides who may practise.
+- **`practice/gate.ts` is the seam.** `PRACTICE_ACCESS` is `"everyone"` today, guests
+  included. Flip it to `"members"` and the option renders disabled, with the reason and a
+  link to register — that one constant is the whole change, and a test already covers the
+  locked rendering. A paid tier means adding `"pro"` to the union and a flag to `UserOut`;
+  the call sites already pass the user.
+- **Practice is read-only.** No resize handles, no Advanced options, no re-analyze, and tempo
+  and key are printed rather than editable — you cannot practise against a chart you are
+  rewriting. The roman numeral is masked too: against a key the player can see, it *is* the
+  answer.
+- **Marking is by pitch class** (`answer.ts`): a chart's Db is a player's C#, and both are
+  right. Quality is exact — hearing the seventh is the point.
+- Progress lives in memory (`usePracticeSession`) and dies with the page. A guest leaves
+  nothing behind, and a reload starts the song over.
+- The masking is **client-side**: the chords are in the chart payload the browser already
+  fetched, so devtools will show them. That is the right trade for a practice aid (playback
+  and marking stay instant and offline-ish); a cheat-proof mode would need the API to serve a
+  chart without chords and mark guesses server-side.
 
 ## Invariants (don't break these)
 

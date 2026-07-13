@@ -64,6 +64,13 @@ function drop(name = "song.mp3") {
   });
 }
 
+/** An uploaded song opens through the mode question — a guest is asked it just as a member
+ *  is. Answer it, and the chord sheet appears. */
+async function open(mode: "edit" | "practice" = "edit") {
+  const name = mode === "edit" ? /open the chart/i : /practice mode/i;
+  fireEvent.click(await screen.findByRole("button", { name }));
+}
+
 test("a logged-out visitor is invited to upload, without being asked to log in", async () => {
   renderWithProviders(<GuestHomePage />);
 
@@ -77,6 +84,7 @@ test("dropping a song shows its chord sheet below the upload area, on the same p
   renderWithProviders(<GuestHomePage />);
 
   drop();
+  await open();
 
   // The chord cells, and the controls that edit them — the signed-in chord sheet, verbatim.
   expect(await screen.findByLabelText("Resize end of C")).toBeInTheDocument();
@@ -93,6 +101,7 @@ test("playback uses the local file, since the server deleted the upload after an
   const { container } = renderWithProviders(<GuestHomePage />);
 
   drop();
+  await open();
 
   await screen.findByLabelText("Resize end of C");
   const audio = container.querySelector("audio")!;
@@ -106,6 +115,7 @@ test("re-analyzing re-sends the file the browser still holds", async () => {
   renderWithProviders(<GuestHomePage />);
 
   drop();
+  await open();
   await screen.findByLabelText("Resize end of C");
   fireEvent.click(screen.getByRole("button", { name: /re-analyze/i }));
 
@@ -158,6 +168,7 @@ test("a chord edit saved after re-counting the tempo reaches the server, and the
   );
   renderWithProviders(<GuestHomePage />);
   drop();
+  await open();
   await screen.findByLabelText("Resize end of C");
 
   fireEvent.click(screen.getByLabelText("Resize end of C").closest(".chord-cell")!);
@@ -181,4 +192,38 @@ test("signing up is offered as the way to keep the chart", async () => {
 
   const cta = await screen.findByRole("link", { name: /create an account/i });
   expect(cta).toHaveAttribute("href", "/register");
+});
+
+// The question is put to a guest as it is to a member — and under the shipped policy their
+// answer is just as free. Locking it later is `practice/gate.ts`'s business, not this page's.
+test("a guest is asked how to open the song, chart or practice", async () => {
+  analysisSucceeds();
+  renderWithProviders(<GuestHomePage />);
+
+  drop();
+
+  expect(await screen.findByRole("heading", { name: /how do you want to open/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /practice mode/i })).toBeEnabled();
+  // The chords are not on the page until the question is answered.
+  expect(screen.queryByText("C")).toBeNull();
+});
+
+test("a guest can practise: the chords are hidden until they name one", async () => {
+  analysisSucceeds();
+  renderWithProviders(<GuestHomePage />);
+
+  drop();
+  await open("practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  expect(screen.queryByLabelText("Resize end of C")).toBeNull(); // read-only while practising
+
+  // s1 is C major.
+  fireEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]);
+  fireEvent.change(await screen.findByLabelText("Root"), { target: { value: "C" } });
+  fireEvent.change(screen.getByLabelText("Quality"), { target: { value: "maj" } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+  expect(await screen.findByText("C")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(1));
 });

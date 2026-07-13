@@ -5,6 +5,10 @@ import { server } from "../test/server";
 import { renderWithProviders } from "../test/utils";
 import ChartEditorPage from "./ChartEditorPage";
 
+// Editing the chart is one of the two ways to open a song, so these open at `?mode=edit`.
+// A song opened with no mode lands on the chooser instead — that path, and practice mode
+// itself, are covered in ChartEditorPage.practice.test.tsx.
+
 function login() {
   server.use(http.get("/api/auth/me", () => HttpResponse.json({ id: "u1", username: "alice" })));
 }
@@ -32,7 +36,7 @@ test("selecting a segment and saving sends a PATCH", async () => {
       return HttpResponse.json({ ...CHART.segments[0], chord_quality: "min", roman_numeral: "i" });
     }),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await userEvent.click(await screen.findByText("I")); // select segment on the timeline
   await userEvent.selectOptions(await screen.findByLabelText(/quality/i), "min");
   await userEvent.click(screen.getByRole("button", { name: /save/i }));
@@ -50,7 +54,7 @@ test("transpose +1 posts to the chart", async () => {
       return HttpResponse.json({ ...CHART, key_tonic: "C#" });
     }),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await screen.findByText("I");
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
   await userEvent.click(screen.getByRole("button", { name: /\+1/ }));
@@ -63,7 +67,7 @@ test("transpose, beats/measure, and add-segment stay behind Advanced options", a
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
     http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await screen.findByText("I");
 
   // Tempo and key are the exception: they are read above the player, so they are edited
@@ -99,7 +103,7 @@ test("beats/measure edits still reach the server from inside Advanced options", 
       return HttpResponse.json({ ...CHART, beats_per_measure: 3 });
     }),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await screen.findByText("I");
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
   await userEvent.click(screen.getByRole("button", { name: "−" })); // 4 → 3 beats per measure
@@ -114,7 +118,7 @@ test("the editor is positioned against the chart area, not the viewport", async 
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
     http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await userEvent.click(await screen.findByText("I"));
 
   const editor = (await screen.findByText("Edit segment")).closest(".segment-editor");
@@ -129,7 +133,7 @@ test("clicking off the selected chord closes the editor, clicking another keeps 
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
     http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
 
   await userEvent.click(await screen.findByText("I"));
   expect(await screen.findByText("Edit segment")).toBeInTheDocument();
@@ -155,7 +159,7 @@ test("editing beats redistributes via the batch endpoint", async () => {
       return HttpResponse.json(CHART);
     }),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await userEvent.click(await screen.findByText("I")); // select C on the timeline
   const beats = await screen.findByLabelText(/beats/i);
   fireEvent.change(beats, { target: { value: "6" } });
