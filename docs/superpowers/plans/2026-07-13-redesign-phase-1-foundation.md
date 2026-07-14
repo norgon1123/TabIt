@@ -107,11 +107,21 @@ describe("contrastRatio", () => {
     );
   });
 
-  // Known value: #767676 on white is the canonical "exactly passes AA text" grey.
-  it("puts #767676 on white just over the AA text threshold", () => {
+  // These two greys straddle the AA text threshold on white: #767676 is 4.54:1 and
+  // #777777 is 4.48:1. Pinning them from BOTH sides is what proves this is the real
+  // WCAG formula and not an approximation of it — an implementation that is merely
+  // close would put them on the same side.
+  it("puts the canonical boundary greys on the correct sides of AA", () => {
     expect(contrastRatio("#767676", "#ffffff")).toBeGreaterThanOrEqual(AA_TEXT);
-    expect(contrastRatio("#777777", "#ffffff")).toBeGreaterThanOrEqual(AA_TEXT);
-    expect(contrastRatio("#787878", "#ffffff")).toBeGreaterThanOrEqual(AA_UI);
+    expect(contrastRatio("#777777", "#ffffff")).toBeLessThan(AA_TEXT);
+  });
+
+  it("still clears the lower UI threshold where it fails the text one", () => {
+    // 3:1 is the bar for borders, icons and focus rings — a colour can be legal for a
+    // control boundary while being illegal for body text. The two thresholds are not
+    // interchangeable, and the whole --line / --control-border split depends on the
+    // difference being real.
+    expect(contrastRatio("#777777", "#ffffff")).toBeGreaterThanOrEqual(AA_UI);
   });
 });
 
@@ -189,7 +199,7 @@ export function contrastRatio(a: string, b: string): number {
 cd frontend && npx vitest run src/theme/contrast.test.ts
 ```
 
-Expected: PASS, 7 tests.
+Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Fix the overstated spec bullet**
 
