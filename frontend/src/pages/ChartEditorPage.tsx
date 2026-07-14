@@ -4,9 +4,8 @@ import { PlaybackProvider } from "../chart/PlaybackContext";
 import ChartContextBar from "../chart/ChartContextBar";
 import { useRecording } from "../chart/useRecording";
 import { useReanalyze } from "../chart/useReanalyze";
-import Spinner from "../components/Spinner";
+import AnalyzingIndicator from "../chart/AnalyzingIndicator";
 import ModeChoice from "../practice/ModeChoice";
-import Stack from "../ui/Stack";
 import Button from "../ui/Button";
 import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
 import { useAuth } from "../auth/AuthContext";
@@ -64,11 +63,7 @@ export default function ChartEditorPage() {
                 </Button>
               )}
 
-              {inProgress && (
-                <Stack gap={1} className="muted">
-                  <Spinner label="Analyzing" /> Analyzing&hellip;
-                </Stack>
-              )}
+              {inProgress && <AnalyzingIndicator />}
             </>
           }
         />

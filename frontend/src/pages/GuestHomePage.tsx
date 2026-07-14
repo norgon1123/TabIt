@@ -5,7 +5,7 @@ import { PlaybackProvider } from "../chart/PlaybackContext";
 import { useRecording } from "../chart/useRecording";
 import { useGuestSong } from "../guest/useGuestSong";
 import UploadDropzone from "../library/UploadDropzone";
-import Spinner from "../components/Spinner";
+import AnalyzingIndicator from "../chart/AnalyzingIndicator";
 import ModeChoice from "../practice/ModeChoice";
 import Stack from "../ui/Stack";
 import Button from "../ui/Button";
@@ -60,35 +60,34 @@ export default function GuestHomePage() {
       )}
 
       {recordingId && audioUrl && (
-        <div className="guest-chart">
-          <Stack gap={3} wrap>
-            <h2 className="no-margin">{filename ?? "Chart"}</h2>
+        // AnalyzingIndicator (below, in the Stack) calls usePlayback() and can be on screen
+        // before a mode is chosen and ChartSheet exists — so the provider has to wrap this
+        // whole block, not just ChartSheet, or it throws outside its context.
+        <PlaybackProvider>
+          <div className="guest-chart">
+            <Stack gap={3} wrap>
+              <h2 className="no-margin">{filename ?? "Chart"}</h2>
 
-            {/* Re-analysis re-cuts the chart, which mid-practice would swap the questions
-                out from under the player. It belongs to the chart. */}
-            {mode === "edit" && (
-              <Button onClick={analyzeAgain} disabled={busy}>
-                Re-analyze
-              </Button>
-            )}
+              {/* Re-analysis re-cuts the chart, which mid-practice would swap the questions
+                  out from under the player. It belongs to the chart. */}
+              {mode === "edit" && (
+                <Button onClick={analyzeAgain} disabled={busy}>
+                  Re-analyze
+                </Button>
+              )}
 
-            {mode && canPractice(user) && (
-              <Button onClick={() => choose(practice ? "edit" : "practice")}>
-                {practice ? "Show the chords" : "Practice mode"}
-              </Button>
-            )}
+              {mode && canPractice(user) && (
+                <Button onClick={() => choose(practice ? "edit" : "practice")}>
+                  {practice ? "Show the chords" : "Practice mode"}
+                </Button>
+              )}
 
-            {inProgress && (
-              <Stack gap={1} className="muted">
-                <Spinner label="Analyzing" /> Analyzing&hellip;
-              </Stack>
-            )}
-          </Stack>
+              {inProgress && <AnalyzingIndicator />}
+            </Stack>
 
-          {mode == null ? (
-            <ModeChoice onChoose={choose} />
-          ) : (
-            <PlaybackProvider>
+            {mode == null ? (
+              <ModeChoice onChoose={choose} />
+            ) : (
               <ChartSheet
                 recordingId={recordingId}
                 // The server deleted the upload when analysis finished; play the local copy.
@@ -98,9 +97,9 @@ export default function GuestHomePage() {
                 inProgress={inProgress}
                 practice={practice}
               />
-            </PlaybackProvider>
-          )}
-        </div>
+            )}
+          </div>
+        </PlaybackProvider>
       )}
 
       <p className="muted guest-cta">

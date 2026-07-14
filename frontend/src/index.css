@@ -507,6 +507,12 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 .control-deck__scrub { flex: 1 1 auto; min-width: 8rem; }
 .control-deck__extra { flex: 0 0 auto; }
 
-@media (max-width: 600px) {
-  .control-deck__extra { display: none; }   /* the scrubber wins the narrow screen */
+/* Narrow screens: the deck WRAPS, it does not amputate. Tempo, key and "Where am I?" live
+   only here — hiding them would make them unreachable on the exact form factor the deck's
+   bottom-pinning was justified by. Play and the clock stay on the first line; the scrubber
+   and the extras wrap onto their own full-width lines below it. */
+@media (max-width: 700px) {
+  .control-deck__row { flex-wrap: wrap; }
+  .control-deck__scrub { flex-basis: 100%; order: 3; }
+  .control-deck__extra { order: 4; flex-basis: 100%; }
 }
