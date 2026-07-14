@@ -89,42 +89,22 @@ export default function ScrubBar({ currentTime, duration, playing, rate, onSeek 
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown}
-      style={{ position: "relative", height: 14, cursor: "pointer", touchAction: "none" }}
     >
-      <div
-        aria-hidden
-        style={{ position: "absolute", left: 0, right: 0, top: 6, height: 4, background: "#2c313a", borderRadius: 2 }}
-      />
+      <div aria-hidden className="scrub-track" />
       <div
         ref={fillRef}
         aria-hidden
         className="scrub-fill"
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 6,
-          height: 4,
-          width: "100%",
-          transformOrigin: "left",
-          transform: `scaleX(${frac})`,
-          background: "var(--accent)",
-          borderRadius: 2,
-        }}
+        // Runtime geometry ONLY: how far along the track playback has reached.
+        // Position, size, and colour live in CSS.
+        style={{ transform: `scaleX(${frac})` }}
       />
       <div
         ref={knobRef}
         aria-hidden
         className="scrub-knob"
-        style={{
-          position: "absolute",
-          top: 2,
-          left: `${frac * 100}%`,
-          width: 10,
-          height: 10,
-          marginLeft: -5,
-          borderRadius: "50%",
-          background: "var(--accent)",
-        }}
+        // Runtime geometry ONLY: the knob's position along the track.
+        style={{ left: `${frac * 100}%` }}
       />
     </div>
   );

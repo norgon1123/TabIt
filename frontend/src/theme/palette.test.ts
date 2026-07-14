@@ -135,7 +135,7 @@ describe("the stylesheet itself", () => {
   });
 
   it("has no hardcoded hex outside the token blocks", () => {
-    // Every colour must be a var(). #2c313a is currently written literally 5 times.
+    // Every colour must be a var(). The old cold blue-grey hex used to be written literally 5 times.
     const withoutTokenBlocks = css.replace(/(:root, \[data-theme="light"\]|\[data-theme="dark"\])\s*\{[^}]*\}/g, "");
     const strays = withoutTokenBlocks.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
     expect(strays, `hardcoded colours outside the palette: ${strays.join(", ")}`).toEqual([]);

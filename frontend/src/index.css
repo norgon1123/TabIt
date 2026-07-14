@@ -281,7 +281,14 @@ a { color: var(--accent); }
 }
 @media (max-width: 600px) { .container { padding: 12px; } }
 
+.scrub-bar { position: relative; height: 14px; cursor: pointer; touch-action: none; }
 .scrub-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scrub-track { position: absolute; left: 0; right: 0; top: 6px; height: 4px;
+  background: var(--control-border); border-radius: 2px; }
+.scrub-fill { position: absolute; left: 0; top: 6px; height: 4px; width: 100%;
+  transform-origin: left; background: var(--accent); border-radius: 2px; }
+.scrub-knob { position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px;
+  border-radius: 50%; background: var(--accent); }
 
 /* Click-to-edit chart settings (tempo, key) sitting above the player. At rest they read
    as plain text; the box only appears under the pointer, so the line stays a sentence

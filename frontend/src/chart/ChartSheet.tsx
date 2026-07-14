@@ -158,15 +158,13 @@ export default function ChartSheet({
         alongside the native <audio> controls (bad UX). Kept for later use;
         re-enable by uncommenting this block.
       */}
-      {/* <div style={{ marginTop: 8 }}>
-        <ScrubBar
-          currentTime={clock.currentTime}
-          duration={clock.duration || duration}
-          playing={clock.playing}
-          rate={clock.rate}
-          onSeek={clock.seek}
-        />
-      </div> */}
+      {/* <ScrubBar
+        currentTime={clock.currentTime}
+        duration={clock.duration || duration}
+        playing={clock.playing}
+        rate={clock.rate}
+        onSeek={clock.seek}
+      /> */}
 
       {practice && (
         <p className="muted chart-practice-status" role="status">
