@@ -1,5 +1,7 @@
 // frontend/src/chart/TimeSignatureControl.tsx
 import type { ChartSettingsPatch } from "./useChart";
+import Stack from "../ui/Stack";
+import Button from "../ui/Button";
 
 interface Props {
   beatsPerMeasure: number;
@@ -15,17 +17,21 @@ export default function TimeSignatureControl({
   busy,
 }: Props) {
   return (
-    <div className="card" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <span>Beats / measure: <strong>{beatsPerMeasure}</strong></span>
-      <button disabled={busy || beatsPerMeasure <= 1}
-              onClick={() => onChange({ beats_per_measure: beatsPerMeasure - 1 })}>−</button>
-      <button disabled={busy || beatsPerMeasure >= 16}
-              onClick={() => onChange({ beats_per_measure: beatsPerMeasure + 1 })}>+</button>
-      <span style={{ marginLeft: 12 }}>Bar-line shift: <strong>{measureOffset}</strong></span>
-      <button disabled={busy || measureOffset <= 0}
-              onClick={() => onChange({ measure_offset: measureOffset - 1 })}>◀</button>
-      <button disabled={busy || measureOffset >= beatsPerMeasure - 1}
-              onClick={() => onChange({ measure_offset: measureOffset + 1 })}>▶</button>
-    </div>
+    <Stack className="card" gap={4} wrap>
+      <Stack gap={2}>
+        <span>Beats / measure: <strong>{beatsPerMeasure}</strong></span>
+        <Button disabled={busy || beatsPerMeasure <= 1}
+                onClick={() => onChange({ beats_per_measure: beatsPerMeasure - 1 })}>−</Button>
+        <Button disabled={busy || beatsPerMeasure >= 16}
+                onClick={() => onChange({ beats_per_measure: beatsPerMeasure + 1 })}>+</Button>
+      </Stack>
+      <Stack gap={2}>
+        <span>Bar-line shift: <strong>{measureOffset}</strong></span>
+        <Button disabled={busy || measureOffset <= 0}
+                onClick={() => onChange({ measure_offset: measureOffset - 1 })}>◀</Button>
+        <Button disabled={busy || measureOffset >= beatsPerMeasure - 1}
+                onClick={() => onChange({ measure_offset: measureOffset + 1 })}>▶</Button>
+      </Stack>
+    </Stack>
   );
 }
