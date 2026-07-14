@@ -6,6 +6,9 @@ import { useRecordings } from "../library/useRecordings";
 import { formatUploadedAt } from "../library/formatDate";
 import { filterAndSortRecordings, type SortDir } from "../library/filterSort";
 import type { RecordingOut } from "../api/types";
+import Stack from "../ui/Stack";
+import Card from "../ui/Card";
+import Button from "../ui/Button";
 
 function RecordingName({
   recording,
@@ -36,23 +39,23 @@ function RecordingName({
 
   if (!editing) {
     return (
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <Stack gap={2}>
         <strong>{recording.original_filename}</strong>
-        <button
+        <Button
+          className="inline-edit__btn"
           onClick={() => {
             setName(recording.original_filename);
             setEditing(true);
           }}
-          style={{ padding: "2px 8px" }}
         >
           Rename
-        </button>
-      </div>
+        </Button>
+      </Stack>
     );
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <Stack gap={2}>
       <input
         autoFocus
         value={name}
@@ -63,13 +66,13 @@ function RecordingName({
           if (e.key === "Escape") setEditing(false);
         }}
       />
-      <button className="primary" onClick={save} disabled={busy} style={{ padding: "2px 8px" }}>
+      <Button variant="primary" className="inline-edit__btn" onClick={save} disabled={busy}>
         Save
-      </button>
-      <button onClick={() => setEditing(false)} disabled={busy} style={{ padding: "2px 8px" }}>
+      </Button>
+      <Button className="inline-edit__btn" onClick={() => setEditing(false)} disabled={busy}>
         Cancel
-      </button>
-    </div>
+      </Button>
+    </Stack>
   );
 }
 
@@ -94,18 +97,18 @@ export default function LibraryPage() {
 
       {uploadError && <p className="error" role="alert">{uploadError}</p>}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+      <Stack className="search-row" gap={2} wrap>
         <input
           type="search"
           placeholder="Search recordings"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          style={{ flex: "1 1 200px" }}
+          className="search-input"
         />
-        <button onClick={() => setSortDir((d) => (d === "newest" ? "oldest" : "newest"))}>
+        <Button onClick={() => setSortDir((d) => (d === "newest" ? "oldest" : "newest"))}>
           {sortDir === "newest" ? "Newest first" : "Oldest first"}
-        </button>
-      </div>
+        </Button>
+      </Stack>
 
       {isLoading && <p className="muted">Loading…</p>}
       {!isLoading && recordings.length === 0 && <p className="muted">No recordings yet. Upload one to start.</p>}
@@ -113,30 +116,32 @@ export default function LibraryPage() {
         <p className="muted">No recordings match your search.</p>
       )}
 
-      <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 12 }}>
+      <ul className="recording-list">
         {visible.map((r) => (
-          <li key={r.id} className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <RecordingName recording={r} onRename={(name) => rename(r.id, name)} />
-                <div className="muted" style={{ fontSize: "0.85em", marginTop: 4 }}>
-                  Uploaded {formatUploadedAt(r.created_at)}
-                </div>
+          <li key={r.id}>
+            <Card>
+              <Stack justify="between" gap={3} wrap>
                 <div>
-                  <AnalysisStatusBadge
-                    analysis={r.analysis}
-                    chart={r.chart}
-                    durationSeconds={r.duration_seconds}
-                  />
+                  <RecordingName recording={r} onRename={(name) => rename(r.id, name)} />
+                  <div className="muted recording-meta">
+                    Uploaded {formatUploadedAt(r.created_at)}
+                  </div>
+                  <div>
+                    <AnalysisStatusBadge
+                      analysis={r.analysis}
+                      chart={r.chart}
+                      durationSeconds={r.duration_seconds}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                {/* "Open", not "Open chart": the next page asks which way to open it. */}
-                {r.analysis?.status === "done" && <Link to={`/recordings/${r.id}`}>Open</Link>}
-                <button onClick={() => reanalyze(r.id)}>Re-analyze</button>
-                <button className="danger" onClick={() => remove(r.id)}>Delete</button>
-              </div>
-            </div>
+                <Stack gap={2} wrap>
+                  {/* "Open", not "Open chart": the next page asks which way to open it. */}
+                  {r.analysis?.status === "done" && <Link to={`/recordings/${r.id}`}>Open</Link>}
+                  <Button onClick={() => reanalyze(r.id)}>Re-analyze</Button>
+                  <Button variant="danger" onClick={() => remove(r.id)}>Delete</Button>
+                </Stack>
+              </Stack>
+            </Card>
           </li>
         ))}
       </ul>

@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent } from "react";
+import Button from "../ui/Button";
 
 const ACCEPT = "audio/*,.m4a,.mp3,.wav,.mp4";
 
@@ -45,40 +46,31 @@ export default function UploadDropzone({
         // keyboard-reachable way in.
         role="region"
         aria-label="Upload a recording"
+        className="dropzone"
+        data-dragging={over ? "true" : undefined}
+        data-busy={busy ? "true" : undefined}
         onDragOver={(e) => {
           e.preventDefault();
           if (!busy) setOver(true);
         }}
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
-        style={{
-          border: `2px dashed ${over ? "var(--accent)" : "#2c313a"}`,
-          borderRadius: 8,
-          padding: 24,
-          textAlign: "center",
-          background: over ? "rgba(255,255,255,0.03)" : "transparent",
-          opacity: busy ? 0.6 : 1,
-        }}
       >
         <input
           ref={inputRef}
           type="file"
           accept={ACCEPT}
-          style={{ display: "none" }}
+          className="dropzone__input"
           onChange={(e) => {
             choose(e.target.files?.[0]);
             e.target.value = "";
           }}
         />
-        <p style={{ margin: "0 0 12px" }}>Drag a song here</p>
-        <button className="primary" disabled={busy} onClick={() => inputRef.current?.click()}>
+        <p className="dropzone__lead">Drag a song here</p>
+        <Button variant="primary" disabled={busy} onClick={() => inputRef.current?.click()}>
           {busy ? "Uploading…" : "Choose a file"}
-        </button>
-        {hint && (
-          <p className="muted" style={{ margin: "12px 0 0", fontSize: "0.85em" }}>
-            {hint}
-          </p>
-        )}
+        </Button>
+        {hint && <p className="muted dropzone__hint">{hint}</p>}
       </div>
       {rejected && (
         <p className="error" role="alert">

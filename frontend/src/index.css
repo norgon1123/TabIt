@@ -218,6 +218,34 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 .inline-edit--editing input { width: 4.5rem; }
 .inline-edit__btn { padding: 2px 6px; border-radius: 6px; font-size: 0.85em; }
 
+/* ---- Library ----------------------------------------------------------------------- */
+.search-row { margin-top: var(--space-3); }
+.search-input { flex: 1 1 200px; }
+.recording-list { list-style: none; padding: 0; display: grid; gap: var(--space-3); }
+.recording-meta { font-size: var(--text-sm); margin-top: var(--space-1); }
+
+/* ---- Upload dropzone -----------------------------------------------------------------
+   An interactive region, so its boundary is a control boundary: --control-border, not the
+   decorative hairline. The dashed edge IS the affordance — it must be visible. The drag
+   highlight is token-driven (not a hardcoded white overlay) so it shows up in both themes:
+   on warm paper (light) it becomes a plain white card-surface fill behind an orange
+   border; on warm charcoal (dark) it becomes a lighter charcoal surface fill. */
+.dropzone {
+  border: 2px dashed var(--control-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  text-align: center;
+  background: transparent;
+}
+.dropzone[data-dragging="true"] {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.dropzone[data-busy="true"] { opacity: 0.6; }
+.dropzone__input { display: none; }
+.dropzone__lead { margin: 0 0 var(--space-3); }
+.dropzone__hint { margin: var(--space-3) 0 0; font-size: var(--text-sm); }
+
 @keyframes tabit-spin {
   to {
     transform: rotate(360deg);

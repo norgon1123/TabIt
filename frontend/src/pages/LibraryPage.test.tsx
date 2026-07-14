@@ -15,6 +15,12 @@ function login() {
   server.use(http.get("/api/auth/me", () => HttpResponse.json({ id: "u1", username: "alice" })));
 }
 
+function renderLibraryPage() {
+  login();
+  server.use(http.get("/api/recordings", () => HttpResponse.json([])));
+  return renderWithProviders(<LibraryPage />);
+}
+
 const TWO = [
   { id: "r1", original_filename: "Autumn Leaves.m4a", format: "m4a", duration_seconds: 30, status: "uploaded",
     created_at: "2026-06-01T00:00:00Z",
@@ -128,4 +134,10 @@ test("toggling sort reverses recording order", async () => {
   await userEvent.click(screen.getByRole("button", { name: /newest first/i }));
   const namesAfter = screen.getAllByText(/\.m4a$/).map((n) => n.textContent);
   expect(namesAfter[0]).toBe("Autumn Leaves.m4a");
+});
+
+test("has no inline styles left", async () => {
+  const { container } = renderLibraryPage();
+  await screen.findByText(/no recordings yet/i);
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
 });

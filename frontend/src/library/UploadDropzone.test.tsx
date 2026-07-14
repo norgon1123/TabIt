@@ -10,6 +10,10 @@ function dropFile(file: File) {
   fireEvent.drop(zone, { dataTransfer: { files: [file] } });
 }
 
+function renderDropzone() {
+  return renderWithProviders(<UploadDropzone onUpload={vi.fn()} busy={false} />);
+}
+
 test("uploads a file dropped on the zone", () => {
   const onUpload = vi.fn();
   renderWithProviders(<UploadDropzone onUpload={onUpload} busy={false} />);
@@ -45,4 +49,16 @@ test("ignores a drop while an upload is already in flight", () => {
   dropFile(song());
 
   expect(onUpload).not.toHaveBeenCalled();
+});
+
+test("has no inline styles left", () => {
+  const { container } = renderDropzone();
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
+test("is reachable and operable from the keyboard", () => {
+  // A drag-and-drop region that only responds to drag is unusable without a mouse.
+  // The "Choose a file" button is the keyboard path and must be a real button.
+  renderDropzone();
+  expect(screen.getByRole("button", { name: /choose a file/i })).toBeInTheDocument();
 });
