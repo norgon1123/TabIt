@@ -3,14 +3,14 @@ import ChartSheet from "../chart/ChartSheet";
 import { useRecording } from "../chart/useRecording";
 import { useReanalyze } from "../chart/useReanalyze";
 import Spinner from "../components/Spinner";
-import ModeChoice, { type ChartMode } from "../practice/ModeChoice";
-import { canPractice } from "../practice/gate";
+import ModeChoice from "../practice/ModeChoice";
+import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
 import { useAuth } from "../auth/AuthContext";
 
 /** The mode lives in the URL, so it survives a reload and can be linked to. Anything else —
  *  no `mode`, or a value we don't serve — means the question has not been answered yet. */
-function readMode(raw: string | null, allowPractice: boolean): ChartMode | null {
-  if (raw === "practice") return allowPractice ? "practice" : null;
+function readMode(raw: string | null): ChartMode | null {
+  if (raw === "practice") return "practice";
   return raw === "edit" ? "edit" : null;
 }
 
@@ -23,9 +23,17 @@ export default function ChartEditorPage() {
   const { reanalyze, isPending: reanalyzing } = useReanalyze(id);
 
   // A `?mode=practice` link that arrives once the feature is locked lands on the chooser
-  // rather than quietly opening the editor: the gate decides who practises, not the URL.
-  const mode = readMode(params.get("mode"), canPractice(user));
-  const choose = (next: ChartMode) => setParams({ mode: next }, { replace: true });
+  // rather than quietly opening it: the gate decides who practises, not the URL.
+  const mode = allowedMode(readMode(params.get("mode")), user);
+  const choose = (next: ChartMode) =>
+    setParams(
+      (prev) => {
+        // Set, don't replace: the mode is one param among whatever else the URL is carrying.
+        prev.set("mode", next);
+        return prev;
+      },
+      { replace: true },
+    );
   const practice = mode === "practice";
 
   if (isLoading) return <p className="muted container">Loading...</p>;

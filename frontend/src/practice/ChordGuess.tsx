@@ -13,7 +13,9 @@ interface Props {
   /** Offset, in px, from the top of the chart area to the row of the chord being named —
    *  the same measurement the segment editor uses, so the form lands beside its chord. */
   top?: number;
-  /** The player got it: reveal the chord on the chart. Fired after the green flash. */
+  /** Already named — in this sitting, or a moment ago. The form has nothing left to ask. */
+  solved?: boolean;
+  /** The player got it. Fired the instant they submit, not when the flash ends. */
   onSolved: (segmentId: string) => void;
   onClose?: () => void;
   revealMs?: number;
@@ -24,10 +26,16 @@ interface Props {
  * A wrong answer shakes the form red and leaves it standing, fields untouched, so the next
  * attempt is one click away. A right answer flashes green and then gets out of the way,
  * handing the chord back to the chart to display.
+ *
+ * The solve is reported the moment it is submitted; the green flash is a nicety played out
+ * over a chord that has *already* been named. Deferring the reveal to the end of the flash
+ * loses it for a player who does the natural thing and clicks straight on to the next "?" —
+ * this form unmounts and the chord they just got right goes back to being a question.
  */
 export default function ChordGuess({
   segment,
   top = 0,
+  solved = false,
   onSolved,
   onClose,
   revealMs = REVEAL_MS,
@@ -63,7 +71,7 @@ export default function ChordGuess({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (verdict === "right") return; // already solved, the reveal is in flight
+    if (verdict === "right") return; // already named; the form is just seeing itself out
 
     if (!isCorrectGuess({ root, quality }, segment)) {
       setVerdict("wrong");
@@ -71,8 +79,29 @@ export default function ChordGuess({
       return;
     }
 
+    // Named: banked on the chart now, so nothing about it depends on the player sitting
+    // still through the flash. The timer only dismisses the form.
     setVerdict("right");
-    timer.current = window.setTimeout(() => onSolved(segment.id), revealMs);
+    onSolved(segment.id);
+    timer.current = window.setTimeout(() => onClose?.(), revealMs);
+  }
+
+  // A chord named earlier in the sitting: say so, rather than selecting into a dead end or
+  // asking a question whose answer is on screen behind the panel.
+  if (solved && verdict !== "right") {
+    return (
+      <div ref={card} className="card chart-panel chord-guess" style={{ top }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <strong>{chordLabel(segment.chord_root, segment.chord_quality)}</strong>
+          {onClose && (
+            <button className="icon" aria-label="Close chord guess" onClick={onClose}>
+              &times;
+            </button>
+          )}
+        </div>
+        <p className="muted" style={{ margin: 0 }}>You named this one.</p>
+      </div>
+    );
   }
 
   return (

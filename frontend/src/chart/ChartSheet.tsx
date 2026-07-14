@@ -168,9 +168,11 @@ export default function ChartSheet({
 
       {practice && (
         <p className="muted" style={{ margin: "10px 0 0" }} role="status">
-          {session.solvedCount === session.total
-            ? `All ${session.total} chords named — the chart is yours.`
-            : `${session.solvedCount} of ${session.total} chords named. Click a “?” to name it.`}
+          {session.total === 0
+            ? "No chords in this chart — nothing to name."
+            : session.solvedCount === session.total
+              ? `All ${session.total} chords named — the chart is yours.`
+              : `${session.solvedCount} of ${session.total} chords named. Click a “?” to name it.`}
         </p>
       )}
 
@@ -192,15 +194,16 @@ export default function ChartSheet({
           onResizeCommit={practice ? undefined : applyResize}
         />
 
-        {selected && practice && session.masked.has(selected.id) && (
+        {selected && practice && (
           <ChordGuess
             key={selected.id}
             segment={selected}
             top={editorTop}
-            onSolved={(id) => {
-              session.reveal(id);
-              setSelectedId(null);
-            }}
+            solved={session.isSolved(selected.id)}
+            // Reveal on the chart as soon as it is named — the form owns its own goodbye, and
+            // stays mounted (green) through the flash rather than being unmounted by the
+            // reveal it just caused.
+            onSolved={session.reveal}
             onClose={() => setSelectedId(null)}
           />
         )}

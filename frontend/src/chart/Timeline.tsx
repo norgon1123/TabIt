@@ -159,6 +159,15 @@ export default function Timeline({
                   onSelect(s.id);
                   onSeek?.(s.start_time);
                 }}
+                // The cell says it is a button, so it has to answer to one. In practice mode
+                // this is the only way in: clicking a chord *is* the question, and a player on
+                // the keyboard would otherwise have no way to name a single one.
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault(); // Space scrolls the page otherwise
+                  onSelect(s.id);
+                  onSeek?.(s.start_time);
+                }}
                 style={{
                   position: "relative",
                   // Width tracks the chord's beat count within the line.

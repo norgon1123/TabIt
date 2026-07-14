@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { PRACTICE_ACCESS, practiceLock, type PracticeAccess } from "./gate";
+import { PRACTICE_ACCESS, practiceLock, type ChartMode, type PracticeAccess } from "./gate";
 
-export type ChartMode = "edit" | "practice";
+export type { ChartMode };
 
 /** The question every song is opened through: see the chords, or work them out?
  *

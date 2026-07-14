@@ -213,14 +213,21 @@ one to reveal it. Analysis is unchanged — the same chart, shown differently.
 - **`practice/gate.ts` is the seam.** `PRACTICE_ACCESS` is `"everyone"` today, guests
   included. Flip it to `"members"` and the option renders disabled, with the reason and a
   link to register — that one constant is the whole change, and a test already covers the
-  locked rendering. A paid tier means adding `"pro"` to the union and a flag to `UserOut`;
-  the call sites already pass the user.
+  locked world. A paid tier means adding `"pro"` to the union and a flag to `UserOut`; the
+  call sites already pass the user.
+- **`allowedMode()` is the lock; the disabled button is only the manners.** Every route into
+  a mode — the `?mode=` URL, a click on the chooser, the header toggle — goes through it, so
+  a locked-out visitor who deletes the `disabled` attribute or hand-types `?mode=practice`
+  still lands on the chooser. Add a route into practice mode, and route it through the gate.
 - **Practice is read-only.** No resize handles, no Advanced options, no re-analyze, and tempo
   and key are printed rather than editable — you cannot practise against a chart you are
   rewriting. The roman numeral is masked too: against a key the player can see, it *is* the
   answer.
 - **Marking is by pitch class** (`answer.ts`): a chart's Db is a player's C#, and both are
   right. Quality is exact — hearing the seventh is the point.
+- **A chord is named the moment it is submitted**, not when the green flash ends. The flash
+  decides when the *form* leaves, nothing more. Tying the reveal to the end of it loses the
+  answer of any player who does the natural thing and clicks straight on to the next `?`.
 - Progress lives in memory (`usePracticeSession`) and dies with the page. A guest leaves
   nothing behind, and a reload starts the song over.
 - The masking is **client-side**: the chords are in the chart payload the browser already

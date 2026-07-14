@@ -5,8 +5,8 @@ import { useRecording } from "../chart/useRecording";
 import { useGuestSong } from "../guest/useGuestSong";
 import UploadDropzone from "../library/UploadDropzone";
 import Spinner from "../components/Spinner";
-import ModeChoice, { type ChartMode } from "../practice/ModeChoice";
-import { canPractice } from "../practice/gate";
+import ModeChoice from "../practice/ModeChoice";
+import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
 import { useAuth } from "../auth/AuthContext";
 
 /** Tabit without an account: upload a song, and its chord sheet appears right below.
@@ -20,15 +20,20 @@ import { useAuth } from "../auth/AuthContext";
  * `practice/gate.ts`'s call, and this page does not second-guess it.
  */
 export default function GuestHomePage() {
-  const { recordingId, audioUrl, filename, upload, analyzeAgain, isUploading, uploadError } =
+  const { recordingId, songKey, audioUrl, filename, upload, analyzeAgain, isUploading, uploadError } =
     useGuestSong();
   const { analysis, duration, inProgress } = useRecording(recordingId);
   const { user } = useAuth();
   const busy = isUploading || inProgress;
 
-  // The mode is per-song: a new upload is a new song, and a fresh question.
+  // The mode is per-song, and a re-analysis is not a new song — it mints a new recording id
+  // for the same one, and re-asking the question there would throw away the chart the visitor
+  // is looking at. Key on the song, not the id.
   const [mode, setMode] = useState<ChartMode | null>(null);
-  useEffect(() => setMode(null), [recordingId]);
+  useEffect(() => setMode(null), [songKey]);
+  // Every route into a mode goes through the gate, here as on the editor page: the disabled
+  // button in the chooser is the manners, this is the lock.
+  const choose = (next: ChartMode) => setMode(allowedMode(next, user));
   const practice = mode === "practice";
 
   return (
@@ -65,7 +70,7 @@ export default function GuestHomePage() {
             )}
 
             {mode && canPractice(user) && (
-              <button onClick={() => setMode(practice ? "edit" : "practice")}>
+              <button onClick={() => choose(practice ? "edit" : "practice")}>
                 {practice ? "Show the chords" : "Practice mode"}
               </button>
             )}
@@ -78,7 +83,7 @@ export default function GuestHomePage() {
           </div>
 
           {mode == null ? (
-            <ModeChoice onChoose={setMode} />
+            <ModeChoice onChoose={choose} />
           ) : (
             <ChartSheet
               recordingId={recordingId}

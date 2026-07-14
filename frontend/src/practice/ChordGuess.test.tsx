@@ -51,10 +51,13 @@ test("a second wrong answer shakes again", async () => {
   expect(card.className).toMatch(/shake/);
 });
 
-test("the right answer is confirmed in green, then reveals the chord", async () => {
+// A long flash, so "has not dismissed itself yet" is a fact about the code and not a race
+// against the clock the assertions run on.
+test("the right answer is confirmed in green, and named at once", async () => {
   const onSolved = vi.fn();
+  const onClose = vi.fn();
   const { container } = render(
-    <ChordGuess segment={SEGMENT} onSolved={onSolved} revealMs={10} />,
+    <ChordGuess segment={SEGMENT} onSolved={onSolved} onClose={onClose} revealMs={10_000} />,
   );
 
   await guess("G", "Dominant 7th");
@@ -64,8 +67,41 @@ test("the right answer is confirmed in green, then reveals the chord", async () 
   expect(container.querySelector(".chord-guess--right")).not.toBeNull();
   expect(screen.queryByRole("alert")).toBeNull();
 
-  // The form hands the chord to the chart and dismisses itself.
-  await waitFor(() => expect(onSolved).toHaveBeenCalledWith("s1"));
+  // The chord is handed to the chart on submit — while the form is still standing there
+  // green. The flash only decides when the form leaves.
+  expect(onSolved).toHaveBeenCalledWith("s1");
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test("the form sees itself out once the flash is over", async () => {
+  const onClose = vi.fn();
+  render(<ChordGuess segment={SEGMENT} onSolved={vi.fn()} onClose={onClose} revealMs={10} />);
+
+  await guess("G", "Dominant 7th");
+
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+});
+
+// A player who names a chord and immediately clicks the next "?" tears this form down
+// mid-flash. The answer was right when they gave it; it cannot depend on them sitting still.
+test("the solve survives the form being torn down during the green flash", async () => {
+  const onSolved = vi.fn();
+  const { unmount } = render(
+    <ChordGuess segment={SEGMENT} onSolved={onSolved} revealMs={10_000} />,
+  );
+
+  await guess("G", "Dominant 7th");
+  unmount();
+
+  expect(onSolved).toHaveBeenCalledWith("s1");
+});
+
+test("a chord already named says so, instead of asking again", () => {
+  render(<ChordGuess segment={SEGMENT} solved onSolved={vi.fn()} />);
+
+  expect(screen.getByText("Gdom7")).toBeInTheDocument();
+  expect(screen.getByText(/you named this one/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
 });
 
 // Db on the chart, C# in the player's hands: the same chord.

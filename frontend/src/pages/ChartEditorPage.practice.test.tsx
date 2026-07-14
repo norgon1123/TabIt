@@ -116,6 +116,79 @@ test("a wrong answer keeps the chord hidden; the right one reveals it", async ()
   expect(screen.getByText("V7")).toBeInTheDocument();
 });
 
+// The green flash is 700ms of "yes, that's it" — and an eager player spends it clicking the
+// next "?". Nothing about naming a chord may depend on them sitting still afterwards: the
+// answer is right the moment it is submitted, and the flash is a nicety on top of a solve
+// that has already happened.
+test("a correct answer sticks even if the player moves straight on to the next chord", async () => {
+  login();
+  serveChart();
+  open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  await userEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[1]); // s2
+
+  const form = (await screen.findByText("Name that chord")).closest(".chord-guess") as HTMLElement;
+  await userEvent.selectOptions(within(form).getByLabelText("Root"), "G");
+  await userEvent.selectOptions(within(form).getByLabelText("Quality"), "Dominant 7th");
+  await userEvent.click(within(form).getByRole("button", { name: "Submit" }));
+
+  // Straight on to the other chord, without waiting for the flash to finish. (s1 is first in
+  // the chart either way, so this picks it whether or not s2 has already been revealed.)
+  await userEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]);
+
+  expect(screen.getByText("Gdom7")).toBeInTheDocument(); // still named
+  expect(screen.getAllByText("?")).toHaveLength(1);
+  expect(screen.getByText(/1 of 2 chords named/i)).toBeInTheDocument();
+});
+
+// Practice mode's only interaction is clicking a chord, so a chord that cannot be reached
+// from the keyboard cannot be played at all — the cell announces itself as a button, and has
+// to behave like one.
+test("a masked chord opens with the keyboard", async () => {
+  login();
+  serveChart();
+  open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  screen.getAllByRole("button", { name: /hidden chord/i })[0].focus();
+  await userEvent.keyboard("{Enter}");
+
+  expect(await screen.findByText("Name that chord")).toBeInTheDocument();
+});
+
+test("clicking a chord you have already named shows it, rather than an empty selection", async () => {
+  login();
+  serveChart();
+  open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  await userEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]); // s1 = C
+
+  const form = (await screen.findByText("Name that chord")).closest(".chord-guess") as HTMLElement;
+  await userEvent.selectOptions(within(form).getByLabelText("Root"), "C");
+  await userEvent.selectOptions(within(form).getByLabelText("Quality"), "Major");
+  await userEvent.click(within(form).getByRole("button", { name: "Submit" }));
+  await waitFor(() => expect(screen.queryByText("Name that chord")).toBeNull());
+
+  // Back to a chord that is already named: it says so, instead of selecting into nothing.
+  await userEvent.click(screen.getByText("C").closest(".chord-cell")!);
+  expect(await screen.findByText(/you named this one/i)).toBeInTheDocument();
+  expect(screen.queryByText("Name that chord")).toBeNull();
+});
+
+test("a chart with no chords does not congratulate the player on naming all zero of them", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json({ ...CHART, segments: [] })),
+  );
+  open("/recordings/r1?mode=practice");
+
+  expect(await screen.findByText(/no chords in this chart/i)).toBeInTheDocument();
+  expect(screen.queryByText(/all 0 chords named/i)).toBeNull();
+});
+
 test("the player can give up and switch to the chart", async () => {
   login();
   serveChart();
