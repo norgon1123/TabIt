@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -146,6 +146,40 @@ test("clicking off the selected chord closes the editor, clicking another keeps 
   // Off the chart entirely: the editor goes away.
   await userEvent.click(document.body);
   await waitFor(() => expect(screen.queryByText("Edit segment")).not.toBeInTheDocument());
+});
+
+test("keyboard-only: Tab to a chord, Enter opens the segment editor with a half-beat Beats field", async () => {
+  // Drag-to-resize handles are out of scope entirely (no keyboard support, possibly removed
+  // later) ONLY because this path is claimed to exist: Tab to a chord cell, press Enter, and
+  // resize it via the Beats field instead of dragging. Timeline.test.tsx proves the cell is
+  // focusable and that Enter fires onSelect, but only against a mock callback — it can't see
+  // whether ChartSheet actually wires that callback up to render SegmentEditor. This test
+  // renders the real page end to end so that wiring is under test too. If someone breaks it,
+  // the accessibility justification for cutting drag-to-resize silently stops being true — do
+  // not delete this as "redundant" with the Timeline unit test; it covers different code.
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
+  await screen.findByText("I"); // chart loaded
+
+  // Tab through whatever precedes the chart (library link, re-analyze, tempo, key, ...)
+  // until focus lands on a chord cell. No .click() anywhere in this test.
+  let guard = 0;
+  while (!(document.activeElement as HTMLElement | null)?.hasAttribute("data-segment-id")) {
+    if (++guard > 40) throw new Error("never reached a chord cell by tabbing");
+    await userEvent.tab();
+  }
+  expect(document.activeElement).toHaveAttribute("data-segment-id", "s1");
+
+  await userEvent.keyboard("{Enter}");
+
+  const editor = await screen.findByRole("group", { name: "Edit segment" });
+  const beats = within(editor).getByLabelText(/beats/i);
+  expect(beats).toHaveAttribute("step", "0.5");
+  expect(beats).toHaveAttribute("min", "0.5");
 });
 
 test("editing beats redistributes via the batch endpoint", async () => {
