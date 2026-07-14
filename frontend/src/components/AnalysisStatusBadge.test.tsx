@@ -55,3 +55,19 @@ test("falls back to the detected tempo when the chart carries no tempo of its ow
   );
   expect(container.textContent).toBe("done · 144 BPM · A minor");
 });
+
+test("has no inline styles left", () => {
+  const { container } = render(<AnalysisStatusBadge analysis={{ ...base, status: "failed", error: "boom" }} />);
+  const styled = container.querySelectorAll("[style]");
+  expect(
+    Array.from(styled).map((e) => e.outerHTML.slice(0, 80)),
+    "AnalysisStatusBadge must carry no inline styles — colour must come from a class",
+  ).toEqual([]);
+});
+
+test("carries the status as a class, so colour is never the only channel", () => {
+  const { container } = render(<AnalysisStatusBadge analysis={{ ...base, status: "failed", error: "boom" }} />);
+  // The status word ("failed") is always in the text too — the class only supplements it.
+  expect(container.querySelector(".status--failed")).not.toBeNull();
+  expect(container.textContent).toContain("failed");
+});

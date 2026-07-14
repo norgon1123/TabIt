@@ -224,6 +224,46 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
   }
 }
 
+/* ---- Header ---------------------------------------------------------------------
+   The hairline under the header is decorative chrome, not a control boundary — --line,
+   not --control-border. */
+.app-header { border-bottom: 1px solid var(--line); }
+.app-header .container { padding-top: var(--space-3); padding-bottom: var(--space-3); }
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+  text-decoration: none;
+  color: var(--text);
+}
+
+/* ---- Spinner --------------------------------------------------------------------
+   Sized in em so it scales with whatever text it sits beside (e.g. the status badge)
+   rather than carrying its own pixel size as an inline style. */
+.spinner {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1em;
+  height: 1em;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tabit-spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2s; }
+}
+
+/* ---- Analysis status badge --------------------------------------------------------
+   Status colour is SUPPLEMENTARY. The badge always renders the status word, so a
+   colourblind user loses nothing. Never let the hue be the only channel. */
+.status { font-weight: var(--weight-bold); }
+.status__meta { font-weight: var(--weight-normal); }
+.status--pending { color: var(--muted); }
+.status--running { color: var(--accent); }
+.status--done    { color: var(--ok); }
+.status--failed  { color: var(--danger); }
+
 /* ---- Practice mode ------------------------------------------------------------------
    The chord is a question until the player names it. A masked cell keeps its shape, its
    beats and its bar lines — only the answer is withheld, so the chart still reads as a

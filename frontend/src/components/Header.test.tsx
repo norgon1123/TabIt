@@ -23,3 +23,24 @@ test("shows logout when logged in and calls the endpoint", async () => {
   await userEvent.click(await screen.findByRole("button", { name: /log out/i }));
   await waitFor(() => expect(loggedOut).toBe(true));
 });
+
+// Header now renders ThemeToggle, which needs the ThemeProvider that
+// renderWithProviders supplies.
+test("offers the theme toggle", () => {
+  renderWithProviders(<Header />);
+  expect(screen.getByRole("button", { name: /switch to/i })).toBeInTheDocument();
+});
+
+test("has no inline styles left", () => {
+  const { container } = renderWithProviders(<Header />);
+  const styled = container.querySelectorAll("[style]");
+  expect(
+    Array.from(styled).map((e) => e.outerHTML.slice(0, 80)),
+    "Header must carry no inline styles — they cannot respond to a theme",
+  ).toEqual([]);
+});
+
+test("marks its nav as a landmark", () => {
+  renderWithProviders(<Header />);
+  expect(screen.getByRole("navigation")).toBeInTheDocument();
+});
