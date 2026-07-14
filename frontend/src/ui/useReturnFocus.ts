@@ -16,16 +16,29 @@ export default function useReturnFocus<T extends HTMLElement = HTMLElement>(
   useEffect(() => {
     if (!active) return;
 
+    // Capture the node now. Reading ref.current inside the cleanup is unreliable — React
+    // may have detached it by then.
+    const panel = ref.current;
     opener.current = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
+    panel?.focus();
 
     return () => {
-      // Only give focus back if it is still inside the panel we are closing. If the user
-      // has already Tabbed somewhere else, yanking them back would be the rude version of
-      // being helpful.
       const returning = opener.current;
       opener.current = null;
-      if (returning && document.body.contains(returning)) returning.focus();
+      if (!returning || !document.body.contains(returning)) return;
+
+      // Only give focus back if the user has NOT moved on. If focus is still inside the
+      // panel we are closing (the normal case — they pressed Escape or the close button),
+      // or nowhere in particular, return it. If they have Tabbed somewhere else, leave
+      // them there.
+      //
+      // This is not hypothetical: ChordGuess closes itself on a timer after a correct
+      // answer. Without this check, a keyboard user who Tabs away during the reveal gets
+      // dragged back to the chord cell they had already left.
+      const now = document.activeElement;
+      const stillInPanel = panel != null && now != null && panel.contains(now);
+      const nowhere = now == null || now === document.body;
+      if (stillInPanel || nowhere) returning.focus();
     };
   }, [active]);
 
