@@ -186,7 +186,7 @@ export default function Timeline({
                     : onMeasure
                       ? "3px solid var(--bar-line)"
                       : "1px solid var(--line)",
-                  background: isActive ? "#26303f" : "var(--panel)",
+                  background: isActive ? "#26303f" : "var(--surface)",
                 }}
               >
                 {onResizeCommit && (

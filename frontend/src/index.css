@@ -1,30 +1,129 @@
+/* ---- Tokens -------------------------------------------------------------------------
+   The single source of truth for every visual value in Tabit. Nothing below this block,
+   and nothing in a component, may hardcode a colour, a space, a radius or a size.
+
+   Two themes, ONE design. Light is warm paper; dark is warm charcoal. They are the same
+   app in different light — not two personalities behind a switch. Both are deliberately
+   warm: the old near-black blue-grey was blue-cold DAW chrome, which told a beginner "this
+   tool is not for you."
+
+   Theme is about the room the user is in. Mode (chart vs practice) is about what the app
+   is doing. They are orthogonal — practice mode must NOT be "the dark theme".
+
+   Every pair here is contrast-tested at WCAG AA by theme/palette.test.ts. If you change a
+   colour, that test tells you whether you are allowed to.
+
+   Three tokens do the job the old `--line` was doing alone, because it was doing two jobs
+   and one of them badly:
+
+     --line            decorative hairline — a card's edge, the divider between two chords
+                       in the same bar. NOT WCAG-governed (a card is not a control, and a
+                       chord is identified by its label). But kept perceptible at ~1.85:1,
+                       because a card differs from the page by only 1.05:1 — the border and
+                       the shadow are what make a card visible at all, not its fill.
+     --control-border  the boundary of an input, select or button. A real UI component
+                       boundary, so WCAG 1.4.11 applies: 3:1, enforced.
+     --bar-line        the measure rule on the chart. A graphical object that says "a bar
+                       starts here": 3:1, enforced, and heavier than --line by BOTH colour
+                       and width. Two channels, never hue alone.
+
+   Every value below has been checked — all 30 governed pairs clear AA in both themes. */
+
+:root, [data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #fdf9f3;              /* warm paper, not sterile #ffffff */
+  --surface: #ffffff;         /* a card, raised off the paper */
+  --text: #1f1b16;            /* warm ink                          16.3:1 on bg */
+  --muted: #635a50;           /*                                    6.4:1 on bg */
+  --line: #c4b8a6;            /* decorative hairline                1.9:1 — see above */
+  --control-border: #958b7e;  /* input/button boundary              3.2:1 on bg, 3.4:1 on surface */
+  --bar-line: #7d7060;        /* the measure rule                   4.6:1 on bg */
+  --accent: #b8480f;          /* "now / active". Nothing else may borrow it.  5.0:1 on bg */
+  --on-accent: #ffffff;       /* label on an accent fill            5.3:1 on accent */
+  --danger: #b3261e;          /*                                    6.2:1 on bg */
+  --ok: #1c7a52;              /*                                    5.1:1 on bg */
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #1a1714;              /* warm charcoal — brown-black, NOT the old blue-black */
+  --surface: #232019;
+  --text: #f2ede4;            /*                                   15.3:1 on bg */
+  --muted: #a89d8d;           /*                                    6.7:1 on bg */
+  --line: #4a443b;            /* decorative hairline                1.9:1 */
+  --control-border: #787063;  /* input/button boundary              3.7:1 on bg, 3.3:1 on surface */
+  --bar-line: #9c9280;        /* the measure rule                   5.8:1 on bg */
+  --accent: #ff9d4d;          /*                                    8.7:1 on bg */
+  --on-accent: #241505;       /*                                    8.6:1 on accent */
+  --danger: #ff8a80;          /*                                    7.8:1 on bg */
+  --ok: #5fd39b;              /*                                    9.6:1 on bg */
+}
+
 :root {
-  --bg: #14161a;
-  --panel: #1e2127;
-  --text: #e6e8ec;
-  --muted: #9aa0a8;
-  --accent: #4f8cff;
-  /* Chart rules: --line is the divider between chords, --bar-line the heavier
-     rule at a measure start. Both stay neutral — the accent means "selected or
-     playing", and nothing else may borrow it. */
-  --line: #2c313a;
-  --bar-line: #5a6270;
-  --danger: #ff5d5d;
-  --ok: #46c98b;
-  font-family: system-ui, -apple-system, sans-serif;
+  /* ---- Space. A 4px base. Nothing in the app may invent a gap. ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* ---- Radius ---- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ---- Type. Figtree is variable, so the weight range is free. ---- */
+  --font-ui: "Figtree Variable", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-ui);
+  --font-chart: var(--font-ui);
+
+  --text-xs: 0.78rem;
+  --text-sm: 0.88rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.6rem;
+  --text-2xl: 2.1rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  --weight-normal: 400;
+  --weight-medium: 550;
+  --weight-bold: 700;
+
+  /* ---- Shadow ---- */
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 18%);
+
+  /* ---- Chart geometry ----
+     The chord cell is sized from a TOKEN, never from its content. A content-sized cell
+     re-wraps the whole chart the day someone swaps the typeface for a wider one — this
+     token means a font change can alter the chart's texture but never its layout.
+     Wide enough for the longest label the app can produce (e.g. "F#m7"). */
+  --chord-cell-min: 4.5rem;
+
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: var(--leading-normal);
+}
+
+[data-theme="dark"] {
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 45%);
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 .container { max-width: 880px; margin: 0 auto; padding: 16px; }
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid #2c313a;
-  background: var(--panel); color: var(--text); padding: 8px 12px; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--control-border);
+  background: var(--surface); color: var(--text); padding: 8px 12px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 button:disabled { opacity: 0.5; cursor: default; }
-input, select { font: inherit; background: var(--panel); color: var(--text);
-  border: 1px solid #2c313a; border-radius: 8px; padding: 8px; }
+input, select { font: inherit; background: var(--surface); color: var(--text);
+  border: 1px solid var(--control-border); border-radius: 8px; padding: 8px; }
 a { color: var(--accent); }
-.card { background: var(--panel); border: 1px solid #2c313a; border-radius: 12px; padding: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
 button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color: var(--muted); }
@@ -44,7 +143,7 @@ button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color
   z-index: 10;
   left: calc(100% + 16px);
   width: 190px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  box-shadow: var(--shadow-panel);
 }
 .chart-panel label { display: grid; gap: 4px; }
 .chart-panel select, .chart-panel input { width: 100%; }
@@ -69,9 +168,9 @@ button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color
 .inline-edit { display: inline-flex; align-items: center; gap: 6px; font: inherit;
   color: var(--text); background: transparent; border: 1px solid transparent;
   border-radius: 8px; padding: 4px 8px; cursor: pointer; }
-button.inline-edit:hover:not(:disabled) { background: var(--panel); border-color: var(--line); }
+button.inline-edit:hover:not(:disabled) { background: var(--surface); border-color: var(--line); }
 button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.inline-edit--editing { background: var(--panel); border-color: var(--line); padding: 3px 6px;
+.inline-edit--editing { background: var(--surface); border-color: var(--line); padding: 3px 6px;
   cursor: default; }
 .inline-edit--editing input, .inline-edit--editing select { padding: 3px 4px; border-radius: 6px; }
 .inline-edit--editing input { width: 4.5rem; }
