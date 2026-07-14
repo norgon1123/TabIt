@@ -6,18 +6,23 @@ name: Refresh context docs
 # in-flight PR its own doc commit, and those commits would conflict with each other. Merges
 # to main are serialized by definition, so this is the only place it is safe to do.
 #
-# There is no loop risk: the paths filter below deliberately EXCLUDES AGENTS.md and
-# CONTEXT.md, so merging the docs PR this workflow opens cannot retrigger it.
+# No loop risk: the paths filter below deliberately EXCLUDES AGENTS.md and CONTEXT.md, so
+# merging the docs PR this workflow opens cannot retrigger it.
 #
-# Auth: uses a Claude subscription (Max), NOT an API key. A Pro/Max plan includes no API
-# credits — console.anthropic.com billing is a separate ledger. Instead, mint a long-lived
-# OAuth token from the subscription and store it as a repo secret:
+# Why the raw CLI and not anthropics/claude-code-action: that action only accepts
+# issue/PR/dispatch/schedule/workflow_run events and hard-errors with
+# "Unsupported event type: push" on a push trigger. It is built to reply to PR and issue
+# conversations, which is not what this job does -- we just need a headless run.
+#
+# Auth: a Claude subscription (Max), NOT an API key -- a Pro/Max plan includes no API
+# credits; console.anthropic.com billing is a separate ledger. Mint a long-lived token
+# from the subscription and store it as a repo secret:
 #
 #     claude setup-token                                   # prints a token (valid ~1 year)
 #     gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo norgon1123/tabit
 #
-# The token does NOT auto-renew — it must be regenerated when it expires.
-# To use API billing instead, swap the input below for `anthropic_api_key`.
+# The token does NOT auto-renew -- regenerate it when it expires. CI runs draw on the
+# subscription's usage limits.
 
 on:
   push:
@@ -48,13 +53,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Regenerate the docs
-        uses: anthropics/claude-code-action@v1
+      - uses: actions/setup-node@v4
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: >-
-            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git diff:*),Bash(git log:*),Bash(ls:*)"
-          prompt: |
+          node-version: "22"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Regenerate the docs
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PROMPT: |
             Use the tabit-context-docs skill to refresh this repo's context docs against
             the code as it now stands on main.
 
@@ -62,15 +71,33 @@ jobs:
 
               - CONTEXT.md: you own the whole file.
               - AGENTS.md: rewrite ONLY the part BELOW the
-                "▼▼▼ GENERATED BELOW — DO NOT HAND-EDIT ▼▼▼" marker.
-                Do not alter a single byte above that marker, including the marker itself.
-                That zone is hand-maintained policy and is not yours.
+                "GENERATED BELOW - DO NOT HAND-EDIT" marker. Do not alter a single byte
+                above that marker, including the marker itself. That zone is
+                hand-maintained policy and is not yours.
 
-            If the code contradicts something in the policy zone, DO NOT change the policy.
-            Leave it alone and describe the conflict in your final message so a human can
-            judge it — that report is the most valuable thing you produce here.
+            If the code contradicts something in the policy zone, DO NOT change the
+            policy. Leave it alone and describe the conflict in your final message so a
+            human can judge it -- that report is the most valuable thing you produce here.
 
             If nothing has actually drifted, change nothing and say so.
+        run: |
+          claude -p "$PROMPT" \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git diff:*),Bash(git log:*),Bash(ls:*)"
+
+      - name: Fail if the policy zone was touched
+        run: |
+          # The zone is a promise. Verify it mechanically rather than trusting the model:
+          # if anything above the marker changed, abandon the run instead of opening a PR.
+          marker='GENERATED BELOW'
+          before=$(git show HEAD:AGENTS.md | awk -v m="$marker" 'index($0,m){exit} {print}' | sha256sum)
+          after=$(awk -v m="$marker" 'index($0,m){exit} {print}' AGENTS.md | sha256sum)
+          if [ "$before" != "$after" ]; then
+            echo "::error::The policy zone of AGENTS.md was modified. Refusing to open a PR."
+            git diff AGENTS.md
+            exit 1
+          fi
+          echo "Policy zone intact."
 
       - name: Open a PR if the docs changed
         uses: peter-evans/create-pull-request@v6
@@ -87,7 +114,8 @@ jobs:
             triggered by code landing on `main`.
 
             The hand-maintained policy zone of `AGENTS.md` (above the GENERATED marker) is
-            untouched by design — check the diff and reject this PR if it isn't.
+            untouched — the workflow verifies this by hash and fails rather than opening a
+            PR if it isn't.
 
             > Generated by `.github/workflows/context-docs.yml`.
           delete-branch: true
