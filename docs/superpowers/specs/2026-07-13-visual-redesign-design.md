@@ -97,21 +97,40 @@ relevant. Nothing hardcoded, nothing inline.
 - **Font tokens:** `--font-ui`, `--font-display`, `--font-chart`. Referenced everywhere,
   hardcoded nowhere, so a future typeface change is one line per token.
 
-### Palette (starting proposal — every pair must be contrast-validated before landing)
+### Palette — contrast-validated
 
 Deliberately **warm** in both themes. The dark theme is warm charcoal, explicitly *not*
-today's blue-cold `#14161a`.
+today's blue-cold `#14161a`. **All 30 WCAG-governed pairs clear AA in both themes** (checked,
+not eyeballed; `theme/palette.test.ts` enforces it).
 
 | Role | Light (warm paper) | Dark (warm charcoal) |
 |---|---|---|
-| `--bg` | `#FDF9F3` | `#1A1714` |
-| `--surface` | `#FFFFFF` | `#232019` |
-| `--text` | `#1F1B16` | `#F2EDE4` |
-| `--muted` | `#6B6259` | `#A69C8E` |
-| `--line` | `#E5DCD0` | `#35302A` |
-| `--accent` (now / active) | `#E8641A` | `#FFA23A` |
-| `--ok` (correct) | `#2E9E6B` | `#4FC98F` |
-| `--danger` (wrong) | `#D64545` | `#FF6B6B` |
+| `--bg` | `#fdf9f3` | `#1a1714` |
+| `--surface` | `#ffffff` | `#232019` |
+| `--text` | `#1f1b16` | `#f2ede4` |
+| `--muted` | `#635a50` | `#a89d8d` |
+| `--line` — decorative hairline | `#c4b8a6` | `#4a443b` |
+| `--control-border` — a control's boundary | `#958b7e` | `#787063` |
+| `--bar-line` — the measure rule | `#7d7060` | `#9c9280` |
+| `--accent` (now / active) | `#b8480f` | `#ff9d4d` |
+| `--on-accent` | `#ffffff` | `#241505` |
+| `--danger` (wrong) | `#b3261e` | `#ff8a80` |
+| `--ok` (correct) | `#1c7a52` | `#5fd39b` |
+
+**Why there are three border tokens where the old design had one.** WCAG 1.4.11 governs the
+boundaries of UI *components* and *graphical objects that carry meaning* — it does not reach
+decoration. The old `--line` was doing both jobs and doing one badly:
+
+- **`--line`** is a card's edge and the divider between two chords in the same bar. A card is
+  not a control; a chord is identified by its own label. Not WCAG-governed — and forcing 3:1
+  on it would turn every card into a heavy grey box. But it is held at ~1.85:1 rather than the
+  1.48:1 a naive palette lands on, because **a card differs from the page by only 1.05:1**:
+  the border and the shadow are what make a card visible at all, not its fill.
+- **`--control-border`** is the boundary of an input, select, or button. A real UI component
+  boundary. **3:1, enforced.**
+- **`--bar-line`** is the measure rule — a graphical object saying *"a bar starts here."*
+  **3:1, enforced**, and heavier than `--line` by **both colour and width**. Two channels,
+  never hue alone.
 
 Add a `color-scheme` declaration so native controls follow the theme.
 
