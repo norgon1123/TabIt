@@ -176,6 +176,15 @@ Status lifecycle, polled via `GET /api/recordings/{id}/analysis`:
 Segment writes are validated against the grid: start < end, no overlap with siblings, and
 `end_beat` must not exceed `total_beats(grid, duration)`.
 
+Uploads longer than `TABIT_MAX_RECORDING_SECONDS` (default 600, 10 minutes) are rejected
+with `413` — analysis cost and chart size both scale with length. The check runs twice:
+against the browser-reported `duration_seconds` before anything is written to disk, then
+again against the `ffprobe`-decoded length once the file is stored (the authoritative one,
+since a client can under-report). If `ffprobe` can't establish a length the upload is let
+through and analysis fails later with the usual missing-ffmpeg error. The frontend mirrors
+the same limit (`frontend/src/library/uploadLimits.ts`) only to fail fast client-side; the
+server enforces it for real.
+
 Every one of these serves a guest as well as a signed-in user, with three exceptions that
 exist because a guest has no library and no stored audio: `GET /api/recordings` (401),
 `POST /{id}/analyze` (409 — re-upload instead), and `GET /{id}/audio` (404 once analysis has
@@ -191,13 +200,17 @@ finished and the file has been deleted).
 - `chart/` — `ChartSheet` (the chord sheet both pages render), `useChart` (query/mutation
   hook), `useRecording`, `useReanalyze`, `useMediaClock` (playback clock), `Timeline`,
   `SegmentEditor`, `ScrubBar`, `TransposeControl`, `TempoControl`, `TimeSignatureControl`,
-  `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat math, half-beat snapping),
-  `timeMath` (pixel↔time, centisecond formatting).
+  `KeyControl` (click-to-edit key correction: re-reads the same chords' roman numerals
+  against a new tonic/mode, never moves a chord — `PATCH /charts/{id}/settings`),
+  `chordProgress` (paints the active chord's fill bar as a CSS transition timed to its
+  remaining real time), `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat math,
+  half-beat snapping), `timeMath` (pixel↔time, centisecond formatting).
 - `guest/` — `useGuestSong`: holds the visitor's File for playback (the server deleted its
   copy) and for re-analysis (which re-uploads it).
 - `library/` — `useRecordings`, `uploadRecording` (the one upload path, guest or not),
   `UploadDropzone` (drag-and-drop or file picker), `audioDuration`, `filterSort`,
-  `formatDate`.
+  `formatDate`, `uploadLimits` (mirrors `TABIT_MAX_RECORDING_SECONDS` so an over-long file
+  is refused before it's spent on an upload; the server enforces the limit for real).
 - `practice/` — learning mode: `ModeChoice` (the chart-or-practice question), `ChordGuess`
   (the answer form), `usePracticeSession` (what has been named), `answer` (marking),
   `gate` (**who may practise — the one place that decides**). See *Practice mode*.

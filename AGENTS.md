@@ -221,11 +221,13 @@ comment in `pyproject.toml` and `docs/technical-plan-phase-0-1.md`.
 Config is env-driven, prefix `TABIT_` (`app/config.py`). Don't hardcode paths or secrets.
 
 - Core: `TABIT_DATABASE_URL`, `TABIT_STORAGE_DIR`, `TABIT_COOKIE_SECURE` (`true` behind
-  HTTPS), `TABIT_ANALYSIS_SAMPLE_RATE` (22050), `TABIT_ANALYSIS_MAX_WORKERS` (1),
+  HTTPS), `TABIT_MAX_RECORDING_SECONDS` (600; uploads longer than this are rejected with
+  `413`), `TABIT_ANALYSIS_SAMPLE_RATE` (22050), `TABIT_ANALYSIS_MAX_WORKERS` (1),
   `TABIT_ANALYSIS_MIN_SEGMENT_SECONDS` (0.75), `TABIT_ANALYSIS_CHANGE_PENALTY` (1.0),
   `TABIT_ANALYSIS_USE_HPSS` (true), `TABIT_ANALYSIS_ENGINE`
   (`chordino` | `librosa` | `btc`).
 - Session: `TABIT_SESSION_COOKIE_NAME`, `TABIT_SESSION_MAX_AGE_SECONDS`.
+- Guest: `TABIT_GUEST_COOKIE_NAME`, `TABIT_GUEST_TTL_SECONDS`.
 - Multi-instrument: `TABIT_ANALYSIS_DEVICE` (`auto`), `TABIT_ENABLE_SEPARATION` (false),
   `TABIT_SEPARATION_MODEL`, `TABIT_SEPARATION_STEMS`, `TABIT_STEM_STORAGE`,
   `TABIT_STEM_FORMAT`.
