@@ -1,229 +1,140 @@
 ---
 name: tabit-context-docs
-description: Use when creating or updating Tabit's CONTEXT.md (architecture orientation) or AGENTS.md (agent operating instructions), or when the user asks to "generate context docs", "refresh CONTEXT.md", "write AGENTS.md", or onboard a new agent/contributor to the Tabit repo.
+description: Use when creating or updating Tabit's CONTEXT.md (architecture orientation) or the generated half of AGENTS.md (commands, module map, env vars), or when the user asks to "generate context docs", "refresh CONTEXT.md", "update AGENTS.md", or onboard a new agent/contributor to the Tabit repo. Also runs automatically on merge to main via .github/workflows/context-docs.yml.
 ---
 
 # Tabit Context Docs
 
-Generate and maintain two root-level docs for the Tabit repo:
+Maintain two root-level docs:
 
-- **CONTEXT.md** — the *mental model*. What Tabit is, how the pieces fit, the data model, the analysis pipeline, and the invariants. Audience: anyone (human or agent) who needs to understand the system before touching it.
-- **AGENTS.md** — the *operating manual*. Commands, conventions, gotchas, and the definition of done. Audience: a coding agent about to make a change. This is the canonical instructions file (the tool-agnostic standard).
-- **CLAUDE.md** — a symlink to `AGENTS.md`, so Claude Code auto-loads the operating manual without maintaining a second copy. Never edit `CLAUDE.md` directly; edit `AGENTS.md` and let the symlink follow.
+- **CONTEXT.md** — the *mental model*. What Tabit is, how the pieces fit, the data model,
+  the analysis pipeline, the invariants. Audience: anyone who needs to understand the
+  system before touching it. **You own this whole file.**
+- **AGENTS.md** — the *operating manual*. Audience: a coding agent about to make a change.
+  **You own only part of this file** — see the zone rule below. It is the canonical
+  instructions file (the tool-agnostic standard).
+- **CLAUDE.md** — a symlink to `AGENTS.md`, so Claude Code auto-loads the operating manual
+  without a second copy. Never edit `CLAUDE.md` directly.
 
-Keep CONTEXT.md and AGENTS.md disjoint: CONTEXT.md explains *what is true*; AGENTS.md tells you *what to do*. Don't duplicate command lists into CONTEXT.md or architecture prose into AGENTS.md.
+Keep the two disjoint: CONTEXT.md explains *what is true*; AGENTS.md tells you *what to do*.
+
+## The zone rule — read this before touching AGENTS.md
+
+AGENTS.md is split by a marker comment:
+
+    ═══ ▼▼▼ GENERATED BELOW — DO NOT HAND-EDIT ▼▼▼ ═══
+
+**Above the marker is the POLICY ZONE. You must not write there. Ever.**
+
+Those are *decisions* — the base-branch rule, the disposable-data policy, the rules that
+bite, the definition of done. They were set by a human and are not derivable from the code,
+so **the code cannot be used to "correct" them.** They are exactly the content a regenerator
+is most likely to destroy, because they look like prose that has drifted.
+
+**Below the marker is yours.** Facts read off the code: prerequisites, setup, run, test,
+build, where code lives, configuration, the eval harness. Rewrite it freely.
+
+Two consequences:
+
+1. **If the code contradicts a policy-zone rule, do not fix the doc. Report the conflict.**
+   Either the code has a bug or the human needs to change the policy — both need a human.
+   The single worst failure mode of this skill is a "helpful" verification pass that reads
+   `app/migrations.py`, concludes migrations are expected, and quietly restores migration
+   guidance the user deliberately removed. Don't.
+2. **If you learn a durable rule that must survive regeneration, it goes in the policy
+   zone** — not into this skill's template, and not only into the generated zone. The zone
+   is the mechanism. It replaces the old "never drop these on update" list, which needed a
+   new entry every time a policy was added and silently failed when someone forgot.
+
+If the marker is missing from AGENTS.md, **stop and ask** rather than guessing where the
+line falls.
 
 ## Core rule: verify before you write
 
-**Every fact in these files must be checked against the current code, not recalled from this skill.** The templates below capture Tabit as of authoring; the repo drifts. Before writing each section, confirm it:
+**Every fact you write must be checked against the current code, not recalled from this
+skill.** The notes below were true when written; the repo drifts. Confirm each:
 
 | Claim | Verify against |
 |-------|----------------|
 | Stack / deps / Python version | `pyproject.toml`, `frontend/package.json` |
-| Commands (run/test/build) | `README.md`, `frontend/README.md`, the `scripts` in `package.json`, `[tool.pytest.ini_options]` |
-| Env vars | `app/config.py` (and `README.md` config section) |
-| Backend module map | `app/` and `app/audio/`, `app/routers/` |
+| Commands (run/test/build) | `README.md`, `package.json` scripts, `[tool.pytest.ini_options]` |
+| Env vars | `app/config.py` |
+| Backend module map | `app/`, `app/audio/`, `app/routers/` |
 | Data model | `app/models.py` |
-| Analysis pipeline steps | `app/audio/analyzer.py` and `app/jobs.py` |
+| Analysis pipeline steps | `app/audio/analyzer.py`, `app/jobs.py` |
+| Chord engines | `app/audio/recognizer.py`, `app/config.py` (`TABIT_ANALYSIS_ENGINE`) |
 | API endpoints | `app/routers/*.py` |
 | Frontend structure | `frontend/src/` |
-| Open constraints / rules | `docs/TODO.md`, `docs/INITIAL-REVIEW.md` |
+| Open constraints | `docs/TODO.md` |
 
-If a template line contradicts the code, the code wins — update the line. If a file/module named below no longer exists, drop it.
+If a note here contradicts the code, **the code wins for facts** — but never for policy
+(see the zone rule). If a module named here no longer exists, drop it.
 
 ## Workflow
 
-1. **Detect mode.** If `CONTEXT.md` / `AGENTS.md` exist, you're *updating* (preserve human edits, reconcile drift). Otherwise *creating* from the templates.
-2. **Gather facts** by reading the files in the table above. Prefer a single broad read pass over the relevant dirs.
-3. **Write CONTEXT.md** from the template, replacing each section with verified content.
-4. **Write AGENTS.md** from the template, same discipline.
-5. **Link CLAUDE.md → AGENTS.md.** Ensure `CLAUDE.md` is a relative symlink to `AGENTS.md` so Claude Code auto-loads the operating manual:
+1. **Detect mode.** If the files exist, you're *updating*. Otherwise *creating*.
+2. **Gather facts** — one broad read pass over the files in the table above.
+3. **Rewrite CONTEXT.md** in full, from verified facts. Preserve prose the user clearly
+   hand-wrote; replace anything the code has outgrown; add sections for new subsystems.
+4. **Rewrite ONLY the generated zone of AGENTS.md.** Leave every byte above the marker
+   untouched — including the marker comments themselves.
+5. **Check the symlink.** `ls -l CLAUDE.md` should show `CLAUDE.md -> AGENTS.md`. If it's a
+   real file, fold anything unique into AGENTS.md, then `ln -sf AGENTS.md CLAUDE.md`.
+6. **Cross-check** the two files don't contradict each other or the policy zone.
+7. **Report** what you verified, what drift you corrected, and — separately and loudly —
+   **any place the code contradicts the policy zone.** That list is the most valuable thing
+   you produce; it is the only signal that a policy has gone stale.
 
-       ln -sf AGENTS.md CLAUDE.md   # run from the repo root
+## Tabit facts (verify each — they have gone stale before)
 
-   If a real `CLAUDE.md` file already exists (not a symlink), fold any unique content into `AGENTS.md` first, then replace it with the symlink. Verify with `ls -l CLAUDE.md` (should show `CLAUDE.md -> AGENTS.md`).
-6. **Cross-check** CONTEXT.md and AGENTS.md don't contradict each other (e.g. same test command, same invariants worded consistently).
-7. **Report** which facts you verified and any drift you corrected, so the user can sanity-check.
+- **Two services, one origin.** FastAPI backend (`app/`) + React/TS/Vite SPA
+  (`frontend/`). Auth is an httpOnly session cookie, so the SPA must be same-origin as the
+  API (dev: Vite proxies `/api` → `:8000`).
+- **Charts are beat-native.** Segments are `start_beat`/`end_beat` floats on a beat grid;
+  seconds are *derived, never persisted*. Edits snap to the half-beat; derived times are
+  *displayed* to the centisecond. Any doc saying segments carry seconds-valued
+  `start_time`/`end_time` columns, or that positions are "millisecond precision", is
+  describing a schema that no longer exists.
+- **There are multiple chord engines**, selected by `TABIT_ANALYSIS_ENGINE` — check
+  `app/config.py` for the current set. Do not write "template matching (`template-v1`)";
+  that was one early engine and the docs have been wrong about this before.
+- **`Analysis` is immutable; `ChordChart` is editable.** Re-running analysis creates a fresh
+  `Analysis` and **re-seeds the chart, overwriting manual edits.** A sharp edge — say so.
+- **ffmpeg is a hard runtime dependency.** Without it, uploads succeed but analysis fails.
+- **Heavy deps (torch/demucs/vamp) are optional extras, imported lazily** so the base app
+  installs without them.
+- **Config is env-driven, prefix `TABIT_`** (`app/config.py`) — read the current list, don't
+  copy one from memory.
 
-When updating, do a section-by-section diff in your head: keep prose the user clearly hand-wrote, replace anything the code has outgrown, and add sections for newly-added subsystems.
+## CONTEXT.md shape
 
-**Never drop these on update (load-bearing best practices, carry them forward verbatim unless the user changed them):**
-- The **Bug fixes specifically** definition of done (reproduce → failing test first → prove → root-cause fix → regression lock).
-- The **disposable-data rule** (early dev, no production data → data-breaking changes are fine, no migration scripts, drop and recreate the DB) — and the **`create_all` schema gotcha** that explains *why* a stale DB fails.
+Sections, each written from verified fact: *What it is* · *Architecture* · *Charts are
+beat-native* (the single most important thing to know before touching chart code) · *Guest
+mode* · *Backend map* · *Data model* · *Analysis pipeline* (+ status lifecycle
+`pending → running → done | failed`) · *Frontend map* · *Invariants*.
 
-These live in the AGENTS.md template below precisely so they survive regeneration. If a future best practice must persist the same way, add it to the template here — not only to the generated file.
+## AGENTS.md generated zone — shape
 
-## Tabit facts (verify each — see table above)
+Only these sections, in this order, below the marker:
 
-These are the load-bearing truths that make the docs useful. Confirm, then fold into the right file.
+*Prerequisites* · *Setup* · *Run* · *Test* · *Build* · *Where code lives* ·
+*Configuration* · *Chord-accuracy work (Phase 0/1)*
 
-- **Two services, one origin.** FastAPI backend (`app/`) + React/TS/Vite SPA (`frontend/`). Auth is an httpOnly **session cookie**, so the SPA must be served same-origin as the API (dev: Vite proxies `/api` → `:8000`).
-- **Audio analysis is the heart.** Upload → in-process background job (`app/jobs.py`) → decode mono → BPM (beat tracking) → key (tonic + mode) → chord segments via template matching (`template-v1`) → immutable `Analysis` → seed editable `ChordChart`. Poll `GET /api/recordings/{id}/analysis`: `pending → running → done|failed`.
-- **`Analysis` is immutable; `ChordChart` is editable.** Re-running analysis (`POST /api/recordings/{id}/analyze`, 202) creates a fresh `Analysis` and **re-seeds the chart, overwriting manual edits.** This is a sharp edge — say so.
-- **ffmpeg is a hard runtime dependency.** Without it, uploads succeed but analysis jobs fail with a clear error (logged at startup too).
-- **Config is env-driven, prefix `TABIT_`** (`app/config.py`): `TABIT_DATABASE_URL`, `TABIT_STORAGE_DIR`, `TABIT_COOKIE_SECURE`, `TABIT_ANALYSIS_SAMPLE_RATE`, `TABIT_ANALYSIS_MAX_WORKERS`.
-- **The data is disposable.** Tabit is in early development with **no production data**, so data-breaking changes are fine and expected. **No migration scripts** are required or wanted — when a schema change breaks an existing DB, it is dropped and recreated by `create_all`. `app/migrations.py` is dormant (it still runs on startup; no new migrations get written) until there is real data to preserve. This is a *policy the user set* — carry it into both files on every regeneration.
-- **Product rules from `docs/TODO.md`** that affect any chart/analysis change — treat as invariants:
-  - Charts must **never exceed the audio file's total duration.**
-  - Times are configured/displayed to **millisecond precision** — universal rule.
-  - Chord changes must align to the *actual* change point; leading/trailing silence is trimmed and ignored.
-
-## CONTEXT.md template
-
-```markdown
-# Tabit — Context
-
-Turn practice voice memos into editable chord charts.
-
-## What it is
-<One paragraph: a user uploads a recording; Tabit analyzes it into BPM/key/chord
-segments and produces an editable chord chart they can correct and transpose.>
-
-## Architecture
-- **Backend** — FastAPI (Python >=3.12), SQLAlchemy 2.0, Pydantic v2. Audio analysis
-  via librosa/numpy. Argon2 password hashing, cookie session auth. SQLite by default.
-- **Frontend** — React 18 + TypeScript SPA, Vite, TanStack Query, React Router.
-- **Single origin** — the SPA talks to the API over REST with an httpOnly session
-  cookie, so it must be served same-origin (dev: Vite proxies `/api` → `:8000`).
-
-## Backend map (`app/`)
-- `main.py` — app + router wiring
-- `config.py` — `TABIT_`-prefixed settings (pydantic-settings)
-- `db.py`, `models.py`, `schemas.py` — persistence + I/O shapes
-- `deps.py`, `security.py` — auth/session dependencies, password hashing
-- `storage.py` — recording file storage (`TABIT_STORAGE_DIR`)
-- `jobs.py` — in-process background analysis worker
-- `routers/` — `auth.py`, `recordings.py`, `charts.py`
-- `audio/` — `decode.py`, `analyzer.py`, `key_estimation.py`, `recognizer.py`,
-  `segments.py`; `music_theory.py` at app root
-
-## Data model (`app/models.py`)
-<User, Recording, Analysis (immutable result), ChordChart (editable). Note the
-relationships and which fields are authoritative.>
-
-## Analysis pipeline (`app/audio/analyzer.py`, `app/jobs.py`)
-1. Decode audio to mono
-2. Detect BPM (beat tracking)
-3. Estimate key (tonic pitch class + mode)
-4. Recognize chord segments (template matching, `template-v1`)
-5. Write immutable `Analysis`
-6. Seed a new editable `ChordChart`
-
-Status lifecycle: `pending → running → done | failed`
-(poll `GET /api/recordings/{id}/analysis`).
-
-## Frontend map (`frontend/src/`)
-- `api/` — typed client + REST types
-- `auth/` — `AuthContext`
-- `pages/` — Library, ChartEditor, Login, Register
-- `chart/` — `useChart`, `Timeline`, `SegmentEditor`, `TransposeControl`,
-  `chartLayout`, `timeMath`
-- `library/` — recordings list + upload
-- `components/` — Header, ProtectedRoute, AnalysisStatusBadge
-
-## Invariants (don't break these)
-- `Analysis` is immutable; `ChordChart` is editable.
-- Re-running analysis overwrites the chart's manual edits.
-- Charts must never exceed the audio's total duration.
-- All times use millisecond precision (universal rule).
-- ffmpeg must be on PATH for analysis to run.
-- **Stored data is disposable.** Early dev, no production data — the schema is free to
-  break, and the recovery for a stale DB is to drop and recreate it, not migrate it.
-  `create_all` adds missing *tables* but never *columns* to an existing SQLite file, so an
-  old `tabit.db` fails after a schema change; deleting it is the intended answer.
-  `app/migrations.py` still runs on startup but is dormant.
-```
-
-## AGENTS.md template
-
-```markdown
-# AGENTS.md — Tabit
-
-Operating instructions for coding agents in this repo. Read CONTEXT.md first for the
-mental model.
-
-## Prerequisites
-- Python >= 3.12, Node (for the frontend).
-- **ffmpeg on PATH** — required for audio analysis (`brew install ffmpeg`).
-
-## Setup
-    python -m venv .venv && . .venv/bin/activate
-    pip install -e ".[dev]"
-    cd frontend && npm install
-
-## Run
-- Backend: `uvicorn app.main:app --reload`  (API docs at http://localhost:8000/docs)
-- Frontend: `cd frontend && npm run dev`  (http://localhost:5173, proxies `/api`)
-- Run both for a working app (cookie auth needs same-origin via the dev proxy).
-
-## Test (run the relevant suite before claiming done)
-- Backend: `pytest`  (config in `pyproject.toml`, tests in `tests/`)
-- Frontend: `cd frontend && npm test`  (Vitest + Testing Library + MSW; tests are
-  colocated as `*.test.ts(x)` next to source)
-
-## Build
-- Frontend: `cd frontend && npm run build`  (type-checks, emits `frontend/dist/`)
-
-## Conventions
-- Config via env vars, prefix `TABIT_` (see `app/config.py`). Don't hardcode paths/secrets.
-- Backend: routers in `app/routers/`, audio logic in `app/audio/`, Pydantic schemas in
-  `app/schemas.py`. Keep `Analysis` immutable.
-- Frontend: data fetching through TanStack Query hooks (`useChart`, `useRecordings`);
-  time math lives in `chart/timeMath.ts`.
-
-## Schema changes: the data is disposable
-Tabit is in **early development with no production data**, so data-breaking changes are
-**fine and expected**. Don't contort a model to stay compatible with rows already on disk.
-- **Do not write migration scripts** — not Alembic, not new additive steps in
-  `app/migrations.py`. Not required, not wanted.
-- **The fix for a stale local DB is to delete it.** Drop the SQLite file (`tabit.db`, per
-  `TABIT_DATABASE_URL`) and restart; `create_all` rebuilds the schema from `app/models.py`.
-  Clear `TABIT_STORAGE_DIR` too if the change orphans stored recordings.
-- **Say so in the change** if existing rows break, so nobody meets it as an ORM error.
-- `app/migrations.py` still exists and runs on startup — leave its existing migrations
-  alone. It is dormant until Tabit has real data to preserve.
-
-## Rules that bite (enforce in any chart/analysis change)
-- Chart total length must never exceed the audio file's duration.
-- All start/end times are millisecond-precision — everywhere, no exceptions.
-- Chord boundaries must reflect the real change point; trim leading/trailing silence.
-- Re-running analysis overwrites manual chart edits — call this out if a change touches it.
-
-## Definition of done
-- Relevant tests pass (`pytest` and/or `npm test`); frontend changes type-check (`npm run build`).
-- New behavior has tests in the matching suite.
-- Env/config changes documented in `README.md` and reflected in `app/config.py`.
-- Open items live in `docs/TODO.md` — don't silently regress them.
-
-### Bug fixes specifically
-A bug fix is **not done** until all of the following hold:
-1. **Reproduced.** You can trigger the reported failure yourself and have identified the
-   root cause — not just the symptom. State the root cause in the change.
-2. **Failing test first.** A test in the matching suite reproduces the bug and *fails for
-   the right reason* before the fix (watch it fail). Exercise the real failing path, not a
-   mock of it.
-3. **Proven by that test.** The same test passes after the fix, and the full relevant
-   suite still passes.
-4. **Fixed at the root, not the symptom.** Patching one stale database or one call site is
-   not a fix — make the code self-correct so the failure can't recur.
-5. **Regression locked in.** The new test stays in the suite so the bug can't silently return.
-
-> Schema gotcha that has bitten deletes before: `Base.metadata.create_all()` creates
-> missing *tables* but never adds *columns* to existing ones, so a pre-existing SQLite DB
-> keeps its old schema and the ORM fails on the new column. The remedy is to **delete the DB
-> file and let it be recreated** (see *Schema changes: the data is disposable*) — not to
-> write a migration. Note the distinction from rule 4 above: recreating a dev DB whose
-> *schema* is stale is the intended workflow, but hand-editing *rows* to paper over a bug in
-> the code is not a fix.
-```
+Commands, module paths, and env-var names — nothing else. **No rules, no policy, no
+definition of done.** If you find yourself writing the word "must", it belongs in the
+policy zone, which means it belongs to a human, which means you stop and report it.
 
 ## Common mistakes
 
-- **Copying the template verbatim** without checking the code — the module list or
-  endpoints may have changed. Verify, then write.
-- **Bloating AGENTS.md with architecture** or **stuffing CONTEXT.md with commands.** Keep the split.
-- **Dropping the sharp edges** (immutable Analysis, re-analysis overwrites edits, ms precision, ffmpeg). These are exactly what saves the next agent.
-- **Overwriting hand-written prose on update.** Reconcile drift; preserve intentional human edits.
-- **Editing CLAUDE.md directly or committing it as a real file.** It's a symlink to AGENTS.md — edit AGENTS.md instead, and make sure the symlink (not a copied file) is what's committed.
-- **Dropping the load-bearing best practices** (Bug-fix definition of done, the disposable-data rule, the `create_all` schema gotcha). They are baked into the templates above so regeneration retains them — keep them.
-- **Reintroducing migration guidance.** Older notes (and `app/migrations.py` itself) say new columns need an additive migration. That was superseded: the DB is disposable, so a stale one gets dropped, not migrated. Don't let a code-verification pass "correct" the docs back.
+- **Writing above the marker.** The cardinal sin. The policy zone is not yours.
+- **"Correcting" policy from the code.** `app/migrations.py` exists and runs; that does
+  *not* mean migrations are wanted. The disposable-data rule supersedes it. A verification
+  pass that restores migration guidance has actively damaged the repo.
+- **Copying this skill's notes verbatim** without checking the code. They have been stale
+  before — the `template-v1` and "millisecond precision" lines above were both wrong for
+  months.
+- **Bloating the generated zone with rules** or **stuffing CONTEXT.md with commands.**
+- **Overwriting hand-written prose in CONTEXT.md.** Reconcile drift; preserve intent.
+- **Editing CLAUDE.md directly**, or committing it as a real file instead of a symlink.
+- **Reporting only successes.** The conflicts you find between code and policy are the
+  point. Surface them.
