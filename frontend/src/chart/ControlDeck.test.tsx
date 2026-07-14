@@ -71,13 +71,37 @@ describe("ControlDeck", () => {
   });
 
   it("survives the browser refusing to play", async () => {
-    // Browsers reject play() when there has been no user gesture yet. That is not an error
-    // anyone can act on — the element stays paused and `playing` stays false, which is
-    // already the truth. What must NOT happen is an unhandled rejection, or a crash, from
-    // a user simply pressing the play button.
-    const play = vi
-      .spyOn(HTMLMediaElement.prototype, "play")
-      .mockRejectedValue(new DOMException("NotAllowedError"));
+    // Browsers reject play() when there has been no user gesture yet (autoplay policy). That
+    // is not an error anyone can act on: the element stays paused and `playing` stays false,
+    // which is already the truth. What must NOT happen is an unhandled rejection escaping
+    // from a user simply pressing the play button.
+    //
+    // toggle()/play() fire `el.play()` but do not (and must not) await it, so the click
+    // handler — and the `userEvent.click` promise — resolve before the rejection has even
+    // settled. An earlier version of this test asserted
+    // `await expect(userEvent.click(...)).resolves.not.toThrow()`, which was green whether
+    // or not the `.catch(() => {})` guard existed: that assertion settles before the
+    // detached rejection does, so it structurally could not see the thing it was checking.
+    //
+    // This version listens for the unhandled rejection itself and gives it a turn of the
+    // event loop to surface before asserting none fired. Crucially, it does NOT use
+    // `vi.spyOn(...).mockRejectedValue(...)` to fake the rejection: vitest's mock wrapper
+    // attaches its own internal `.then`/`.catch` to every mocked async call (to populate
+    // `mock.results`), which permanently marks that promise "handled" to Node — Node then
+    // never emits `unhandledRejection` for it, regardless of whether the guard under test
+    // exists. (Verified directly: a bare `vi.fn(() => Promise.reject(...))`, called with no
+    // `.catch` anywhere, never triggers `process.on("unhandledRejection", ...)`.) So the
+    // rejecting `play()` here is a plain function, not a vitest mock, and the call is
+    // tracked by hand instead of via `mock.calls`.
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+
+    const originalPlay = HTMLMediaElement.prototype.play;
+    let playCalls = 0;
+    HTMLMediaElement.prototype.play = function rejectingPlay() {
+      playCalls++;
+      return Promise.reject(new DOMException("NotAllowedError"));
+    };
 
     render(
       <PlaybackProvider>
@@ -86,12 +110,19 @@ describe("ControlDeck", () => {
       </PlaybackProvider>,
     );
 
-    await expect(
-      userEvent.click(screen.getByRole("button", { name: /^play$/i })),
-    ).resolves.not.toThrow();
+    await userEvent.click(screen.getByRole("button", { name: /^play$/i }));
 
+    // The rejection from the detached play() promise settles on a later turn of the event
+    // loop than the click handler. Flush it so the rejection has a chance to surface before
+    // we assert none did.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(playCalls).toBeGreaterThan(0); // sanity: play() was actually exercised
+    expect(unhandled).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /^play$/i })).toBeInTheDocument(); // still says Play
-    play.mockRestore();
+
+    process.off("unhandledRejection", unhandled);
+    HTMLMediaElement.prototype.play = originalPlay;
   });
 });
 
