@@ -5,6 +5,9 @@ import { server } from "../test/server";
 import { renderWithProviders } from "../test/utils";
 import ChartEditorPage from "./ChartEditorPage";
 
+// These open at `?mode=edit`: a song with no mode lands on the chart-or-practice chooser,
+// which ChartEditorPage.practice.test.tsx covers along with practice mode itself.
+
 function login() {
   server.use(http.get("/api/auth/me", () => HttpResponse.json({ id: "u1", username: "alice" })));
 }
@@ -27,7 +30,7 @@ test("shows BPM, key, and the chord timeline", async () => {
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
     http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   // Tempo and key sit above the player as editable text, not as a panel of form fields.
   expect(await screen.findByRole("button", { name: /tempo: 120 BPM/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /key: C major/i })).toBeInTheDocument();
@@ -43,7 +46,7 @@ test("shows analyzing state when the chart is not ready", async () => {
     ),
     http.get("/api/recordings/r1/chart", () => HttpResponse.json({ detail: "Chart not found" }, { status: 404 })),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   // Both the header loading indicator and the body placeholder say "Analyzing…".
   expect((await screen.findAllByText(/analyzing/i)).length).toBeGreaterThan(0);
 });
@@ -62,7 +65,7 @@ test("re-analyze button posts to the analyze endpoint", async () => {
       );
     }),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await screen.findByText(/120 BPM/i);
   await userEvent.click(screen.getByRole("button", { name: /re-analyze/i }));
   await waitFor(() => expect(hit).toBe(true));
@@ -76,7 +79,7 @@ test("shows a spinner while analysis is running", async () => {
     ),
     http.get("/api/recordings/r1/chart", () => HttpResponse.json({ detail: "Chart not found" }, { status: 404 })),
   );
-  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1", path: "/recordings/:recordingId" });
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   expect(await screen.findByRole("status")).toBeInTheDocument();
 });
 
@@ -100,7 +103,7 @@ test("player appears on its own once analysis finishes", async () => {
     ),
   );
   const { container } = renderWithProviders(<ChartEditorPage />, {
-    route: "/recordings/r1",
+    route: "/recordings/r1?mode=edit",
     path: "/recordings/:recordingId",
   });
 

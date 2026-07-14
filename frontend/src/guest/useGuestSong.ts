@@ -16,6 +16,11 @@ export function useGuestSong() {
   const queryClient = useQueryClient();
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  // Every upload mints a new recording id server-side, and re-analyzing *is* an upload — so
+  // the id changes for a song that has not. `songKey` is the count of songs the visitor has
+  // actually put in front of us: it moves when they pick a new file, and not when we re-cut
+  // the chart for the one they already picked.
+  const [songKey, setSongKey] = useState(0);
   const fileRef = useRef<File | null>(null);
   const urlRef = useRef<string | null>(null);
 
@@ -47,9 +52,13 @@ export function useGuestSong() {
 
   return {
     recordingId,
+    songKey,
     audioUrl,
     filename: fileRef.current?.name ?? null,
-    upload: (file: File) => uploadMut.mutate(file),
+    upload: (file: File) => {
+      setSongKey((n) => n + 1);
+      uploadMut.mutate(file);
+    },
     analyzeAgain,
     isUploading: uploadMut.isPending,
     uploadError: uploadMut.error?.message ?? null,

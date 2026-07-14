@@ -29,28 +29,30 @@ a { color: var(--accent); }
 .muted { color: var(--muted); }
 button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color: var(--muted); }
 
-/* The segment editor sits just off the right edge of the chord chart, its top aligned
-   with the row of the chord it edits — near the click, not across the page. It is
-   absolutely positioned (not fixed) against `.chart-area`, so it stays pinned to that
-   chord's line and scrolls away with it rather than trailing the viewport. Selecting a
-   chord therefore never reflows the chart under the pointer.
+/* A chart panel (the segment editor; the practice-mode chord guess) sits just off the right
+   edge of the chord chart, its top aligned with the row of the chord it belongs to — near
+   the click, not across the page. It is absolutely positioned (not fixed) against
+   `.chart-area`, so it stays pinned to that chord's line and scrolls away with it rather
+   than trailing the viewport. Selecting a chord therefore never reflows the chart under the
+   pointer.
 
    The panel is narrow, but the 880px container only leaves room beside it on a wide
    screen; below that it drops back into the flow, directly under the chart. */
 .chart-area { position: relative; }
-.segment-editor {
+.chart-panel {
   position: absolute;
   z-index: 10;
   left: calc(100% + 16px);
   width: 190px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
 }
-.segment-editor label { display: grid; gap: 4px; }
-.segment-editor select, .segment-editor input { width: 100%; }
+.chart-panel label { display: grid; gap: 4px; }
+.chart-panel select, .chart-panel input { width: 100%; }
 .segment-editor .primary, .segment-editor .danger { flex: 1; }
+.chord-guess .primary { width: 100%; }
 
 @media (max-width: 1320px) {
-  .segment-editor {
+  .chart-panel {
     position: static;
     width: auto;
     margin-top: 12px;
@@ -79,4 +81,52 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---- Practice mode ------------------------------------------------------------------
+   The chord is a question until the player names it. A masked cell keeps its shape, its
+   beats and its bar lines — only the answer is withheld, so the chart still reads as a
+   chart and the "?" reads as a gap the player fills. */
+.chord-cell--masked strong { color: var(--muted); }
+.chord-cell--masked:hover strong { color: var(--text); }
+
+.ok { color: var(--ok); }
+
+.chord-guess { display: grid; gap: 8px; border-color: var(--line); }
+/* Wrong: red, and a shake — the same "no" a locked door gives you. The colour is the
+   lasting signal (it stays until the next attempt); the shake is the reflex. */
+.chord-guess--wrong { border-color: var(--danger); }
+.chord-guess--wrong select { border-color: var(--danger); }
+.chord-guess--right { border-color: var(--ok); }
+.chord-guess--right select { border-color: var(--ok); }
+
+.chord-guess.shake { animation: tabit-shake 0.4s ease-in-out; }
+
+@keyframes tabit-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}
+
+/* The shake is decoration; the red border and the message carry the verdict on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .chord-guess.shake { animation: none; }
+}
+
+/* The mode question: two doors, side by side, the same size. Practice is not a footnote on
+   the chart — it is the other half of what Tabit is for. */
+.mode-choice__options { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.mode-choice__option {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 14px;
+  height: 100%;
+}
+.mode-choice__option span { font-size: 0.9em; opacity: 0.85; }
+
+@media (max-width: 600px) {
+  .mode-choice__options { grid-template-columns: 1fr; }
 }

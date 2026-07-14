@@ -45,15 +45,23 @@ const CHART = {
   ],
 };
 
+/** Every guest upload mints a *new* recording id server-side (`app/guest.py`), and
+ *  re-analyzing is a re-upload — so the id changes then too. The mock has to do the same, or
+ *  it hides everything that keys off the id changing. */
 function analysisSucceeds(uploads: string[] = []) {
+  let n = 0;
   server.use(
     http.post("/api/recordings", async ({ request }) => {
       const form = await request.formData();
       uploads.push((form.get("file") as File).name);
-      return HttpResponse.json(RECORDING, { status: 201 });
+      return HttpResponse.json({ ...RECORDING, id: `g${++n}` }, { status: 201 });
     }),
-    http.get("/api/recordings/g1", () => HttpResponse.json(RECORDING)),
-    http.get("/api/recordings/g1/chart", () => HttpResponse.json(CHART)),
+    http.get("/api/recordings/:id", ({ params }) =>
+      HttpResponse.json({ ...RECORDING, id: params.id }),
+    ),
+    http.get("/api/recordings/:id/chart", ({ params }) =>
+      HttpResponse.json({ ...CHART, recording_id: params.id }),
+    ),
   );
 }
 
@@ -62,6 +70,13 @@ function drop(name = "song.mp3") {
   fireEvent.drop(zone, {
     dataTransfer: { files: [new File(["audio"], name, { type: "audio/mpeg" })] },
   });
+}
+
+/** An uploaded song opens through the mode question — a guest is asked it just as a member
+ *  is. Answer it, and the chord sheet appears. */
+async function open(mode: "edit" | "practice" = "edit") {
+  const name = mode === "edit" ? /open the chart/i : /practice mode/i;
+  fireEvent.click(await screen.findByRole("button", { name }));
 }
 
 test("a logged-out visitor is invited to upload, without being asked to log in", async () => {
@@ -77,6 +92,7 @@ test("dropping a song shows its chord sheet below the upload area, on the same p
   renderWithProviders(<GuestHomePage />);
 
   drop();
+  await open();
 
   // The chord cells, and the controls that edit them — the signed-in chord sheet, verbatim.
   expect(await screen.findByLabelText("Resize end of C")).toBeInTheDocument();
@@ -93,6 +109,7 @@ test("playback uses the local file, since the server deleted the upload after an
   const { container } = renderWithProviders(<GuestHomePage />);
 
   drop();
+  await open();
 
   await screen.findByLabelText("Resize end of C");
   const audio = container.querySelector("audio")!;
@@ -106,11 +123,34 @@ test("re-analyzing re-sends the file the browser still holds", async () => {
   renderWithProviders(<GuestHomePage />);
 
   drop();
+  await open();
   await screen.findByLabelText("Resize end of C");
   fireEvent.click(screen.getByRole("button", { name: /re-analyze/i }));
 
   await waitFor(() => expect(uploads).toEqual(["song.mp3", "song.mp3"]));
 });
+
+// Re-analyzing is a re-upload, so the recording id changes — but it is the same song, and the
+// question of how to open it was answered before. Asking it again mid-edit throws the chart
+// away and puts the chooser back in its place.
+test("re-analyzing keeps you on the chart, without re-asking how to open the song", async () => {
+  analysisSucceeds();
+  renderWithProviders(<GuestHomePage />);
+
+  drop();
+  await open();
+  await screen.findByLabelText("Resize end of C");
+  fireEvent.click(screen.getByRole("button", { name: /re-analyze/i }));
+
+  // The chart blanks while the re-analysis runs and is refetched under its new id, so wait
+  // for it to come back rather than for the first frame after the click. Its coming back at
+  // all is the proof: had the mode been reset, the chooser would be sitting there instead,
+  // waiting for an answer nobody gives.
+  await waitFor(() => expect(screen.getByLabelText("Resize end of C")).toBeInTheDocument(), {
+    timeout: 5000,
+  });
+  expect(screen.queryByRole("heading", { name: /how do you want to open/i })).toBeNull();
+}, 10000);
 
 test("the one-song-at-a-time limit is reported, not swallowed", async () => {
   server.use(
@@ -158,6 +198,7 @@ test("a chord edit saved after re-counting the tempo reaches the server, and the
   );
   renderWithProviders(<GuestHomePage />);
   drop();
+  await open();
   await screen.findByLabelText("Resize end of C");
 
   fireEvent.click(screen.getByLabelText("Resize end of C").closest(".chord-cell")!);
@@ -181,4 +222,40 @@ test("signing up is offered as the way to keep the chart", async () => {
 
   const cta = await screen.findByRole("link", { name: /create an account/i });
   expect(cta).toHaveAttribute("href", "/register");
+});
+
+// The question is put to a guest as it is to a member — and under the shipped policy their
+// answer is just as free. Locking it later is `practice/gate.ts`'s business, not this page's.
+test("a guest is asked how to open the song, chart or practice", async () => {
+  analysisSucceeds();
+  renderWithProviders(<GuestHomePage />);
+
+  drop();
+
+  expect(await screen.findByRole("heading", { name: /how do you want to open/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /practice mode/i })).toBeEnabled();
+  // The chords are not on the page until the question is answered.
+  expect(screen.queryByText("C")).toBeNull();
+});
+
+test("a guest can practise: the chords are hidden until they name one", async () => {
+  analysisSucceeds();
+  const { container } = renderWithProviders(<GuestHomePage />);
+
+  drop();
+  await open("practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  expect(screen.queryByLabelText("Resize end of C")).toBeNull(); // read-only while practising
+
+  // s1 is C major.
+  fireEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]);
+  fireEvent.change(await screen.findByLabelText("Root"), { target: { value: "C" } });
+  fireEvent.change(screen.getByLabelText("Quality"), { target: { value: "maj" } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+  // Read the chart, not the page: a bare getByText("C") also matches the "C" still sitting in
+  // the Root dropdown, and would pass with nothing revealed at all.
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(1));
+  expect(container.querySelectorAll(".chord-cell strong")[0]).toHaveTextContent("C");
 });

@@ -1,21 +1,40 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ChartSheet from "../chart/ChartSheet";
 import { useRecording } from "../chart/useRecording";
 import { useGuestSong } from "../guest/useGuestSong";
 import UploadDropzone from "../library/UploadDropzone";
 import Spinner from "../components/Spinner";
+import ModeChoice from "../practice/ModeChoice";
+import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
+import { useAuth } from "../auth/AuthContext";
 
 /** Tabit without an account: upload a song, and its chord sheet appears right below.
  *
  * One song at a time, held in memory on the server and gone from disk the moment analysis
  * ends — uploading another simply replaces it. The chart itself is the same component a
  * signed-in user edits.
+ *
+ * A guest is asked the same question a member is — chart, or practice? — while the analysis
+ * is still running, so answering it costs no time. Whether practice is *theirs to pick* is
+ * `practice/gate.ts`'s call, and this page does not second-guess it.
  */
 export default function GuestHomePage() {
-  const { recordingId, audioUrl, filename, upload, analyzeAgain, isUploading, uploadError } =
+  const { recordingId, songKey, audioUrl, filename, upload, analyzeAgain, isUploading, uploadError } =
     useGuestSong();
   const { analysis, duration, inProgress } = useRecording(recordingId);
+  const { user } = useAuth();
   const busy = isUploading || inProgress;
+
+  // The mode is per-song, and a re-analysis is not a new song — it mints a new recording id
+  // for the same one, and re-asking the question there would throw away the chart the visitor
+  // is looking at. Key on the song, not the id.
+  const [mode, setMode] = useState<ChartMode | null>(null);
+  useEffect(() => setMode(null), [songKey]);
+  // Every route into a mode goes through the gate, here as on the editor page: the disabled
+  // button in the chooser is the manners, this is the lock.
+  const choose = (next: ChartMode) => setMode(allowedMode(next, user));
+  const practice = mode === "practice";
 
   return (
     <div className="container">
@@ -41,9 +60,21 @@ export default function GuestHomePage() {
         <div style={{ marginTop: 24 }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0 }}>{filename ?? "Chart"}</h2>
-            <button onClick={analyzeAgain} disabled={busy}>
-              Re-analyze
-            </button>
+
+            {/* Re-analysis re-cuts the chart, which mid-practice would swap the questions
+                out from under the player. It belongs to the chart. */}
+            {mode === "edit" && (
+              <button onClick={analyzeAgain} disabled={busy}>
+                Re-analyze
+              </button>
+            )}
+
+            {mode && canPractice(user) && (
+              <button onClick={() => choose(practice ? "edit" : "practice")}>
+                {practice ? "Show the chords" : "Practice mode"}
+              </button>
+            )}
+
             {inProgress && (
               <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} className="muted">
                 <Spinner label="Analyzing" /> Analyzing&hellip;
@@ -51,14 +82,19 @@ export default function GuestHomePage() {
             )}
           </div>
 
-          <ChartSheet
-            recordingId={recordingId}
-            // The server deleted the upload when analysis finished; play the local copy.
-            audioSrc={audioUrl}
-            analysis={analysis}
-            duration={duration}
-            inProgress={inProgress}
-          />
+          {mode == null ? (
+            <ModeChoice onChoose={choose} />
+          ) : (
+            <ChartSheet
+              recordingId={recordingId}
+              // The server deleted the upload when analysis finished; play the local copy.
+              audioSrc={audioUrl}
+              analysis={analysis}
+              duration={duration}
+              inProgress={inProgress}
+              practice={practice}
+            />
+          )}
         </div>
       )}
 

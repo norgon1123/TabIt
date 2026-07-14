@@ -83,7 +83,7 @@ export default function SegmentEditor({
   }
 
   return (
-    <div className="card segment-editor" style={{ display: "grid", gap: 8, top }}>
+    <div className="card chart-panel segment-editor" style={{ display: "grid", gap: 8, top }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <strong>Edit segment</strong>
         {onClose && (

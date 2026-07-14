@@ -10,12 +10,20 @@ import TempoControl from "./TempoControl";
 import KeyControl from "./KeyControl";
 import TransposeControl from "./TransposeControl";
 import TimeSignatureControl from "./TimeSignatureControl";
+import ChordGuess from "../practice/ChordGuess";
+import { usePracticeSession } from "../practice/usePracticeSession";
+
+const NO_SEGMENTS: never[] = [];
 
 /** The chord sheet: player, timeline, and every control that edits the chart.
  *
  * Shared verbatim by the signed-in editor page and the logged-out home page — the only
  * difference between them is where the audio comes from (`audioSrc`: the API for a stored
  * recording, an object URL for a guest's, whose upload the server has already deleted).
+ *
+ * In `practice` mode it is the same sheet with the answers taken away: the chords are "?"
+ * until the player names them, and every control that would edit the chart is gone — you
+ * cannot practise against a chart you are simultaneously rewriting.
  */
 export default function ChartSheet({
   recordingId,
@@ -23,12 +31,14 @@ export default function ChartSheet({
   analysis,
   duration,
   inProgress,
+  practice = false,
 }: {
   recordingId: string;
   audioSrc: string;
   analysis: AnalysisOut | null;
   duration: number;
   inProgress: boolean;
+  practice?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -48,6 +58,10 @@ export default function ChartSheet({
     updateSettings,
     setTempo,
   } = useChart(recordingId, { poll: inProgress, awaitChart: analysis?.status === "done" });
+
+  // Hooks run before the early returns below, so the session is built from the segments the
+  // chart has (none, while it is still analysing) rather than from a chart that may be null.
+  const session = usePracticeSession(chart?.segments ?? NO_SEGMENTS);
 
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
@@ -80,7 +94,7 @@ export default function ChartSheet({
     if (!selectedId) return;
     const dismiss = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest(".segment-editor, [data-segment-id]")) return;
+      if (target?.closest(".chart-panel, [data-segment-id]")) return;
       setSelectedId(null);
     };
     const onKey = (e: KeyboardEvent) => {
@@ -108,22 +122,32 @@ export default function ChartSheet({
   }
 
   const bpm = chart.bpm ?? analysis?.bpm ?? null;
+  const selected = selectedId ? chart.segments.find((s) => s.id === selectedId) : undefined;
 
   return (
     <>
       {/* Tempo and key read as a sentence about the song and are edited where they are
-          read — click the BPM or the key to change it, no separate panel of form fields. */}
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
-        <TempoControl bpm={bpm} onChange={(next) => setTempo(next)} busy={isMutating} />
-        {bpm != null && <span className="muted">&middot;</span>}
-        <span className="muted" style={{ marginLeft: 6 }}>Key:</span>
-        <KeyControl
-          keyTonic={chart.key_tonic}
-          keyMode={chart.key_mode}
-          onChange={(patch) => updateSettings(patch)}
-          busy={isMutating}
-        />
-      </div>
+          read — click the BPM or the key to change it, no separate panel of form fields.
+          Practice mode reads them out but does not hand over the pen: tempo and key are
+          what a player is given on any chart, and re-cutting either mid-quiz is editing. */}
+      {practice ? (
+        <p className="muted" style={{ margin: "0 0 4px" }}>
+          {bpm != null && <>{bpm} BPM &middot; </>}
+          Key: {chart.key_tonic} {chart.key_mode}
+        </p>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+          <TempoControl bpm={bpm} onChange={(next) => setTempo(next)} busy={isMutating} />
+          {bpm != null && <span className="muted">&middot;</span>}
+          <span className="muted" style={{ marginLeft: 6 }}>Key:</span>
+          <KeyControl
+            keyTonic={chart.key_tonic}
+            keyMode={chart.key_mode}
+            onChange={(patch) => updateSettings(patch)}
+            busy={isMutating}
+          />
+        </div>
+      )}
 
       <audio ref={clock.ref} controls style={{ width: "100%" }} src={audioSrc} />
 
@@ -142,6 +166,16 @@ export default function ChartSheet({
         />
       </div> */}
 
+      {practice && (
+        <p className="muted" style={{ margin: "10px 0 0" }} role="status">
+          {session.total === 0
+            ? "No chords in this chart — nothing to name."
+            : session.solvedCount === session.total
+              ? `All ${session.total} chords named — the chart is yours.`
+              : `${session.solvedCount} of ${session.total} chords named. Click a “?” to name it.`}
+        </p>
+      )}
+
       <div className="chart-area" ref={chartArea} style={{ marginTop: 12 }}>
         <Timeline
           segments={chart.segments}
@@ -152,21 +186,38 @@ export default function ChartSheet({
           playing={clock.playing}
           rate={clock.rate}
           selectedId={selectedId}
+          maskedIds={practice ? session.masked : undefined}
           onSelect={setSelectedId}
           onSeek={clock.seek}
-          onResizeCommit={applyResize}
+          // Practice is read-only: no resize handles, so the chart cannot move under a
+          // player who is trying to hear where a chord ends.
+          onResizeCommit={practice ? undefined : applyResize}
         />
 
-        {selectedId && chart.segments.find((s) => s.id === selectedId) && (
+        {selected && practice && (
+          <ChordGuess
+            key={selected.id}
+            segment={selected}
+            top={editorTop}
+            solved={session.isSolved(selected.id)}
+            // Reveal on the chart as soon as it is named — the form owns its own goodbye, and
+            // stays mounted (green) through the flash rather than being unmounted by the
+            // reveal it just caused.
+            onSolved={session.reveal}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
+
+        {selected && !practice && (
           <SegmentEditor
-            segment={chart.segments.find((s) => s.id === selectedId)!}
+            segment={selected}
             allSegments={chart.segments}
             maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
             top={editorTop}
             onResize={(windows) => resizeSegments(windows)}
-            onSave={(patch) => updateSegment(selectedId, patch).then(() => undefined)}
+            onSave={(patch) => updateSegment(selected.id, patch).then(() => undefined)}
             onDelete={() => {
-              deleteSegment(selectedId);
+              deleteSegment(selected.id);
               setSelectedId(null);
             }}
             onClose={() => setSelectedId(null)}
@@ -176,45 +227,48 @@ export default function ChartSheet({
       </div>
 
       {/* Tempo and key are edited in the line above the player, so Advanced options is what
-          is left: the counts and shifts you reach for rarely. */}
-      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-        <button
-          aria-expanded={showAdvanced}
-          style={{ justifySelf: "start" }}
-          onClick={() => setShowAdvanced((open) => !open)}
-        >
-          {showAdvanced ? "▾" : "▸"} Advanced options
-        </button>
+          is left: the counts and shifts you reach for rarely. Practice mode has none of it —
+          transposing or re-cutting the chart mid-quiz would be rewriting the question. */}
+      {!practice && (
+        <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+          <button
+            aria-expanded={showAdvanced}
+            style={{ justifySelf: "start" }}
+            onClick={() => setShowAdvanced((open) => !open)}
+          >
+            {showAdvanced ? "▾" : "▸"} Advanced options
+          </button>
 
-        {showAdvanced && (
-          <div style={{ display: "grid", gap: 12 }}>
-            <TimeSignatureControl
-              beatsPerMeasure={chart.beats_per_measure}
-              measureOffset={chart.measure_offset}
-              onChange={(patch) => updateSettings(patch)}
-              busy={isMutating}
-            />
+          {showAdvanced && (
+            <div style={{ display: "grid", gap: 12 }}>
+              <TimeSignatureControl
+                beatsPerMeasure={chart.beats_per_measure}
+                measureOffset={chart.measure_offset}
+                onChange={(patch) => updateSettings(patch)}
+                busy={isMutating}
+              />
 
-            <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
+              <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
 
-            <button
-              disabled={isMutating}
-              style={{ justifySelf: "start" }}
-              onClick={() => {
-                const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
-                addSegment({
-                  start_beat: lastEnd,
-                  end_beat: lastEnd + chart.beats_per_measure,
-                  chord_root: chart.key_tonic,
-                  chord_quality: "maj",
-                });
-              }}
-            >
-              Add segment
-            </button>
-          </div>
-        )}
-      </div>
+              <button
+                disabled={isMutating}
+                style={{ justifySelf: "start" }}
+                onClick={() => {
+                  const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
+                  addSegment({
+                    start_beat: lastEnd,
+                    end_beat: lastEnd + chart.beats_per_measure,
+                    chord_root: chart.key_tonic,
+                    chord_quality: "maj",
+                  });
+                }}
+              >
+                Add segment
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }

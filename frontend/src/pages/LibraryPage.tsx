@@ -131,7 +131,8 @@ export default function LibraryPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                {r.analysis?.status === "done" && <Link to={`/recordings/${r.id}`}>Open chart</Link>}
+                {/* "Open", not "Open chart": the next page asks which way to open it. */}
+                {r.analysis?.status === "done" && <Link to={`/recordings/${r.id}`}>Open</Link>}
                 <button onClick={() => reanalyze(r.id)}>Re-analyze</button>
                 <button className="danger" onClick={() => remove(r.id)}>Delete</button>
               </div>
