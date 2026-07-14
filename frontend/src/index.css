@@ -115,6 +115,16 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 .container { max-width: 880px; margin: 0 auto; padding: 16px; }
+
+/* #root is the whole app: the header, then whichever page matched the route. A flex column
+   at least one viewport tall is what lets a PAGE push its own trailing content (the control
+   deck, see below) down to the true bottom of the screen instead of wherever the document's
+   own content happens to end. `100dvh`, not `100vh` — `vh` is measured against the browser
+   chrome's largest state, so on mobile (where the URL bar collapses on scroll) it leaves a
+   gap under the "pinned" deck; `dvh` tracks the chrome as it actually is. `min-height`, not
+   `height`: a chart longer than one screen must still be free to grow past it and scroll. */
+#root { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-header { flex: 0 0 auto; }
 button {
   font: inherit;
   font-weight: var(--weight-medium);
@@ -282,10 +292,22 @@ a { color: var(--accent); }
 
 /* ---- Zone 2: the chart is the hero --------------------------------------------------
    It was boxed into the same 880px column as a login form. It is the product; give it
-   the room. */
-.chart-page { max-width: 1100px; margin: 0 auto; padding: var(--space-4); }
+   the room.
+
+   It is also a flex column now, and `flex: 1 1 auto` so it takes the leftover height #root
+   reserved above (see #root, top of this file) instead of merely sizing to its content:
+   that leftover is exactly what lets .chart-page__body's own flex:1 (below) push the
+   control deck down to the real bottom of a short screen. */
+.chart-page { flex: 1 1 auto; display: flex; flex-direction: column;
+  max-width: 1100px; margin: 0 auto; padding: var(--space-4); }
 
 /* ---- ChartSheet -------------------------------------------------------------------- */
+/* Everything ChartSheet renders EXCEPT the control deck (which follows as its sibling) —
+   the chart, the practice status line, Advanced options. `flex: 1 1 auto` is what actually
+   pins the deck: it soaks up whatever height .chart-page (or GuestHomePage's .guest-chart)
+   has going spare, which is precisely the gap between a short chart and the bottom of the
+   screen, so the deck — laid out after this box — lands flush with it. */
+.chart-page__body { flex: 1 1 auto; }
 .chart-key-summary { margin: 0 0 var(--space-1); }
 .chart-practice-status { margin: var(--space-3) 0 0; }
 .chart-audio { width: 100%; }
@@ -300,7 +322,16 @@ a { color: var(--accent); }
 .no-margin { margin: 0; }
 
 /* ---- GuestHomePage ------------------------------------------------------------------ */
-.guest-chart { margin-top: var(--space-5); }
+/* Also a flex column with flex:1 — same reasoning as .chart-page above. GuestHomePage has
+   marketing copy both above (the pitch, the dropzone) AND below (the "create an account"
+   CTA) the chart, so it cannot itself be the thing that stretches; this inner box is, and
+   it is what gives ChartSheet's .chart-page__body a floor to push the deck against on a
+   short guest chart, same as the signed-in editor. */
+.guest-chart { flex: 1 1 auto; display: flex; flex-direction: column; margin-top: var(--space-5); }
+/* This page's own #root flex item (see #root, top of file), scoped separately from the
+   generic .container so LoginPage/RegisterPage/LibraryPage — which have no bottom-pinned
+   deck to feed — are untouched. */
+.guest-home { flex: 1 1 auto; display: flex; flex-direction: column; }
 .guest-cta { margin-top: var(--space-6); }
 .chart-panel { position: static; width: auto; box-shadow: var(--shadow-panel); }
 .chart-panel label { display: grid; gap: var(--space-1); }
@@ -488,10 +519,34 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 
 /* ---- Zone 3: the control deck --------------------------------------------------------
    Pinned to the bottom, because a phone is on the roadmap and the bottom edge is the thumb
-   zone. Costs nothing to take now. */
+   zone. Costs nothing to take now.
+
+   `position: sticky; bottom: 0` on its own does NOT pin anything: sticky only holds an
+   element in place while it would otherwise scroll out of its containing block — i.e. it
+   does nothing at all unless the containing block is taller than the viewport. A chart
+   short enough to fit on screen (this app's median case, and the phone form factor this
+   deck was justified by is a SHORTER screen, so short pages are the common case there, not
+   the edge case) has nothing for `sticky` to hold against, and the deck just sits at the
+   end of the document flow whever that happens to land — which measured out to the middle
+   of the page, not the bottom.
+
+   The fix is the flex column on #root/.chart-page/.guest-chart above: it guarantees the
+   deck's containing block is at least one viewport tall, so on a short chart the deck
+   lands at the bottom via ordinary flex layout (chart-page__body's flex:1 pushes it there),
+   and `sticky` only has to take over once a long chart makes the page taller than the
+   screen. `margin-top: auto` is the belt to that braces — it independently pushes the deck
+   to the end of its flex container's free space, so the two mechanisms agree rather than
+   one silently depending on the other.
+
+   The negative right/bottom/left margin cancels its parent page's own padding (--space-4,
+   on both .chart-page and .container) so the bar's background/border/shadow reach the real
+   edges of the screen — a thumb-zone bottom bar with a 16px gap under it is not pinned, it
+   is floating 16px above pinned. `.control-deck__row`'s own max-width + margin:auto (below)
+   re-centers the CONTENT back onto the chart's column, so only the chrome bleeds. */
 .control-deck {
   position: sticky;
   bottom: 0;
+  margin: auto calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
   z-index: 20;
   background: var(--surface);
   border-top: 1px solid var(--line);

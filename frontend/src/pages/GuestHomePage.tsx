@@ -40,7 +40,7 @@ export default function GuestHomePage() {
   const practice = mode === "practice";
 
   return (
-    <div className="container">
+    <div className="container guest-home">
       <h1>Turn a recording into a chord chart</h1>
       <p className="muted">
         Drop in a practice recording and Tabit works out the tempo, key and chords. No account

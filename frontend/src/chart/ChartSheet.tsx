@@ -145,119 +145,125 @@ export default function ChartSheet({
 
   return (
     <>
-      {/* The deck is the controls now — no native `controls` attribute, so it does not
-          duplicate the transport. Kept in the DOM (just visually hidden) since it is still
-          what actually plays the audio; the ref wires it to the shared clock. */}
-      <audio ref={clock.ref} className="chart-audio visually-hidden" src={audioSrc} />
+      {/* Everything but the deck, grouped so it can take the flex slack in the page column —
+          on a short chart this is what gets stretched, which is what pushes the deck (below,
+          a sibling) down to the bottom of a short viewport instead of leaving it stranded
+          mid-page. See .chart-page__body in index.css. */}
+      <div className="chart-page__body">
+        {/* The deck is the controls now — no native `controls` attribute, so it does not
+            duplicate the transport. Kept in the DOM (just visually hidden) since it is still
+            what actually plays the audio; the ref wires it to the shared clock. */}
+        <audio ref={clock.ref} className="chart-audio visually-hidden" src={audioSrc} />
 
-      {practice && (
-        <p
-          className="muted chart-practice-status"
-          // role="status" ONLY while paused. During playback the user is listening, and this
-          // would announce "3 of 8 chords named" over the top of the song. The text stays on
-          // screen either way — it just stops SPEAKING.
-          role={clock.playing ? undefined : "status"}
-        >
-          {session.total === 0
-            ? "No chords in this chart — nothing to name."
-            : session.solvedCount === session.total
-              ? `All ${session.total} chords named — the chart is yours.`
-              : `${session.solvedCount} of ${session.total} chords named. Click a “?” to name it.`}
-        </p>
-      )}
-
-      <div className="chart-workspace" data-panel-open={selected ? "true" : undefined}>
-        <Timeline
-          segments={chart.segments}
-          beatsPerMeasure={chart.beats_per_measure}
-          measureOffset={chart.measure_offset}
-          duration={duration}
-          currentTime={clock.currentTime}
-          playing={clock.playing}
-          rate={clock.rate}
-          selectedId={selectedId}
-          maskedIds={practice ? session.masked : undefined}
-          grid={grid}
-          onSelect={setSelectedId}
-          onSeek={clock.seek}
-          // Practice is read-only: no resize handles, so the chart cannot move under a
-          // player who is trying to hear where a chord ends.
-          onResizeCommit={practice ? undefined : applyResize}
-        />
-
-        {selected && practice && (
-          <ChordGuess
-            key={selected.id}
-            segment={selected}
-            solved={session.isSolved(selected.id)}
-            // Reveal on the chart as soon as it is named — the form owns its own goodbye, and
-            // stays mounted (green) through the flash rather than being unmounted by the
-            // reveal it just caused.
-            onSolved={session.reveal}
-            onClose={() => setSelectedId(null)}
-          />
+        {practice && (
+          <p
+            className="muted chart-practice-status"
+            // role="status" ONLY while paused. During playback the user is listening, and this
+            // would announce "3 of 8 chords named" over the top of the song. The text stays on
+            // screen either way — it just stops SPEAKING.
+            role={clock.playing ? undefined : "status"}
+          >
+            {session.total === 0
+              ? "No chords in this chart — nothing to name."
+              : session.solvedCount === session.total
+                ? `All ${session.total} chords named — the chart is yours.`
+                : `${session.solvedCount} of ${session.total} chords named. Click a “?” to name it.`}
+          </p>
         )}
 
-        {selected && !practice && (
-          <SegmentEditor
-            segment={selected}
-            allSegments={chart.segments}
-            maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
-            onResize={(windows) => resizeSegments(windows)}
-            onSave={(patch) => updateSegment(selected.id, patch).then(() => undefined)}
-            onDelete={() => {
-              deleteSegment(selected.id);
-              setSelectedId(null);
-            }}
-            onClose={() => setSelectedId(null)}
-            busy={isMutating}
+        <div className="chart-workspace" data-panel-open={selected ? "true" : undefined}>
+          <Timeline
+            segments={chart.segments}
+            beatsPerMeasure={chart.beats_per_measure}
+            measureOffset={chart.measure_offset}
+            duration={duration}
+            currentTime={clock.currentTime}
+            playing={clock.playing}
+            rate={clock.rate}
+            selectedId={selectedId}
+            maskedIds={practice ? session.masked : undefined}
+            grid={grid}
+            onSelect={setSelectedId}
+            onSeek={clock.seek}
+            // Practice is read-only: no resize handles, so the chart cannot move under a
+            // player who is trying to hear where a chord ends.
+            onResizeCommit={practice ? undefined : applyResize}
           />
+
+          {selected && practice && (
+            <ChordGuess
+              key={selected.id}
+              segment={selected}
+              solved={session.isSolved(selected.id)}
+              // Reveal on the chart as soon as it is named — the form owns its own goodbye, and
+              // stays mounted (green) through the flash rather than being unmounted by the
+              // reveal it just caused.
+              onSolved={session.reveal}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
+
+          {selected && !practice && (
+            <SegmentEditor
+              segment={selected}
+              allSegments={chart.segments}
+              maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
+              onResize={(windows) => resizeSegments(windows)}
+              onSave={(patch) => updateSegment(selected.id, patch).then(() => undefined)}
+              onDelete={() => {
+                deleteSegment(selected.id);
+                setSelectedId(null);
+              }}
+              onClose={() => setSelectedId(null)}
+              busy={isMutating}
+            />
+          )}
+        </div>
+
+        {/* Tempo and key are edited in the line above the player, so Advanced options is what
+            is left: the counts and shifts you reach for rarely. Practice mode has none of it —
+            transposing or re-cutting the chart mid-quiz would be rewriting the question. */}
+        {!practice && (
+          <Stack direction="column" gap={3} align="stretch" className="chart-advanced">
+            <Button
+              aria-expanded={showAdvanced}
+              className="self-start"
+              onClick={() => setShowAdvanced((open) => !open)}
+            >
+              {showAdvanced ? "▾" : "▸"} Advanced options
+            </Button>
+
+            {showAdvanced && (
+              <Stack direction="column" gap={3} align="stretch">
+                <TimeSignatureControl
+                  beatsPerMeasure={chart.beats_per_measure}
+                  measureOffset={chart.measure_offset}
+                  onChange={(patch) => updateSettings(patch)}
+                  busy={isMutating}
+                />
+
+                <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
+
+                <Button
+                  disabled={isMutating}
+                  className="self-start"
+                  onClick={() => {
+                    const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
+                    addSegment({
+                      start_beat: lastEnd,
+                      end_beat: lastEnd + chart.beats_per_measure,
+                      chord_root: chart.key_tonic,
+                      chord_quality: "maj",
+                    });
+                  }}
+                >
+                  Add segment
+                </Button>
+              </Stack>
+            )}
+          </Stack>
         )}
       </div>
-
-      {/* Tempo and key are edited in the line above the player, so Advanced options is what
-          is left: the counts and shifts you reach for rarely. Practice mode has none of it —
-          transposing or re-cutting the chart mid-quiz would be rewriting the question. */}
-      {!practice && (
-        <Stack direction="column" gap={3} align="stretch" className="chart-advanced">
-          <Button
-            aria-expanded={showAdvanced}
-            className="self-start"
-            onClick={() => setShowAdvanced((open) => !open)}
-          >
-            {showAdvanced ? "▾" : "▸"} Advanced options
-          </Button>
-
-          {showAdvanced && (
-            <Stack direction="column" gap={3} align="stretch">
-              <TimeSignatureControl
-                beatsPerMeasure={chart.beats_per_measure}
-                measureOffset={chart.measure_offset}
-                onChange={(patch) => updateSettings(patch)}
-                busy={isMutating}
-              />
-
-              <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
-
-              <Button
-                disabled={isMutating}
-                className="self-start"
-                onClick={() => {
-                  const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
-                  addSegment({
-                    start_beat: lastEnd,
-                    end_beat: lastEnd + chart.beats_per_measure,
-                    chord_root: chart.key_tonic,
-                    chord_quality: "maj",
-                  });
-                }}
-              >
-                Add segment
-              </Button>
-            </Stack>
-          )}
-        </Stack>
-      )}
 
       {/* Zone 3, pinned to the bottom: the transport, the tempo/key sentence, and the
           on-demand "where am I" — everything you reach for while a song runs. */}
