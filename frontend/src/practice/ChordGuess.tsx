@@ -141,8 +141,18 @@ export default function ChordGuess({
           </select>
         </Field>
 
+        {/* Never gated on !playing: the user just submitted a guess, so this ANSWERS a
+            question rather than volunteering speech over the music. Silencing it during
+            playback would leave a blind player with no idea whether they got it right —
+            and practice mode's ear-training quiz is the single most valuable feature this
+            app has for exactly that player.
+
+            Polite, not assertive: role="status" (not "alert") because nothing about a
+            wrong guess is urgent enough to interrupt whatever the reader is already
+            saying, over the top of the song. Same reasoning as WhereAmI's polite
+            live region — the user asked, they can wait a beat for the answer. */}
         {verdict === "wrong" && (
-          <p className="error" role="alert">
+          <p className="error" role="status">
             Not that one — listen again and try another.
           </p>
         )}

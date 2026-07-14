@@ -94,7 +94,10 @@ test("a wrong answer keeps the chord hidden; the right one reveals it", async ()
   await userEvent.selectOptions(within(form as HTMLElement).getByLabelText("Quality"), "Major");
   await userEvent.click(within(form as HTMLElement).getByRole("button", { name: "Submit" }));
 
-  expect(await screen.findByRole("alert")).toHaveTextContent(/not that one/i);
+  // Polite (role="status"), not assertive: the guess answers a question the user just
+  // asked, but nothing about it is urgent enough to interrupt over the music.
+  const wrongMessage = await screen.findByText(/not that one/i);
+  expect(wrongMessage).toHaveAttribute("role", "status");
   expect(form.className).toMatch(/chord-guess--wrong/);
   expect(screen.getAllByText("?")).toHaveLength(2); // still hidden
   expect(screen.queryByText("Gdom7")).toBeNull();

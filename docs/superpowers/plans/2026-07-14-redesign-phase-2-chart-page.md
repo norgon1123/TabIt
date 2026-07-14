@@ -13,7 +13,21 @@
 
 ## Global Constraints
 
-- **Quiet while playing, rich while paused.** During playback the user is **listening**. Screen-reader speech and the music compete for the same channel — a chart that announced every chord change as it played would be *actively hostile*. **No live regions may fire while `playing` is true.** This is also why the chrome recedes: the same principle, expressed visually.
+- **Quiet while playing, rich while paused — precisely: during playback the app never VOLUNTEERS speech, it may ANSWER when spoken to.** During playback the user is **listening**. Screen-reader speech and the music compete for the same channel — a chart that announced every chord change unprompted would be *actively hostile*. But a message that directly answers something the user just did is not competing for that channel; it is the thing they asked for. **"No live regions may fire while `playing` is true" is a crude, WRONG restatement of this rule** — taken literally it would silence `ChordGuess`'s guess feedback, leaving a blind user with no idea whether a mid-song guess was right. This is also why the chrome recedes: the same principle, expressed visually.
+
+  | Speaker | Volunteers or answers? | Verdict |
+  |---|---|---|
+  | Practice status line (*"3 of 8 chords named"*) | volunteers | gated on `!playing` |
+  | `Spinner` / `AnalyzingIndicator` (*"Analyzing…"*) | volunteers | gated on `!playing` |
+  | `WhereAmI` (*"bar 12, beat 2"*) | answers — the user pressed a button | speaks, `role="status"` (polite) |
+  | `ChordGuess` (*"Not that one" / "C major — that's it"*) | answers — the user submitted a guess | speaks, **never** gated on `!playing`; `role="status"` (polite), not `role="alert"` — a wrong guess is not an emergency |
+
+  Practice mode is an ear-training quiz — the single most valuable feature this app has
+  for a blind or low-vision musician — so `ChordGuess`'s verdict must always speak. It is
+  never `role="alert"` because nothing in it is urgent enough to interrupt the music; it
+  is always `role="status"` because the user asked and can wait a beat for the answer.
+  Contrast `Field`'s form-validation error, which stays `role="alert"`: a failed save is a
+  genuine, rare, user-initiated error the user must not miss.
 - **The scrubber speaks music, not seconds.** `aria-valuetext` must read *"bar 12, beat 2"*. `87 seconds` is meaningless to someone practising, and it is the reason we cannot keep the native `<audio controls>`.
 - **Inline `style={{...}}` is permitted for runtime-computed geometry ONLY** — a beat-derived flex ratio, a playhead transform, a scrub position. **Forbidden** for colour, spacing, radius, border, shadow, font, or static layout. `src/ui/noInlineStyle.test.ts` enforces this and will fail the build.
 - **Tokens are the only source of visual values.** `src/theme/palette.test.ts` parses `index.css` and fails the build on any hardcoded hex outside the token blocks, and on any colour pair below WCAG AA.
@@ -1901,7 +1915,7 @@ gh pr create --draft --title "Redesign Phase 2: the chart page" --body "..."
 | The chart is a semantic sequence | 8 |
 | Scrubber's `aria-valuetext` in musical terms | 1 (maths) + 4 (wiring) |
 | Panels move focus in on open, return it on close | 7 |
-| Quiet while playing — no live regions during playback | 4 (slider), 5 (deck), 8 (`WhereAmI` exists *because* of this), 9 (gates the practice status line) |
+| Quiet while playing — never volunteers speech, may answer when spoken to | 4 (slider), 5 (deck), 8 (`WhereAmI` exists *because* of this), 9 (gates the practice status line; `ChordGuess`'s answers stay ungated) |
 | Consolidate actions to one home each | 9 |
 | No sidebar | Honoured — five screens do not need one |
 

@@ -58,8 +58,10 @@ is that chords get masked. `ModeChoice` already asks *"How do you want to open t
    sessions. A perpetually-animating UI is exhausting. Playfulness spends itself in
    exactly two moments (see *Motion*).
 3. **Quiet while playing, rich while paused.** During playback the user is *listening*.
-   Chrome recedes; screen readers stay silent. Accessibility and the play-along feel want
-   the same thing — which is how we know it is a real principle and not a bolt-on.
+   Chrome recedes; the app stops *volunteering* speech. It may still *answer* — see
+   *Screen readers* below for why that distinction matters. Accessibility and the
+   play-along feel want the same thing — which is how we know it is a real principle and
+   not a bolt-on.
 4. **Hue is never the only channel.** Every meaning carried by colour carries a second
    channel too.
 5. **Theme is about the room; mode is about the app.** They are orthogonal and must not be
@@ -238,12 +240,29 @@ guitar-practice apps skew male.
 
 ### Screen readers
 
-**The design rule: quiet while playing, rich while paused.** During playback the user is
-*listening*. Screen-reader speech and the music compete for the same channel — a chart
-announcing every chord change as it plays would be *actively hostile*.
+**The design rule, precisely stated: during playback the app never VOLUNTEERS speech. It
+may ANSWER when spoken to.** During playback the user is *listening*, and screen-reader
+speech competes with the music for the same channel — a chart announcing every chord
+change unprompted would be *actively hostile*. But a message that is a **direct answer to
+something the user just did** is not competing for that channel; it is the thing they
+asked for. "No live regions during playback" is too crude a restatement of this — taken
+literally it would silence `ChordGuess`'s guess feedback, which is exactly the wrong call
+(see the table below and *Why practice mode deserves this*).
 
-- **No live regions during playback.** Instead: an on-demand "where am I", and full keyboard
-  navigation of the chart when stopped.
+| Speaker | Volunteers or answers? | Verdict |
+|---|---|---|
+| Practice status line (*"3 of 8 chords named"*) | volunteers | gated on `!playing` |
+| `Spinner` / `AnalyzingIndicator` (*"Analyzing…"*) | volunteers | gated on `!playing` |
+| `WhereAmI` (*"bar 12, beat 2"*) | answers — the user pressed a button | speaks; `role="status"` (polite) |
+| `ChordGuess` (*"Not that one" / "C major — that's it"*) | answers — the user submitted a guess | speaks, **not** gated on `!playing`; `role="status"` (polite), not `role="alert"` — a wrong guess is not an emergency |
+
+- **Volunteered speech is gated on `!playing`**: the practice status line and the
+  analyzing spinner. Instead of a volunteered position during playback: an on-demand
+  "where am I", and full keyboard navigation of the chart when stopped.
+- **Answers are never gated on `!playing`**, and default to `role="status"` (polite)
+  rather than `role="alert"` (assertive) unless the message is a genuine error the user
+  must not miss (see `Field`'s form-validation error, which stays `alert` — rare,
+  user-initiated, and something they cannot be allowed to miss).
 - **The chart is a semantic sequence**, not a pile of divs. Keyboard-navigable, each cell
   announcing e.g. *"bar 3, beat 1, A minor, 2 beats."*
 - **Chord cells are real focusable buttons.** This is load-bearing — it is the condition
@@ -321,7 +340,7 @@ it ends up half-done. The audit at the end verifies; it does not implement.
 |---|---|---|---|
 | **1. Foundation** | Token layer (all six kinds), Figtree + type scale, primitives (`Button`/`Card`/`Field`/`Panel`/layout), theme toggle, and the elimination of all 78 inline style objects. A11y: the primitives get contrast, focus rings, and semantics built in **once**. | The palette warms, the type changes, light mode appears. Layout is unchanged. | Nothing structural moves, so the risk is contained to appearance. This is also the phase that makes every later phase cheap. |
 | **2. Chart page structure** | The three zones, the pinned control deck, the docked side panel (replacing the measured-pixel `top`), the `ScrubBar` revival. A11y: chord cells become real focusable buttons; the chart becomes a semantic sequence; the scrubber gets musical `aria-valuetext`. | The chart page is rearranged. | The chart still shows the same information; only where things sit changes. |
-| **3. Mode expression** | The receding context bar, practice mode's theme-independent spotlight, the current-chord lift, the reveal-as-reward. A11y: the one-channel "correct" state is fixed; everything sits behind `prefers-reduced-motion`; no live regions during playback. | The app gains its personality. The two modes finally feel different. | Purely additive on top of a working phase 2. |
+| **3. Mode expression** | The receding context bar, practice mode's theme-independent spotlight, the current-chord lift, the reveal-as-reward. A11y: the one-channel "correct" state is fixed; everything sits behind `prefers-reduced-motion`; no *volunteered* speech during playback (answers, e.g. `ChordGuess`'s guess feedback, are unaffected). | The app gains its personality. The two modes finally feel different. | Purely additive on top of a working phase 2. |
 | **4. Audit and close** | Full WCAG AA contrast sweep in both themes, keyboard-only walkthrough of all five screens, screen-reader pass on practice mode. Chord-quality colour lands here **if** it passes. | Little to none, by design. | It is a verification phase. If it finds nothing, that is the phase succeeding. |
 
 **Phase 1 is the load-bearing one.** It is also the least glamorous — it ends with the app

@@ -15,7 +15,15 @@ export interface FieldProps {
  *
  *  The error is role="alert" so it is announced when it appears. A red border alone is
  *  invisible to a screen reader and ambiguous to a red-green colourblind user — colour is
- *  never the only channel. */
+ *  never the only channel.
+ *
+ *  role="alert" (assertive) is deliberate here and should NOT be softened to role="status"
+ *  the way ChordGuess's wrong-guess message was. The rule is "answers may speak; nothing
+ *  during playback may volunteer" — but a failed save is also a genuine error the user
+ *  must not miss: it is rare, it is user-initiated (they clicked Save), and there is no
+ *  song playing to talk over. A wrong practice guess is none of those things — it is
+ *  routine, expected, and happens mid-playback — which is why that one is polite and this
+ *  one stays assertive. */
 export default function Field({ label, children, error, hint }: FieldProps) {
   return (
     <div className="field">

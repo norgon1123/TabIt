@@ -31,13 +31,39 @@ test("a wrong answer is refused, marked invalid, and shakes", async () => {
 
   await guess("C", "Major");
 
-  expect(await screen.findByRole("alert")).toHaveTextContent(/not that one/i);
+  // Polite, not assertive: the user asked (they submitted a guess), so it speaks — but
+  // nothing here is urgent enough to interrupt whatever the reader was already saying.
+  expect(await screen.findByRole("status")).toHaveTextContent(/not that one/i);
   expect(container.querySelector(".chord-guess--wrong")).not.toBeNull();
   expect(container.querySelector(".chord-guess.shake")).not.toBeNull();
   expect(screen.getByLabelText("Root")).toHaveAttribute("aria-invalid", "true");
   // The chord is not given away, and the form stays up for another attempt.
   expect(onSolved).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Submit" })).toBeEnabled();
+});
+
+it("announces a wrong guess politely — it answers, it does not interrupt", async () => {
+  // The user ASKED: they submitted a guess. So this must speak — gating it on !playing
+  // would leave a blind user with no idea whether they were right, and practice mode is
+  // an ear-training quiz, the feature this app serves a blind musician BEST.
+  //
+  // But it must not INTERRUPT. role="alert" is assertive and cuts across whatever the
+  // screen reader is saying, over the top of the music. A wrong guess is not an emergency.
+  render(<ChordGuess segment={SEGMENT} onSolved={vi.fn()} />);
+
+  await guess("C", "Major");
+
+  const said = screen.getByText(/not that one/i);
+  expect(said).toHaveAttribute("role", "status");
+  expect(said).not.toHaveAttribute("role", "alert");
+});
+
+it("still announces a wrong guess at all — silence would be the worse bug", async () => {
+  render(<ChordGuess segment={SEGMENT} onSolved={vi.fn()} />);
+
+  await guess("C", "Major");
+
+  expect(screen.getByRole("status")).toHaveTextContent(/not that one/i);
 });
 
 test("a second wrong answer shakes again", async () => {
