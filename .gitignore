@@ -1,7 +1,9 @@
 # Python
 __pycache__/
 *.py[cod]
-.venv/
+# No trailing slash: in a worktree, scripts/setup-worktree.sh makes .venv a SYMLINK to the
+# root checkout's venv, and `.venv/` (dir-only) would not match a symlink.
+.venv
 *.egg-info/
 .pytest_cache/
 
