@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { barBeatAt, formatMusicalPosition, type BeatGridInfo } from "./musicalPosition";
 
 interface ScrubBarProps {
   currentTime: number;
   duration: number;
   playing: boolean;
   rate: number;
+  /** The chart's beat grid, so the slider can announce where it is in MUSIC. */
+  grid: BeatGridInfo;
   onSeek: (time: number) => void;
 }
 
-export default function ScrubBar({ currentTime, duration, playing, rate, onSeek }: ScrubBarProps) {
+export default function ScrubBar({ currentTime, duration, playing, rate, grid, onSeek }: ScrubBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
@@ -82,6 +85,13 @@ export default function ScrubBar({ currentTime, duration, playing, rate, onSeek 
       aria-valuemin={0}
       aria-valuemax={duration || 0}
       aria-valuenow={currentTime}
+      // Seconds are meaningless to someone practising. A screen reader reads valuetext in
+      // preference to valuenow, so this is what a player actually hears when they move the
+      // scrubber — and it is why the native <audio> element's own slider had to go.
+      //
+      // Deliberately NOT a live region: during playback the user is LISTENING, and speech
+      // competes with the music. This speaks when spoken to.
+      aria-valuetext={formatMusicalPosition(barBeatAt(grid, currentTime))}
       tabIndex={0}
       className="scrub-bar"
       onPointerDown={onPointerDown}
