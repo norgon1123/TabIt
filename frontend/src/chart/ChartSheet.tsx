@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type { AnalysisOut } from "../api/types";
 import { useChart } from "./useChart";
-import { useMediaClock } from "./useMediaClock";
+import { usePlayback } from "./PlaybackContext";
 import { totalBeats } from "./beatGrid";
 import Timeline, { type SegmentUpdate } from "./Timeline";
 import type { BeatGridInfo } from "./musicalPosition";
-// import ScrubBar from "./ScrubBar"; // disabled with the scrub-bar block below
+import ControlDeck from "./ControlDeck";
+import WhereAmI from "./WhereAmI";
 import SegmentEditor from "./SegmentEditor";
 import TempoControl from "./TempoControl";
 import KeyControl from "./KeyControl";
@@ -45,7 +46,7 @@ export default function ChartSheet({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const clock = useMediaClock();
+  const clock = usePlayback();
 
   const {
     chart,
@@ -105,8 +106,8 @@ export default function ChartSheet({
 
   const bpm = chart.bpm ?? analysis?.bpm ?? null;
   const selected = selectedId ? chart.segments.find((s) => s.id === selectedId) : undefined;
-  // Timeline needs this to announce a chord's position ("bar 3, beat 1"). Task 9 builds this
-  // once and threads it through ControlDeck/WhereAmI too; here it is only what Timeline needs.
+  // Threaded through Timeline (position announcements), ControlDeck (the scrubber's
+  // aria-valuetext) and WhereAmI (the on-demand "where am I") — built once, here.
   const grid: BeatGridInfo = {
     // ChartOut declares beat_times as always-present, but it is fine either way: barBeatAt's
     // beatIndexAt spreads it into an array, and a genuinely missing value would throw before
@@ -118,48 +119,45 @@ export default function ChartSheet({
     measureOffset: chart.measure_offset,
   };
 
+  // Tempo and key read as a sentence about the song and are edited where they are read —
+  // click the BPM or the key to change it, no separate panel of form fields. Practice mode
+  // reads them out but does not hand over the pen: tempo and key are what a player is given
+  // on any chart, and re-cutting either mid-quiz is editing. Handed to the deck as its
+  // children — the deck does not know what a chart is.
+  const tempoAndKey = practice ? (
+    <p className="muted chart-key-summary">
+      {bpm != null && <>{bpm} BPM &middot; </>}
+      Key: {chart.key_tonic} {chart.key_mode}
+    </p>
+  ) : (
+    <Stack wrap gap={2}>
+      <TempoControl bpm={bpm} onChange={(next) => setTempo(next)} busy={isMutating} />
+      {bpm != null && <span className="muted">&middot;</span>}
+      <span className="muted">Key:</span>
+      <KeyControl
+        keyTonic={chart.key_tonic}
+        keyMode={chart.key_mode}
+        onChange={(patch) => updateSettings(patch)}
+        busy={isMutating}
+      />
+    </Stack>
+  );
+
   return (
     <>
-      {/* Tempo and key read as a sentence about the song and are edited where they are
-          read — click the BPM or the key to change it, no separate panel of form fields.
-          Practice mode reads them out but does not hand over the pen: tempo and key are
-          what a player is given on any chart, and re-cutting either mid-quiz is editing. */}
-      {practice ? (
-        <p className="muted chart-key-summary">
-          {bpm != null && <>{bpm} BPM &middot; </>}
-          Key: {chart.key_tonic} {chart.key_mode}
-        </p>
-      ) : (
-        <Stack wrap gap={2}>
-          <TempoControl bpm={bpm} onChange={(next) => setTempo(next)} busy={isMutating} />
-          {bpm != null && <span className="muted">&middot;</span>}
-          <span className="muted">Key:</span>
-          <KeyControl
-            keyTonic={chart.key_tonic}
-            keyMode={chart.key_mode}
-            onChange={(patch) => updateSettings(patch)}
-            busy={isMutating}
-          />
-        </Stack>
-      )}
-
-      <audio ref={clock.ref} controls className="chart-audio" src={audioSrc} />
-
-      {/*
-        YouTube-style scrub bar — commented out to avoid a duplicate bar
-        alongside the native <audio> controls (bad UX). Kept for later use;
-        re-enable by uncommenting this block.
-      */}
-      {/* <ScrubBar
-        currentTime={clock.currentTime}
-        duration={clock.duration || duration}
-        playing={clock.playing}
-        rate={clock.rate}
-        onSeek={clock.seek}
-      /> */}
+      {/* The deck is the controls now — no native `controls` attribute, so it does not
+          duplicate the transport. Kept in the DOM (just visually hidden) since it is still
+          what actually plays the audio; the ref wires it to the shared clock. */}
+      <audio ref={clock.ref} className="chart-audio visually-hidden" src={audioSrc} />
 
       {practice && (
-        <p className="muted chart-practice-status" role="status">
+        <p
+          className="muted chart-practice-status"
+          // role="status" ONLY while paused. During playback the user is listening, and this
+          // would announce "3 of 8 chords named" over the top of the song. The text stays on
+          // screen either way — it just stops SPEAKING.
+          role={clock.playing ? undefined : "status"}
+        >
           {session.total === 0
             ? "No chords in this chart — nothing to name."
             : session.solvedCount === session.total
@@ -260,6 +258,13 @@ export default function ChartSheet({
           )}
         </Stack>
       )}
+
+      {/* Zone 3, pinned to the bottom: the transport, the tempo/key sentence, and the
+          on-demand "where am I" — everything you reach for while a song runs. */}
+      <ControlDeck grid={grid}>
+        {tempoAndKey}
+        <WhereAmI grid={grid} />
+      </ControlDeck>
     </>
   );
 }

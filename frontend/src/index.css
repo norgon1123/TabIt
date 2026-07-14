@@ -266,6 +266,25 @@ a { color: var(--accent); }
   }
 }
 
+/* ---- Zone 1: the context bar --------------------------------------------------------- */
+.chart-context-bar { padding-bottom: var(--space-3); transition: opacity 200ms ease; }
+.chart-context-bar__title { margin: 0; font-size: var(--text-xl); }
+
+/* Recedes while playing — eyes on hands, not on chrome. It DIMS; it does not disappear:
+   a control you cannot find is worse than one you can ignore, and it stays focusable. */
+.chart-context-bar[data-receded="true"] { opacity: 0.45; }
+.chart-context-bar[data-receded="true"]:hover,
+.chart-context-bar[data-receded="true"]:focus-within { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-context-bar { transition: none; }
+}
+
+/* ---- Zone 2: the chart is the hero --------------------------------------------------
+   It was boxed into the same 880px column as a login form. It is the product; give it
+   the room. */
+.chart-page { max-width: 1100px; margin: 0 auto; padding: var(--space-4); }
+
 /* ---- ChartSheet -------------------------------------------------------------------- */
 .chart-key-summary { margin: 0 0 var(--space-1); }
 .chart-practice-status { margin: var(--space-3) 0 0; }

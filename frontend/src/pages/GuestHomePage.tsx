@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ChartSheet from "../chart/ChartSheet";
+import { PlaybackProvider } from "../chart/PlaybackContext";
 import { useRecording } from "../chart/useRecording";
 import { useGuestSong } from "../guest/useGuestSong";
 import UploadDropzone from "../library/UploadDropzone";
@@ -87,15 +88,17 @@ export default function GuestHomePage() {
           {mode == null ? (
             <ModeChoice onChoose={choose} />
           ) : (
-            <ChartSheet
-              recordingId={recordingId}
-              // The server deleted the upload when analysis finished; play the local copy.
-              audioSrc={audioUrl}
-              analysis={analysis}
-              duration={duration}
-              inProgress={inProgress}
-              practice={practice}
-            />
+            <PlaybackProvider>
+              <ChartSheet
+                recordingId={recordingId}
+                // The server deleted the upload when analysis finished; play the local copy.
+                audioSrc={audioUrl}
+                analysis={analysis}
+                duration={duration}
+                inProgress={inProgress}
+                practice={practice}
+              />
+            </PlaybackProvider>
           )}
         </div>
       )}

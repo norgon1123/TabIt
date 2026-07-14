@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -188,6 +188,30 @@ test("a chart with no chords does not congratulate the player on naming all zero
 
   expect(await screen.findByText(/no chords in this chart/i)).toBeInTheDocument();
   expect(screen.queryByText(/all 0 chords named/i)).toBeNull();
+});
+
+// This is the rule the whole phase turns on: during playback the user is LISTENING, and a
+// live region narrating "3 of 8 chords named" over the top of the song is actively hostile
+// — the assistive equivalent of someone shouting chords at you while you practise. The text
+// stays on screen either way; only the role (and so the announcement) comes and goes.
+test("the practice status line stops announcing while playing, and speaks again once paused", async () => {
+  login();
+  serveChart();
+  const { container } = open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+
+  const status = () => container.querySelector(".chart-practice-status");
+  expect(status()).toHaveAttribute("role", "status");
+
+  const audio = container.querySelector("audio")!;
+  fireEvent.play(audio);
+  await waitFor(() => expect(status()).not.toHaveAttribute("role"));
+  // Still visible — it just stopped speaking.
+  expect(status()).toHaveTextContent(/0 of 2 chords named/i);
+
+  fireEvent.pause(audio);
+  await waitFor(() => expect(status()).toHaveAttribute("role", "status"));
 });
 
 test("the player can give up and switch to the chart", async () => {
