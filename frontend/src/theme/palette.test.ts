@@ -77,7 +77,7 @@ describe.each(Object.entries(THEMES))("%s theme", (themeName, tokens) => {
 
   it("makes the measure rule out-weigh the ordinary chord divider", () => {
     // Two channels, not one: the bar line is heavier than --line by COLOUR (this test)
-    // and by WIDTH (3px vs 2px, in the CSS). A user who cannot see the colour difference
+    // and by WIDTH (3px vs 1px, in the CSS). A user who cannot see the colour difference
     // still sees the weight difference. Hue is never the only channel.
     const bar = contrastRatio(tokens["--bar-line"], tokens["--bg"]);
     const line = contrastRatio(tokens["--line"], tokens["--bg"]);

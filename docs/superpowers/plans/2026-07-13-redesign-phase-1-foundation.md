@@ -327,7 +327,7 @@ describe.each(Object.entries(THEMES))("%s theme", (themeName, tokens) => {
 
   it("makes the measure rule out-weigh the ordinary chord divider", () => {
     // Two channels, not one: the bar line is heavier than --line by COLOUR (this test)
-    // and by WIDTH (3px vs 2px, in the CSS). A user who cannot see the colour difference
+    // and by WIDTH (3px vs 1px, in the CSS). A user who cannot see the colour difference
     // still sees the weight difference. Hue is never the only channel.
     const bar = contrastRatio(tokens["--bar-line"], tokens["--bg"]);
     const line = contrastRatio(tokens["--line"], tokens["--bg"]);
@@ -2188,14 +2188,17 @@ Preserve the existing `className` logic at `:145` if it carries anything the dat
   font-variant-numeric: tabular-nums;
   background: transparent;
   border: 1px solid transparent;
-  border-left: 2px solid var(--line);
+  border-left: 1px solid var(--line);
   border-radius: 0;
   padding: var(--space-2);
   text-align: center;
   color: var(--text);
 }
 /* The measure rule. Heavier than --line by BOTH colour and width — two channels, so it
-   still reads as "a bar starts here" without relying on hue. */
+   still reads as "a bar starts here" for someone who cannot see the colour difference.
+   Keep the width ratio at 3:1 (3px vs 1px), which is what the app already ships. An
+   earlier draft of this plan said 2px here; that halves the width channel to 1.5x and
+   quietly weakens the one signal that does not depend on hue. Do not "tidy" it back. */
 .chord-cell[data-bar-start="true"] { border-left: 3px solid var(--bar-line); }
 .chord-cell[data-selected="true"]  { border-left-color: var(--accent); }
 
