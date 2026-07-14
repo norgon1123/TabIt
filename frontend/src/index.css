@@ -141,7 +141,32 @@ select:focus-visible {
 input, select { font: inherit; background: var(--surface); color: var(--text);
   border: 1px solid var(--control-border); border-radius: 8px; padding: 8px; }
 a { color: var(--accent); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.card[data-padding="1"] { padding: var(--space-1); }
+.card[data-padding="2"] { padding: var(--space-2); }
+.card[data-padding="3"] { padding: var(--space-3); }
+.card[data-padding="4"] { padding: var(--space-4); }
+.card[data-padding="5"] { padding: var(--space-5); }
+.card[data-padding="6"] { padding: var(--space-6); }
+
+.field { display: grid; gap: var(--space-1); }
+.field__label { display: grid; gap: var(--space-1); }
+.field__name { font-size: var(--text-sm); color: var(--muted); }
+.field__hint { font-size: var(--text-xs); }
+.field .error { margin: 0; font-size: var(--text-sm); }
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
 
