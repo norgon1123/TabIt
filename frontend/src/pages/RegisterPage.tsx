@@ -2,6 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import Card from "../ui/Card";
+import Stack from "../ui/Stack";
+import Field from "../ui/Field";
+import Button from "../ui/Button";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -32,25 +36,25 @@ export default function RegisterPage() {
   return (
     <div className="container">
       <h1>Register</h1>
-      <form onSubmit={onSubmit} className="card" style={{ display: "grid", gap: 12 }}>
-        {/* Round 2 #7: username and password each get their own row. */}
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-          />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button className="primary" type="submit" disabled={busy}>
-          {busy ? "Creating…" : "Create account"}
-        </button>
+      <form onSubmit={onSubmit}>
+        <Card>
+          <Stack direction="column" gap={3} align="stretch">
+            <Field label="Username">
+              <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+            </Field>
+            <Field label="Password" error={error ?? undefined}>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </Field>
+            <Button type="submit" variant="primary" disabled={busy}>
+              {busy ? "Creating…" : "Create account"}
+            </Button>
+          </Stack>
+        </Card>
       </form>
       <p className="muted">
         Have an account? <Link to="/login">Log in</Link>
