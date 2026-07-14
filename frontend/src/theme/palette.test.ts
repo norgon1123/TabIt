@@ -98,6 +98,34 @@ describe.each(Object.entries(THEMES))("%s theme", (themeName, tokens) => {
   });
 });
 
+describe("typography", () => {
+  it("points --font-ui at Figtree with a system fallback", () => {
+    const root = tokensFor(css, ":root");
+    expect(root["--font-ui"]).toMatch(/Figtree/);
+    // The fallback matters: the page must be readable in the frame before the font loads.
+    expect(root["--font-ui"]).toMatch(/system-ui/);
+  });
+
+  it("has a type scale rather than magic numbers", () => {
+    const root = tokensFor(css, ":root");
+    for (const t of ["--text-xs", "--text-sm", "--text-md", "--text-lg", "--text-xl", "--text-2xl"]) {
+      expect(root[t], `missing type token ${t}`).toBeDefined();
+    }
+  });
+
+  it("sizes chord cells from a token, not from their content", () => {
+    // A content-sized cell re-wraps the entire chart the day the typeface changes.
+    expect(tokensFor(css, ":root")["--chord-cell-min"]).toBeDefined();
+  });
+
+  it("declares no font-family outside the font tokens", () => {
+    const declarations = css.match(/font-family:\s*([^;]+);/g) ?? [];
+    for (const d of declarations) {
+      expect(d, `font-family must reference a token: ${d}`).toMatch(/var\(--font-/);
+    }
+  });
+});
+
 describe("the stylesheet itself", () => {
   it("declares color-scheme so native controls follow the theme", () => {
     // Without this, the native <audio> element and form widgets render light against a
