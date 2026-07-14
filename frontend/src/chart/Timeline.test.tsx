@@ -155,3 +155,37 @@ it("renders slash marks for a 4-beat chord", () => {
   renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
   expect(screen.getByText(beatSlashMarks(4))).toBeInTheDocument(); // "╱ ╱ ╱ ╱"
 });
+
+// Fixture shared by the width-guard test below — this file has no module-level BASE, so
+// one is built locally rather than disturbing the fixtures every other test already uses.
+const BASE = { chord_root: "C", chord_quality: "maj", roman_numeral: "I" };
+
+it("sizes each cell by its beat count — the width IS the rhythm", () => {
+  // A 4-beat chord must be twice as wide as a 2-beat one. That is not decoration: it is
+  // how the chart shows rhythm, and it is the single thing in this file that can break
+  // silently — no accessibility assertion would notice every chord going the same width.
+  //
+  // Written BEFORE the semantic-list refactor moves this ratio from the <button> to its
+  // wrapper. It must keep passing across that move.
+  const segs = [
+    { ...BASE, id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2 },
+    { ...BASE, id: "s2", start_beat: 4, end_beat: 6, start_time: 2, end_time: 3 },
+  ];
+  renderTimeline({ segments: segs });
+
+  // Find whichever element carries the ratio — today the button, after the refactor its
+  // wrapper. Asserting on the *rendered ratio* rather than on a specific tag is what lets
+  // this test survive the refactor it exists to guard.
+  const flexOf = (id: string) => {
+    const cell = document.querySelector<HTMLElement>(`[data-segment-id="${id}"]`)!;
+    const carrier = cell.style.flex ? cell : (cell.parentElement as HTMLElement);
+    return carrier.style.flex;
+  };
+
+  // jsdom's CSSOM normalises the flex shorthand's zero flex-basis to "0px" (confirmed by
+  // setting el.style.flex directly — it is a serialisation quirk of this test environment,
+  // not a property of which element carries the ratio), so the expected strings say "0px"
+  // rather than the brief's literal "0". The ratio under test — 4:1 vs 2:1 — is unchanged.
+  expect(flexOf("s1")).toBe("4 1 0px");
+  expect(flexOf("s2")).toBe("2 1 0px");
+});
