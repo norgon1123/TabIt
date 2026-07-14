@@ -173,33 +173,41 @@ it("renders slash marks for a 4-beat chord", () => {
 const BASE = { chord_root: "C", chord_quality: "maj", roman_numeral: "I" };
 
 it("sizes each cell by its beat count — the width IS the rhythm", () => {
-  // A 4-beat chord must be twice as wide as a 2-beat one. That is not decoration: it is
-  // how the chart shows rhythm, and it is the single thing in this file that can break
-  // silently — no accessibility assertion would notice every chord going the same width.
+  // A 4-beat chord must be twice as wide as a 2-beat one. That is not decoration: it is how
+  // the chart shows rhythm.
   //
-  // Written BEFORE the semantic-list refactor moves this ratio from the <button> to its
-  // wrapper. It must keep passing across that move.
+  // The ratio must sit on the .chord-cell__item wrapper, because THAT is the flex child of
+  // the .chart-line row. If it drifts back onto the <button>, the wrapper falls back to
+  // `flex: 0 1 auto`, sizes to its content, and every chord renders the same width — the
+  // chart silently stops showing rhythm. jsdom does no layout, so this test is the only
+  // thing standing between that regression and production: it must name the exact element,
+  // not accept the ratio "wherever it landed". An earlier version of this test did the
+  // latter and was green even with the ratio on the wrong element.
   const segs = [
     { ...BASE, id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2 },
     { ...BASE, id: "s2", start_beat: 4, end_beat: 6, start_time: 2, end_time: 3 },
   ];
   renderTimeline({ segments: segs });
 
-  // Find whichever element carries the ratio — today the button, after the refactor its
-  // wrapper. Asserting on the *rendered ratio* rather than on a specific tag is what lets
-  // this test survive the refactor it exists to guard.
-  const flexOf = (id: string) => {
-    const cell = document.querySelector<HTMLElement>(`[data-segment-id="${id}"]`)!;
-    const carrier = cell.style.flex ? cell : (cell.parentElement as HTMLElement);
-    return carrier.style.flex;
-  };
+  const buttonFor = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-segment-id="${id}"]`)!;
+  const wrapperFor = (id: string) => buttonFor(id).closest<HTMLElement>(".chord-cell__item")!;
 
   // jsdom's CSSOM normalises the flex shorthand's zero flex-basis to "0px" (confirmed by
   // setting el.style.flex directly — it is a serialisation quirk of this test environment,
   // not a property of which element carries the ratio), so the expected strings say "0px"
-  // rather than the brief's literal "0". The ratio under test — 4:1 vs 2:1 — is unchanged.
-  expect(flexOf("s1")).toBe("4 1 0px");
-  expect(flexOf("s2")).toBe("2 1 0px");
+  // rather than the literal "0". The ratio under test — 4:1 vs 2:1 — is unchanged.
+  //
+  // The ratio is on the flex child...
+  expect(wrapperFor("s1").style.flex).toBe("4 1 0px");
+  expect(wrapperFor("s2").style.flex).toBe("2 1 0px");
+
+  // ...and NOT on the button, which is not the flex child and would size to content.
+  expect(buttonFor("s1").style.flex).toBe("");
+  expect(buttonFor("s2").style.flex).toBe("");
+
+  // And the wrapper really is a child of the flex row, not floating somewhere else.
+  expect(wrapperFor("s1").parentElement).toHaveClass("chart-line");
 });
 
 describe("the chart is a semantic sequence, not a pile of divs", () => {
