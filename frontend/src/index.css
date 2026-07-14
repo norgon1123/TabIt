@@ -170,6 +170,67 @@ a { color: var(--accent); }
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
 
+/* ---- Chord chart ----------------------------------------------------------------------
+   The chart itself: a column of lines, each a row of chord cells. Chord cells are real
+   <button>s (Timeline.tsx) so a keyboard user can Tab to one and press Enter/Space to open
+   the segment editor — that focusability is what makes cutting drag-to-resize safe. */
+.chord-cell {
+  position: relative;
+  min-width: var(--chord-cell-min);   /* sized from a token, never from content */
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--font-chart);
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  padding: var(--space-2);
+  text-align: center;
+  color: var(--text);
+}
+/* The measure rule. Heavier than --line by BOTH colour and width — two channels, so it
+   still reads as "a bar starts here" for someone who cannot see the colour difference.
+   Keep the width ratio at 3:1 (3px vs 1px), which is what the app already ships. */
+.chord-cell[data-bar-start="true"] { border-left: 3px solid var(--bar-line); }
+.chord-cell[data-selected="true"]  { border-left-color: var(--accent); }
+
+/* "Playing" gets colour AND a border. The old hardcoded dark-slate background was one
+   channel, and a subtle one at that. */
+.chord-cell[data-playing="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent);
+}
+
+.chord-cell[data-masked="true"] strong { color: var(--muted); }
+.chord-cell[data-masked="true"]:hover strong { color: var(--text); }
+
+/* The chord's own progress fill. Position/size are design values and live here; the
+   transform is repainted per-frame by chordProgress.ts and stays inline in Timeline.tsx —
+   that value is data (how far through the chord we are), not a design choice. */
+.chord-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 100%;
+  transform-origin: left;
+  background: var(--accent);
+}
+
+/* Drag-to-resize handles. Unchanged behaviour, no new investment — only the positioning
+   moved out of the inline style and into these two classes. */
+.chord-cell__resize { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.chord-cell__resize--left { left: 0; }
+.chord-cell__resize--right { right: 0; }
+
+.chart-line { display: flex; justify-content: flex-start; gap: 0; }
+.chart-lines { display: flex; flex-direction: column; gap: var(--space-1); }
+
 /* A chart panel (the segment editor; the practice-mode chord guess) sits just off the right
    edge of the chord chart, its top aligned with the row of the chord it belongs to — near
    the click, not across the page. It is absolutely positioned (not fixed) against
@@ -179,7 +240,17 @@ a { color: var(--accent); }
 
    The panel is narrow, but the 880px container only leaves room beside it on a wide
    screen; below that it drops back into the flow, directly under the chart. */
-.chart-area { position: relative; }
+.chart-area { position: relative; margin-top: var(--space-3); }
+
+/* ---- ChartSheet -------------------------------------------------------------------- */
+.chart-key-summary { margin: 0 0 var(--space-1); }
+.chart-practice-status { margin: var(--space-3) 0 0; }
+.chart-audio { width: 100%; }
+.chart-advanced { margin-top: var(--space-3); }
+/* A Stack aligned "stretch" stretches every child full-width, including this one — the
+   escape valve for a control (a toggle, an "add" button) that should hug its own content
+   instead, same job "justify-self: start" did inside the CSS Grid this replaces. */
+.self-start { align-self: flex-start; }
 .chart-panel {
   position: absolute;
   z-index: 10;
@@ -297,9 +368,8 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 /* ---- Practice mode ------------------------------------------------------------------
    The chord is a question until the player names it. A masked cell keeps its shape, its
    beats and its bar lines — only the answer is withheld, so the chart still reads as a
-   chart and the "?" reads as a gap the player fills. */
-.chord-cell--masked strong { color: var(--muted); }
-.chord-cell--masked:hover strong { color: var(--text); }
+   chart and the "?" reads as a gap the player fills. (Styling itself lives on
+   .chord-cell[data-masked="true"], above.) */
 
 .ok { color: var(--ok); }
 

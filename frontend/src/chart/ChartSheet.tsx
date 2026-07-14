@@ -12,6 +12,8 @@ import TransposeControl from "./TransposeControl";
 import TimeSignatureControl from "./TimeSignatureControl";
 import ChordGuess from "../practice/ChordGuess";
 import { usePracticeSession } from "../practice/usePracticeSession";
+import Stack from "../ui/Stack";
+import Button from "../ui/Button";
 
 const NO_SEGMENTS: never[] = [];
 
@@ -131,25 +133,25 @@ export default function ChartSheet({
           Practice mode reads them out but does not hand over the pen: tempo and key are
           what a player is given on any chart, and re-cutting either mid-quiz is editing. */}
       {practice ? (
-        <p className="muted" style={{ margin: "0 0 4px" }}>
+        <p className="muted chart-key-summary">
           {bpm != null && <>{bpm} BPM &middot; </>}
           Key: {chart.key_tonic} {chart.key_mode}
         </p>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+        <Stack wrap gap={2}>
           <TempoControl bpm={bpm} onChange={(next) => setTempo(next)} busy={isMutating} />
           {bpm != null && <span className="muted">&middot;</span>}
-          <span className="muted" style={{ marginLeft: 6 }}>Key:</span>
+          <span className="muted">Key:</span>
           <KeyControl
             keyTonic={chart.key_tonic}
             keyMode={chart.key_mode}
             onChange={(patch) => updateSettings(patch)}
             busy={isMutating}
           />
-        </div>
+        </Stack>
       )}
 
-      <audio ref={clock.ref} controls style={{ width: "100%" }} src={audioSrc} />
+      <audio ref={clock.ref} controls className="chart-audio" src={audioSrc} />
 
       {/*
         YouTube-style scrub bar — commented out to avoid a duplicate bar
@@ -167,7 +169,7 @@ export default function ChartSheet({
       </div> */}
 
       {practice && (
-        <p className="muted" style={{ margin: "10px 0 0" }} role="status">
+        <p className="muted chart-practice-status" role="status">
           {session.total === 0
             ? "No chords in this chart — nothing to name."
             : session.solvedCount === session.total
@@ -176,7 +178,7 @@ export default function ChartSheet({
         </p>
       )}
 
-      <div className="chart-area" ref={chartArea} style={{ marginTop: 12 }}>
+      <div className="chart-area" ref={chartArea}>
         <Timeline
           segments={chart.segments}
           beatsPerMeasure={chart.beats_per_measure}
@@ -230,17 +232,17 @@ export default function ChartSheet({
           is left: the counts and shifts you reach for rarely. Practice mode has none of it —
           transposing or re-cutting the chart mid-quiz would be rewriting the question. */}
       {!practice && (
-        <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-          <button
+        <Stack direction="column" gap={3} align="stretch" className="chart-advanced">
+          <Button
             aria-expanded={showAdvanced}
-            style={{ justifySelf: "start" }}
+            className="self-start"
             onClick={() => setShowAdvanced((open) => !open)}
           >
             {showAdvanced ? "▾" : "▸"} Advanced options
-          </button>
+          </Button>
 
           {showAdvanced && (
-            <div style={{ display: "grid", gap: 12 }}>
+            <Stack direction="column" gap={3} align="stretch">
               <TimeSignatureControl
                 beatsPerMeasure={chart.beats_per_measure}
                 measureOffset={chart.measure_offset}
@@ -250,9 +252,9 @@ export default function ChartSheet({
 
               <TransposeControl onTranspose={(semitones) => transpose(semitones)} busy={isMutating} />
 
-              <button
+              <Button
                 disabled={isMutating}
-                style={{ justifySelf: "start" }}
+                className="self-start"
                 onClick={() => {
                   const lastEnd = chart.segments[chart.segments.length - 1]?.end_beat ?? 0;
                   addSegment({
@@ -264,10 +266,10 @@ export default function ChartSheet({
                 }}
               >
                 Add segment
-              </button>
-            </div>
+              </Button>
+            </Stack>
           )}
-        </div>
+        </Stack>
       )}
     </>
   );

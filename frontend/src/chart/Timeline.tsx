@@ -123,9 +123,9 @@ export default function Timeline({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div className="chart-lines">
       {lines.map((line, li) => (
-        <div key={li} style={{ display: "flex", justifyContent: "flex-start", gap: 0 }}>
+        <div key={li} className="chart-line">
           {line.map((s) => {
             const i = indexById.get(s.id)!;
             const selected = s.id === selectedId;
@@ -136,20 +136,16 @@ export default function Timeline({
             const onMeasure =
               Math.abs(((s.start_beat - measureOffset) % beatsPerMeasure)) < 1e-6;
             return (
-              <div
+              <button
+                type="button"
                 key={s.id}
-                role="button"
-                tabIndex={0}
+                className="chord-cell"
+                data-bar-start={onMeasure ? "true" : undefined}
+                data-selected={selected ? "true" : undefined}
+                data-playing={isActive ? "true" : undefined}
+                data-masked={masked ? "true" : undefined}
                 aria-pressed={selected}
                 aria-label={masked ? `Hidden chord, ${beats} beats` : undefined}
-                className={[
-                  "chord-cell",
-                  isActive && "playing",
-                  selected && "selected",
-                  masked && "chord-cell--masked",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
                 data-segment-id={s.id}
                 onClick={() => {
                   if (suppressClick.current) {
@@ -169,33 +165,18 @@ export default function Timeline({
                   onSeek?.(s.start_time);
                 }}
                 style={{
-                  position: "relative",
-                  // Width tracks the chord's beat count within the line.
+                  // Runtime geometry ONLY: the cell's width IS the chord's beat count.
+                  // Every other visual value on this element lives in CSS.
                   flex: `${beats} 1 0`,
-                  minWidth: 56,
-                  height: 64,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  overflow: "hidden",
-                  border: selected ? "2px solid var(--accent)" : "1px solid var(--line)",
-                  borderLeft: selected
-                    ? "2px solid var(--accent)"
-                    : onMeasure
-                      ? "3px solid var(--bar-line)"
-                      : "1px solid var(--line)",
-                  background: isActive ? "#26303f" : "var(--surface)",
                 }}
               >
                 {onResizeCommit && (
                   <span
+                    className="chord-cell__resize chord-cell__resize--left"
                     aria-label={`Resize start of ${chordLabel(s.chord_root, s.chord_quality)}`}
                     draggable={false}
                     onPointerDown={(e) => startResize(i, "left", e)}
                     onClick={(e) => e.stopPropagation()}
-                    style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
                   />
                 )}
                 <strong>{masked ? "?" : chordLabel(s.chord_root, s.chord_quality)}</strong>
@@ -205,11 +186,11 @@ export default function Timeline({
                 <span className="muted">{masked ? "" : s.roman_numeral}</span>
                 {onResizeCommit && (
                   <span
+                    className="chord-cell__resize chord-cell__resize--right"
                     aria-label={`Resize end of ${chordLabel(s.chord_root, s.chord_quality)}`}
                     draggable={false}
                     onPointerDown={(e) => startResize(i, "right", e)}
                     onClick={(e) => e.stopPropagation()}
-                    style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize" }}
                   />
                 )}
                 {isActive && (
@@ -217,19 +198,13 @@ export default function Timeline({
                     ref={fillRef}
                     aria-hidden
                     className="chord-progress"
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      bottom: 0,
-                      height: 4,
-                      width: "100%",
-                      transformOrigin: "left",
-                      transform: "scaleX(0)",
-                      background: "var(--accent)",
-                    }}
+                    // Runtime geometry ONLY: how far through the chord we are, repainted
+                    // per-frame by chordProgress.ts. Everything else about this element
+                    // (position, size, colour) lives in CSS.
+                    style={{ transform: "scaleX(0)" }}
                   />
                 )}
-              </div>
+              </button>
             );
           })}
         </div>

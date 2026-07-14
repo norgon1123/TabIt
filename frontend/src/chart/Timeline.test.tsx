@@ -40,9 +40,22 @@ test("clicking a segment selects it and seeks to its start (#8)", async () => {
   expect(onSeek).toHaveBeenCalledWith(2);
 });
 
+test("a keyboard user can tab to a chord and press Enter to select it", async () => {
+  // The chord cells are real <button>s for exactly this reason: in practice mode,
+  // clicking a chord *is* the question, and a keyboard user has no other way to reach it.
+  const onSelect = vi.fn();
+  const onSeek = vi.fn();
+  renderTimeline({ onSelect, onSeek });
+  await userEvent.tab();
+  expect(document.activeElement).toHaveAttribute("data-segment-id", "s1");
+  await userEvent.keyboard("{Enter}");
+  expect(onSelect).toHaveBeenCalledWith("s1");
+  expect(onSeek).toHaveBeenCalledWith(0);
+});
+
 test("highlights the chord under the playhead (#3)", () => {
   const { container } = renderTimeline({ currentTime: 3 }); // inside s2 [2,4)
-  const playing = container.querySelectorAll(".playing");
+  const playing = container.querySelectorAll('[data-playing="true"]');
   expect(playing).toHaveLength(1);
   expect(playing[0]).toHaveAttribute("data-segment-id", "s2");
 });
@@ -61,18 +74,29 @@ test("fills the active chord's progress bar to the current fraction when paused"
   expect(bar.style.transform).toBe("scaleX(0.5)");
 });
 
-test("measure bar lines are neutral — the accent marks only selection/playback", () => {
-  // s1 and s2 both start a measure (beats 0 and 4, beatsPerMeasure 4), so both get a
-  // bar line on their left edge. Only the selected one may wear the accent colour.
-  const { container } = renderTimeline({ selectedId: "s1" });
-  const cellStyle = (id: string) =>
-    (container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement).getAttribute("style")!;
+it("marks the cell that starts a measure, so the bar line can be drawn", () => {
+  // The bar line is a graphical object and gets its 3:1 contrast from --bar-line, which
+  // palette.test.ts enforces. What THIS test cares about is that the right cell is
+  // marked — not how many pixels wide the rule is, which is a design decision the CSS
+  // is allowed to change without breaking the suite.
+  //
+  // NB: the module-level `segments` fixture (s1 @ beat 0, s2 @ beat 4, 4 beats/measure)
+  // has BOTH cells landing on a measure boundary, so it can't distinguish "marked" from
+  // "not marked" — use a fixture where only one of the two does.
+  const segs = [
+    { id: "s1", start_beat: 2, end_beat: 4, start_time: 1, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
+    { id: "s2", start_beat: 4, end_beat: 8, start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
+  ];
+  const { container } = renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
+  const cell = (id: string) => container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement;
+  expect(cell("s2")).toHaveAttribute("data-bar-start", "true");
+  expect(cell("s1")).not.toHaveAttribute("data-bar-start");
+});
 
-  expect(cellStyle("s2")).toContain("border-left: 3px solid var(--bar-line)");
-  expect(cellStyle("s2")).not.toContain("var(--accent)");
-  // The selected cell's bar line gives way to the accent, so its box stays even.
-  expect(cellStyle("s1")).toContain("border-left: 2px solid var(--accent)");
-  expect(cellStyle("s1")).not.toContain("var(--bar-line)");
+it("marks the selected cell", () => {
+  const { container } = renderTimeline({ selectedId: "s1" });
+  const cell = (id: string) => container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement;
+  expect(cell("s1")).toHaveAttribute("data-selected", "true");
 });
 
 // A CSS transition only animates when the browser already holds a computed value to
