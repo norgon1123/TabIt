@@ -39,4 +39,20 @@ describe("Panel", () => {
     const { container } = render(<Panel title="Edit segment" top={120} />);
     expect((container.firstElementChild as HTMLElement).style.top).toBe("120px");
   });
+
+  it("does not let a caller clobber the measured `top` offset", () => {
+    // `top` is the one sanctioned inline style in this phase — it is what aligns the panel
+    // with its chord's row. A caller passing `style` must not silently void it.
+    const { container } = render(<Panel title="Edit segment" top={120} style={{ color: "red" }} />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.style.top).toBe("120px");
+    expect(el.style.color).toBe("red"); // the caller's own style still applies
+  });
+
+  it("does not let a caller strip its accessible name", () => {
+    // role=group + aria-label are why a screen reader announces "Edit segment" rather than
+    // reading out an unlabelled box of selects. They are not negotiable by a caller.
+    render(<Panel title="Edit segment" {...({ "aria-label": "Something else" } as object)} />);
+    expect(screen.getByRole("group", { name: "Edit segment" })).toBeInTheDocument();
+  });
 });

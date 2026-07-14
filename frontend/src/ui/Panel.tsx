@@ -15,15 +15,15 @@ export interface PanelProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"
  *
  *  role="group" + aria-label so that when focus lands inside it, a screen reader says
  *  what it is rather than reading out an unlabelled box of selects. */
-export default function Panel({ title, children, onClose, top, className, ...rest }: PanelProps) {
+export default function Panel({ title, children, onClose, top, className, style, ...rest }: PanelProps) {
   return (
     <div
+      {...rest}
       role="group"
       aria-label={title}
       className={className ? `card chart-panel ${className}` : "card chart-panel"}
       data-padding="3"
-      style={top === undefined ? undefined : { top }}
-      {...rest}
+      style={top === undefined ? style : { ...style, top }}
     >
       <div className="panel__head">
         <strong>{title}</strong>
