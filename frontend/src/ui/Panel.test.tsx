@@ -53,4 +53,17 @@ describe("Panel", () => {
     render(<Panel title="Edit segment" {...({ "aria-label": "Something else" } as object)} />);
     expect(screen.getByRole("group", { name: "Edit segment" })).toBeInTheDocument();
   });
+
+  it("takes focus when it opens", () => {
+    const { container } = render(<Panel title="Edit segment" />);
+    expect(container.firstElementChild).toHaveFocus();
+  });
+
+  it("still forwards its ref — ChordGuess's shake depends on it", () => {
+    // Phase 1 added forwardRef so ChordGuess could replay its shake without remounting the
+    // form and dropping focus. Merging the focus ref must not drop the forwarded one.
+    const seen = { current: null as HTMLDivElement | null };
+    render(<Panel title="Edit segment" ref={seen} />);
+    expect(seen.current).toBeInstanceOf(HTMLElement);
+  });
 });
