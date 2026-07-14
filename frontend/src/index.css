@@ -457,3 +457,28 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 @media (max-width: 600px) {
   .mode-choice__options { grid-template-columns: 1fr; }
 }
+
+/* ---- Zone 3: the control deck --------------------------------------------------------
+   Pinned to the bottom, because a phone is on the roadmap and the bottom edge is the thumb
+   zone. Costs nothing to take now. */
+.control-deck {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-3) var(--space-4);
+}
+.control-deck__row { width: 100%; max-width: 1100px; margin: 0 auto; }
+.control-deck__play { min-width: 3rem; }
+.control-deck__time {
+  font-variant-numeric: tabular-nums;   /* so the clock does not jitter as digits change */
+  font-size: var(--text-sm);
+}
+.control-deck__scrub { flex: 1 1 auto; min-width: 8rem; }
+.control-deck__extra { flex: 0 0 auto; }
+
+@media (max-width: 600px) {
+  .control-deck__extra { display: none; }   /* the scrubber wins the narrow screen */
+}
