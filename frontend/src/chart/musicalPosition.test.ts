@@ -90,3 +90,54 @@ describe("formatMusicalPosition", () => {
     expect(formatMusicalPosition({ bar: -1, beat: 2 })).toBe("pickup, beat 2");
   });
 });
+
+describe("an offset larger than the bar", () => {
+  // Reachable in two clicks: set a 3-beat pickup, then shrink the bar to 2 beats. The API
+  // validates the two fields independently and never relates them.
+  const OVERSHOOT: BeatGridInfo = {
+    beatTimes: Array.from({ length: 20 }, (_, i) => i * 0.5),
+    bpm: 120,
+    duration: 10,
+    beatsPerMeasure: 2,
+    measureOffset: 3, // >= beatsPerMeasure
+  };
+
+  it("never repeats a beat number non-consecutively", () => {
+    // The old behaviour was "pickup beat 2, pickup beat 1, pickup beat 2" — a player has
+    // no way to order those, and a readout they cannot trust is worse than no readout.
+    const said = [0, 0.5, 1.0, 1.5, 2.0].map((t) =>
+      formatMusicalPosition(barBeatAt(OVERSHOOT, t)),
+    );
+    expect(said).toEqual([
+      "pickup, beat 2",
+      "bar 1, beat 1",
+      "bar 1, beat 2",
+      "bar 2, beat 1",
+      "bar 2, beat 2",
+    ]);
+  });
+
+  it("folds a whole-bar shift away, because it is a no-op", () => {
+    // An offset of 3 in a 2-beat bar IS an offset of 1. Same bar line, same music.
+    const folded: BeatGridInfo = { ...OVERSHOOT, measureOffset: 1 };
+    for (const t of [0, 0.5, 1.0, 1.5, 2.0]) {
+      expect(barBeatAt(OVERSHOOT, t)).toEqual(barBeatAt(folded, t));
+    }
+  });
+});
+
+describe("a negative offset", () => {
+  it("is folded into the bar rather than producing nonsense", () => {
+    // Unreachable through the API today (ge=0), but a total function is cheaper to trust
+    // than one with a precondition nobody enforces.
+    const neg: BeatGridInfo = {
+      beatTimes: Array.from({ length: 20 }, (_, i) => i * 0.5),
+      bpm: 120,
+      duration: 10,
+      beatsPerMeasure: 4,
+      measureOffset: -1,
+    };
+    expect(formatMusicalPosition(barBeatAt(neg, 0))).toBe("pickup, beat 2");
+    expect(formatMusicalPosition(barBeatAt(neg, 1.5))).toBe("bar 1, beat 1");
+  });
+});

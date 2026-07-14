@@ -51,6 +51,18 @@ function beatIndexAt(grid: BeatGridInfo, timeSeconds: number): number {
 export function barBeatAt(grid: BeatGridInfo, timeSeconds: number): MusicalPosition {
   const perMeasure = Math.max(1, Math.floor(grid.beatsPerMeasure) || 1);
 
+  // Shifting the bar line by a whole bar is a no-op, so fold the offset into one bar.
+  //
+  // This is not defensive padding: `measure_offset` and `beats_per_measure` are validated
+  // independently by the API (ge=0 and ge=1..16, with no cross-field check), so a user can
+  // set a 3-beat pickup and then shrink the bar to 2 beats — two clicks in
+  // TimeSignatureControl. Without this, the readout emits "pickup beat 2, pickup beat 1,
+  // pickup beat 2" — the same beat number recurring non-consecutively, which a player
+  // cannot order, and an untrustworthy readout is worse than none.
+  //
+  // Sign-safe, like the modulo below: JS's % keeps the dividend's sign.
+  const offset = (((Math.floor(grid.measureOffset) % perMeasure) + perMeasure) % perMeasure);
+
   // Floor, never round: mid-beat is still that beat. Announcing the next one while the
   // player is only 40% into this one would make the readout untrustworthy, and the only
   // thing this string has going for it is that a player can trust it.
@@ -59,7 +71,7 @@ export function barBeatAt(grid: BeatGridInfo, timeSeconds: number): MusicalPosit
   // measureOffset says which beat carries the bar line. Shift, then wrap into the bar.
   // The modulo is written the long way because JS's % keeps the sign of the dividend:
   // -1 % 4 is -1, not 3, and a pickup makes `shifted` negative.
-  const shifted = absolute - grid.measureOffset;
+  const shifted = absolute - offset;
   const beatInBar = ((shifted % perMeasure) + perMeasure) % perMeasure;
 
   // Deliberately NOT clamped to 1. Anything before the first downbeat gets bar <= 0, and
