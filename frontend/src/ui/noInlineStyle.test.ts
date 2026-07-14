@@ -17,9 +17,6 @@ const ALLOWED: Record<string, string> = {
     "flex ratio from the chord's beat count; the playhead progress transform (chordProgress.ts)",
   "src/chart/ScrubBar.tsx":
     "scrub fill and knob positions, computed from playback time",
-  "src/ui/Panel.tsx":
-    "receives the measured px offset that aligns the panel with the chord's row as its " +
-    "`top` prop (Phase 2 removes this whole mechanism)",
 };
 
 /** Properties that are NEVER acceptable inline, even in an allowed file. */

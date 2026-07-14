@@ -12,9 +12,6 @@ interface Props {
   segment: SegmentOut;
   allSegments: SegmentOut[];
   maxTotalBeats: number;
-  /** Offset, in px, from the top of the chart area to the row of the chord being edited.
-   *  Ignored below the breakpoint where the panel drops back into the flow. */
-  top?: number;
   onResize: (windows: SegmentWindowInput[]) => void;
   onSave: (patch: SegmentPatch) => Promise<void>;
   onDelete: () => void;
@@ -27,7 +24,6 @@ export default function SegmentEditor({
   segment,
   allSegments,
   maxTotalBeats,
-  top,
   onResize,
   onSave,
   onDelete,
@@ -87,7 +83,7 @@ export default function SegmentEditor({
   }
 
   return (
-    <Panel title="Edit segment" onClose={onClose} top={top} className="segment-editor">
+    <Panel title="Edit segment" onClose={onClose} className="segment-editor">
       <Stack direction="column" gap={2} align="stretch">
         <Field label="Root">
           <select value={root} onChange={(e) => setRoot(e.target.value)}>

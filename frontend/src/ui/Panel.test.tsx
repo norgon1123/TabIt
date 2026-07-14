@@ -33,20 +33,18 @@ describe("Panel", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("keeps `top` as an inline style — it is a measured offset, not a design value", () => {
-    // Phase 2 replaces this whole mechanism with a docked panel. Until then the measured
-    // pixel offset is legitimate runtime geometry and must stay inline.
-    const { container } = render(<Panel title="Edit segment" top={120} />);
-    expect((container.firstElementChild as HTMLElement).style.top).toBe("120px");
+  it("carries no inline style at all — the docked panel is positioned by CSS", () => {
+    // Phase 1 kept ONE sanctioned inline style here: a pixel offset measured from the DOM,
+    // recomputed on every chart change and window resize, to line the panel up with its
+    // chord's row. Phase 2 docks the panel, so that offset is dead — and with it the last
+    // inline style in src/ui.
+    const { container } = render(<Panel title="Edit segment" />);
+    expect((container.firstElementChild as HTMLElement).getAttribute("style")).toBeNull();
   });
 
-  it("does not let a caller clobber the measured `top` offset", () => {
-    // `top` is the one sanctioned inline style in this phase — it is what aligns the panel
-    // with its chord's row. A caller passing `style` must not silently void it.
-    const { container } = render(<Panel title="Edit segment" top={120} style={{ color: "red" }} />);
-    const el = container.firstElementChild as HTMLElement;
-    expect(el.style.top).toBe("120px");
-    expect(el.style.color).toBe("red"); // the caller's own style still applies
+  it("still lets a caller pass their own style through", () => {
+    const { container } = render(<Panel title="Edit segment" style={{ color: "red" }} />);
+    expect((container.firstElementChild as HTMLElement).style.color).toBe("red");
   });
 
   it("does not let a caller strip its accessible name", () => {

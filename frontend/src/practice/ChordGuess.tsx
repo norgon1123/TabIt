@@ -13,9 +13,6 @@ type Verdict = "idle" | "wrong" | "right";
 
 interface Props {
   segment: SegmentOut;
-  /** Offset, in px, from the top of the chart area to the row of the chord being named —
-   *  the same measurement the segment editor uses, so the form lands beside its chord. */
-  top?: number;
   /** Already named — in this sitting, or a moment ago. The form has nothing left to ask. */
   solved?: boolean;
   /** The player got it. Fired the instant they submit, not when the flash ends. */
@@ -37,7 +34,6 @@ interface Props {
  */
 export default function ChordGuess({
   segment,
-  top,
   solved = false,
   onSolved,
   onClose,
@@ -97,7 +93,6 @@ export default function ChordGuess({
         ref={card}
         title={chordLabel(segment.chord_root, segment.chord_quality)}
         onClose={onClose}
-        top={top}
         className="chord-guess"
       >
         <p className="muted">You named this one.</p>
@@ -110,7 +105,6 @@ export default function ChordGuess({
       ref={card}
       title="Name that chord"
       onClose={onClose}
-      top={top}
       className={[
         "chord-guess",
         verdict === "wrong" && "chord-guess--wrong",

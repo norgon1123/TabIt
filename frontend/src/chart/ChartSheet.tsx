@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AnalysisOut } from "../api/types";
 import { useChart } from "./useChart";
 import { useMediaClock } from "./useMediaClock";
@@ -44,8 +44,6 @@ export default function ChartSheet({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [editorTop, setEditorTop] = useState(0);
-  const chartArea = useRef<HTMLDivElement | null>(null);
   const clock = useMediaClock();
 
   const {
@@ -68,25 +66,6 @@ export default function ChartSheet({
   const applyResize = async (updates: SegmentUpdate[]) => {
     for (const u of updates) await updateSegment(u.id, u.patch); // ordered: shrink before grow
   };
-
-  // Line the editor up with the chord it edits: its top matches the top of the selected
-  // cell, measured against the chart area it is positioned inside. The chart wraps to
-  // however many lines fit, so the offset has to be read from the DOM — nothing about the
-  // beat grid predicts which line a chord lands on at a given width. Re-measure on resize,
-  // and whenever the chart changes (a re-count or a neighbour's resize can push the chord
-  // onto a different line under a stationary pointer).
-  useLayoutEffect(() => {
-    if (!selectedId) return;
-    const measure = () => {
-      const area = chartArea.current;
-      const cell = area?.querySelector<HTMLElement>(`[data-segment-id="${selectedId}"]`);
-      if (!area || !cell) return;
-      setEditorTop(cell.getBoundingClientRect().top - area.getBoundingClientRect().top);
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [selectedId, chart]);
 
   // Clicking off the selected chord closes the editor. The editor is out of the page flow,
   // so "off" is anything outside both it and a chord cell — pressing another chord
@@ -176,7 +155,7 @@ export default function ChartSheet({
         </p>
       )}
 
-      <div className="chart-area" ref={chartArea}>
+      <div className="chart-workspace" data-panel-open={selected ? "true" : undefined}>
         <Timeline
           segments={chart.segments}
           beatsPerMeasure={chart.beats_per_measure}
@@ -198,7 +177,6 @@ export default function ChartSheet({
           <ChordGuess
             key={selected.id}
             segment={selected}
-            top={editorTop}
             solved={session.isSolved(selected.id)}
             // Reveal on the chart as soon as it is named — the form owns its own goodbye, and
             // stays mounted (green) through the flash rather than being unmounted by the
@@ -213,7 +191,6 @@ export default function ChartSheet({
             segment={selected}
             allSegments={chart.segments}
             maxTotalBeats={totalBeats(chart.beat_times, bpm, duration)}
-            top={editorTop}
             onResize={(windows) => resizeSegments(windows)}
             onSave={(patch) => updateSegment(selected.id, patch).then(() => undefined)}
             onDelete={() => {

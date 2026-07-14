@@ -231,16 +231,24 @@ a { color: var(--accent); }
 .chart-line { display: flex; justify-content: flex-start; gap: 0; }
 .chart-lines { display: flex; flex-direction: column; gap: var(--space-1); }
 
-/* A chart panel (the segment editor; the practice-mode chord guess) sits just off the right
-   edge of the chord chart, its top aligned with the row of the chord it belongs to — near
-   the click, not across the page. It is absolutely positioned (not fixed) against
-   `.chart-area`, so it stays pinned to that chord's line and scrolls away with it rather
-   than trailing the viewport. Selecting a chord therefore never reflows the chart under the
-   pointer.
+/* ---- The docked editing panel --------------------------------------------------------
+   Was: absolutely positioned, its `top` measured from the DOM on every chart change and
+   every window resize, so it lined up with its chord's row. That was fragile, it fought
+   every responsive change, and it was the last inline style in src/ui.
 
-   The panel is narrow, but the 880px container only leaves room beside it on a wide
-   screen; below that it drops back into the flow, directly under the chart. */
-.chart-area { position: relative; margin-top: var(--space-3); }
+   Now: a docked column beside the chart. On a narrow screen it drops below — which is a
+   natural bottom sheet the day the phone app lands. */
+.chart-workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .chart-workspace[data-panel-open="true"] {
+    grid-template-columns: 1fr minmax(14rem, 18rem);
+  }
+}
 
 /* ---- ChartSheet -------------------------------------------------------------------- */
 .chart-key-summary { margin: 0 0 var(--space-1); }
@@ -259,26 +267,11 @@ a { color: var(--accent); }
 /* ---- GuestHomePage ------------------------------------------------------------------ */
 .guest-chart { margin-top: var(--space-5); }
 .guest-cta { margin-top: var(--space-6); }
-.chart-panel {
-  position: absolute;
-  z-index: 10;
-  left: calc(100% + 16px);
-  width: 190px;
-  box-shadow: var(--shadow-panel);
-}
-.chart-panel label { display: grid; gap: 4px; }
+.chart-panel { position: static; width: auto; box-shadow: var(--shadow-panel); }
+.chart-panel label { display: grid; gap: var(--space-1); }
 .chart-panel select, .chart-panel input { width: 100%; }
 .segment-editor .primary, .segment-editor .danger { flex: 1; }
 .chord-guess .primary { width: 100%; }
-
-@media (max-width: 1320px) {
-  .chart-panel {
-    position: static;
-    width: auto;
-    margin-top: 12px;
-    box-shadow: none;
-  }
-}
 @media (max-width: 600px) { .container { padding: 12px; } }
 
 .scrub-bar { position: relative; height: 14px; cursor: pointer; touch-action: none; }
