@@ -267,9 +267,15 @@ work; it is a feature that happens to fit.
 - Theme toggle: user-controlled, `prefers-color-scheme` default, persisted.
 - Primitives: `Button`, `Card`, `Field`, `Panel`, layout wrapper.
 - Figtree, self-hosted, with a real type scale.
-- Elimination of all 78 inline `style={{...}}` objects — **this is the load-bearing wall.**
-  A `style={{ background: "#26303f" }}` cannot respond to a theme. Under a single-theme
+- Elimination of every inline `style={{...}}` object **carrying colour, spacing, radius,
+  border, shadow, font, or static layout** — this is the load-bearing wall. A
+  `style={{ background: "#26303f" }}` cannot respond to a theme. Under a single-theme
   redesign this was optional; under two themes it is not.
+
+  **Inline style remains legitimate for runtime-computed geometry**, and those uses stay:
+  `Timeline.tsx:174` sets `flex: ${beats} 1 0` from the chord's beat count, and
+  `Timeline.tsx:220` / `ScrubBar.tsx:102` carry the playhead transform that
+  `chordProgress.ts` drives. Those are data, not design values.
 - The three-zone chart page; docked side panel; revived `ScrubBar`.
 - Practice mode's spotlight treatment (theme-independent).
 - Motion: the current-chord lift, the reveal-as-reward.
