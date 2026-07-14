@@ -7,6 +7,16 @@
 
 const DEFAULT_BPM = 120;
 
+/** A non-finite input must never reach the string a screen reader speaks aloud.
+ *
+ *  `Math.max(0, NaN)` is NaN, and every NaN comparison is false — so a NaN slips past both
+ *  the clamp below AND formatMusicalPosition's pickup check, and comes out the far end as
+ *  the literal spoken words "bar NaN, beat NaN". Degrade to the start of the song instead:
+ *  a wrong-but-sane position is recoverable, a garbage one is not. */
+function finite(n: number): number {
+  return Number.isFinite(n) ? n : 0;
+}
+
 export interface BeatGridInfo {
   /** Ascending beat-onset seconds, as the analysis produced them. May be empty. */
   beatTimes: number[];
@@ -27,7 +37,7 @@ export interface MusicalPosition {
 /** The beat index (0-based, may be fractional) at a given time.
  *  Falls back to a straight BPM division when the tracker found no onsets. */
 function beatIndexAt(grid: BeatGridInfo, timeSeconds: number): number {
-  const t = Math.max(0, timeSeconds);
+  const t = Math.max(0, finite(timeSeconds));
   const times = [...grid.beatTimes].sort((a, b) => a - b);
 
   if (times.length < 2) {
@@ -61,7 +71,7 @@ export function barBeatAt(grid: BeatGridInfo, timeSeconds: number): MusicalPosit
   // cannot order, and an untrustworthy readout is worse than none.
   //
   // Sign-safe, like the modulo below: JS's % keeps the dividend's sign.
-  const offset = (((Math.floor(grid.measureOffset) % perMeasure) + perMeasure) % perMeasure);
+  const offset = (((Math.floor(finite(grid.measureOffset)) % perMeasure) + perMeasure) % perMeasure);
 
   // Floor, never round: mid-beat is still that beat. Announcing the next one while the
   // player is only 40% into this one would make the readout untrustworthy, and the only

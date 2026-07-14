@@ -141,3 +141,24 @@ describe("a negative offset", () => {
     expect(formatMusicalPosition(barBeatAt(neg, 1.5))).toBe("bar 1, beat 1");
   });
 });
+
+describe("a non-finite input must never reach a screen reader", () => {
+  // This string is SPOKEN ALOUD. "bar NaN, beat NaN" is not a degraded experience, it is
+  // an insulting one — and it slips through because Math.max(0, NaN) is NaN and every NaN
+  // comparison is false, so it evades both the clamp and the pickup check.
+  it.each([
+    ["NaN", NaN],
+    ["Infinity", Infinity],
+    ["-Infinity", -Infinity],
+  ])("never speaks %s as a position", (_name, t) => {
+    const said = formatMusicalPosition(barBeatAt(GRID, t as number));
+    expect(said).not.toMatch(/NaN|Infinity|undefined/);
+    expect(said).toBe("bar 1, beat 1");
+  });
+
+  it("survives a non-finite measureOffset", () => {
+    const broken: BeatGridInfo = { ...GRID, measureOffset: NaN };
+    const said = formatMusicalPosition(barBeatAt(broken, 2));
+    expect(said).not.toMatch(/NaN|Infinity|undefined/);
+  });
+});
