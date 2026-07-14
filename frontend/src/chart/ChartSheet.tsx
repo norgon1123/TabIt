@@ -4,6 +4,7 @@ import { useChart } from "./useChart";
 import { useMediaClock } from "./useMediaClock";
 import { totalBeats } from "./beatGrid";
 import Timeline, { type SegmentUpdate } from "./Timeline";
+import type { BeatGridInfo } from "./musicalPosition";
 // import ScrubBar from "./ScrubBar"; // disabled with the scrub-bar block below
 import SegmentEditor from "./SegmentEditor";
 import TempoControl from "./TempoControl";
@@ -104,6 +105,18 @@ export default function ChartSheet({
 
   const bpm = chart.bpm ?? analysis?.bpm ?? null;
   const selected = selectedId ? chart.segments.find((s) => s.id === selectedId) : undefined;
+  // Timeline needs this to announce a chord's position ("bar 3, beat 1"). Task 9 builds this
+  // once and threads it through ControlDeck/WhereAmI too; here it is only what Timeline needs.
+  const grid: BeatGridInfo = {
+    // ChartOut declares beat_times as always-present, but it is fine either way: barBeatAt's
+    // beatIndexAt spreads it into an array, and a genuinely missing value would throw before
+    // it could ever fall back to the pure BPM division it already has for a short grid.
+    beatTimes: chart.beat_times ?? [],
+    bpm,
+    duration,
+    beatsPerMeasure: chart.beats_per_measure,
+    measureOffset: chart.measure_offset,
+  };
 
   return (
     <>
@@ -166,6 +179,7 @@ export default function ChartSheet({
           rate={clock.rate}
           selectedId={selectedId}
           maskedIds={practice ? session.masked : undefined}
+          grid={grid}
           onSelect={setSelectedId}
           onSeek={clock.seek}
           // Practice is read-only: no resize handles, so the chart cannot move under a

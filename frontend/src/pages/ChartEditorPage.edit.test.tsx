@@ -196,7 +196,11 @@ test("editing beats redistributes via the batch endpoint", async () => {
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await userEvent.click(await screen.findByText("I")); // select C on the timeline
-  const beats = await screen.findByLabelText(/beats/i);
+  // Scoped to the editor panel: an unscoped query now also matches a chord cell's own
+  // aria-label (Task 8 — cells announce their beat count, e.g. "...4 beats..."), which
+  // collides with /beats/i across the whole document.
+  const editor = await screen.findByRole("group", { name: /edit segment/i });
+  const beats = within(editor).getByLabelText(/beats/i);
   fireEvent.change(beats, { target: { value: "6" } });
   await waitFor(() => expect(body).toEqual({ segments: [
     { id: "s1", start_beat: 0, end_beat: 6 },

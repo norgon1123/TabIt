@@ -2,11 +2,22 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
 import { beatSlashMarks } from "./beatMath";
+import type { BeatGridInfo } from "./musicalPosition";
 
 const segments = [
   { id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
   { id: "s2", start_beat: 4, end_beat: 8, start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
 ];
+
+// bpm 120 -> a beat every 0.5s; beatsPerMeasure 4, no pickup. Matches `segments` above:
+// s1 starts at t=0 (bar 1, beat 1), s2 starts at t=2 (bar 2, beat 1).
+const GRID: BeatGridInfo = {
+  beatTimes: Array.from({ length: 9 }, (_, i) => i * 0.5),
+  bpm: 120,
+  duration: 4,
+  beatsPerMeasure: 4,
+  measureOffset: 0,
+};
 
 function renderTimeline(props: Partial<React.ComponentProps<typeof Timeline>> = {}) {
   return render(
@@ -18,6 +29,7 @@ function renderTimeline(props: Partial<React.ComponentProps<typeof Timeline>> = 
       currentTime={0}
       selectedId={null}
       onSelect={() => {}}
+      grid={GRID}
       {...props}
     />,
   );
@@ -188,4 +200,38 @@ it("sizes each cell by its beat count — the width IS the rhythm", () => {
   // rather than the brief's literal "0". The ratio under test — 4:1 vs 2:1 — is unchanged.
   expect(flexOf("s1")).toBe("4 1 0px");
   expect(flexOf("s2")).toBe("2 1 0px");
+});
+
+describe("the chart is a semantic sequence, not a pile of divs", () => {
+  it("names itself, so a screen-reader user can find it", () => {
+    renderTimeline();
+    expect(screen.getByRole("list", { name: /chord chart/i })).toBeInTheDocument();
+  });
+
+  it("tells a player where each chord IS, how long it lasts, and whether a bar starts", () => {
+    // "C, button" is what the chart said before. It gave a blind or low-vision player no
+    // idea where in the song they were, how long to stay on the chord, or that a bar
+    // started there. All three are things a sighted player reads off the page instantly.
+    renderTimeline();
+    const cells = screen.getAllByRole("button", { name: /bar \d+/i });
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells[0]).toHaveAccessibleName(/bar 1, beat 1/i);
+    expect(cells[0]).toHaveAccessibleName(/beats/i);
+  });
+
+  it("says a bar starts here, without relying on the colour that says so visually", () => {
+    // The measure rule is a graphical object. A screen reader cannot see 3px of --bar-line.
+    renderTimeline();
+    const barStart = screen.getAllByRole("button", { name: /starts a bar/i });
+    expect(barStart.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a masked chord's secret while still saying where it is", () => {
+    // Practice mode: the chord is the question. The position and the length are the
+    // question's CONTEXT and must survive — a player needs the rhythm to guess against.
+    renderTimeline({ maskedIds: new Set(["s1"]) });
+    const masked = screen.getByRole("button", { name: /hidden chord/i });
+    expect(masked).toHaveAccessibleName(/bar 1/i);
+    expect(masked).not.toHaveAccessibleName(/major|minor|\bC\b/i);
+  });
 });

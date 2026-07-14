@@ -170,12 +170,26 @@ a { color: var(--accent); }
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
 
+/* Available to a screen reader, invisible on screen. The standard clip-rect recipe —
+   display:none and visibility:hidden would hide it from assistive tech too. */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- Chord chart ----------------------------------------------------------------------
    The chart itself: a column of lines, each a row of chord cells. Chord cells are real
    <button>s (Timeline.tsx) so a keyboard user can Tab to one and press Enter/Space to open
    the segment editor — that focusability is what makes cutting drag-to-resize safe. */
 .chord-cell {
   position: relative;
+  width: 100%;                        /* fills its item; the item now carries the flex ratio */
   min-width: var(--chord-cell-min);   /* sized from a token, never from content */
   height: 64px;
   display: flex;
@@ -228,8 +242,10 @@ a { color: var(--accent); }
 .chord-cell__resize--left { left: 0; }
 .chord-cell__resize--right { right: 0; }
 
-.chart-line { display: flex; justify-content: flex-start; gap: 0; }
-.chart-lines { display: flex; flex-direction: column; gap: var(--space-1); }
+.chart-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.chart-line  { list-style: none; display: flex; justify-content: flex-start; gap: 0; }
+/* The flex CHILD, carrying the beat-derived ratio set inline. */
+.chord-cell__item { display: flex; min-width: 0; }
 
 /* ---- The docked editing panel --------------------------------------------------------
    Was: absolutely positioned, its `top` measured from the DOM on every chart change and

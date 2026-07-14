@@ -80,8 +80,9 @@ test("a wrong answer keeps the chord hidden; the right one reveals it", async ()
   open("/recordings/r1?mode=practice");
 
   await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
-  // Both chords run four beats, so they share an accessible name; the second cell is s2.
-  const masked = screen.getAllByRole("button", { name: /hidden chord, 4 beats/i });
+  // Both chords run four beats (Task 8's label also states each cell's bar/beat, which now
+  // differs between them), so match on the shared "4 beats" fragment; the second cell is s2.
+  const masked = screen.getAllByRole("button", { name: /hidden chord.*4 beats/i });
   expect(masked).toHaveLength(2);
   await userEvent.click(masked[1]);
 

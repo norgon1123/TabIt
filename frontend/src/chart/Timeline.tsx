@@ -9,6 +9,7 @@ import {
 import { beatSlashMarks, clampBeatBoundary } from "./beatMath";
 import { paintChordFill } from "./chordProgress";
 import { chordLabel } from "../api/music";
+import { barBeatAt, formatMusicalPosition, type BeatGridInfo } from "./musicalPosition";
 
 export type { SegmentUpdate };
 
@@ -18,6 +19,10 @@ interface Props {
   measureOffset: number;
   duration: number;
   currentTime: number;
+  /** The chart's beat grid, so each cell can announce WHERE it is ("bar 3, beat 1") —
+   *  the thing a sighted player reads off the page instantly and a screen reader could not
+   *  say at all. */
+  grid: BeatGridInfo;
   playing?: boolean;
   rate?: number;
   selectedId: string | null;
@@ -44,6 +49,7 @@ export default function Timeline({
   rate = 1,
   selectedId,
   maskedIds = NO_MASK,
+  grid,
   onSelect,
   onSeek,
   onResizeCommit,
@@ -123,9 +129,14 @@ export default function Timeline({
   }
 
   return (
-    <div className="chart-lines">
+    <ul className="chart-lines" aria-label="Chord chart">
       {lines.map((line, li) => (
-        <div key={li} className="chart-line">
+        // A LINE is a layout artefact — the chart wraps at whatever width the window happens
+        // to be, and a line break means nothing musically. role="presentation" keeps it out of
+        // the accessibility tree: a screen-reader user must not be told about a break that a
+        // wider window would remove. The chords are the list; the lines are just where they
+        // landed today.
+        <li key={li} className="chart-line" role="presentation">
           {line.map((s) => {
             const i = indexById.get(s.id)!;
             const selected = s.id === selectedId;
@@ -135,80 +146,102 @@ export default function Timeline({
             // A bar line is drawn on the left edge of cells that start a measure.
             const onMeasure =
               Math.abs(((s.start_beat - measureOffset) % beatsPerMeasure)) < 1e-6;
+
+            // A sighted player reads position, length and the bar line off the page instantly.
+            // "C, button" — which is all the old markup said — gave a screen-reader user none
+            // of it.
+            //
+            // A MASKED chord keeps its secret but keeps its position and its length: in
+            // practice mode the chord is the question, but the rhythm is the question's
+            // CONTEXT and a player needs something to guess against.
+            const what = masked ? "Hidden chord" : chordLabel(s.chord_root, s.chord_quality);
+            const where = formatMusicalPosition(barBeatAt(grid, s.start_time)); // "bar 3, beat 1"
+            const howLong = `${beats} ${beats === 1 ? "beat" : "beats"}`;
+            // The measure rule is a graphical object. A screen reader cannot see 3px of
+            // --bar-line, so it has to be said.
+            const startsBar = onMeasure ? ", starts a bar" : "";
+
+            const label = `${what}, ${where}, ${howLong}${startsBar}`;
+
             return (
-              <button
-                type="button"
+              <span
                 key={s.id}
-                className="chord-cell"
-                data-bar-start={onMeasure ? "true" : undefined}
-                data-selected={selected ? "true" : undefined}
-                data-playing={isActive ? "true" : undefined}
-                data-masked={masked ? "true" : undefined}
-                aria-pressed={selected}
-                aria-label={masked ? `Hidden chord, ${beats} beats` : undefined}
-                data-segment-id={s.id}
-                onClick={() => {
-                  if (suppressClick.current) {
-                    suppressClick.current = false;
-                    return;
-                  }
-                  onSelect(s.id);
-                  onSeek?.(s.start_time);
-                }}
-                // The cell says it is a button, so it has to answer to one. In practice mode
-                // this is the only way in: clicking a chord *is* the question, and a player on
-                // the keyboard would otherwise have no way to name a single one.
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" && e.key !== " ") return;
-                  e.preventDefault(); // Space scrolls the page otherwise
-                  onSelect(s.id);
-                  onSeek?.(s.start_time);
-                }}
-                style={{
-                  // Runtime geometry ONLY: the cell's width IS the chord's beat count.
-                  // Every other visual value on this element lives in CSS.
-                  flex: `${beats} 1 0`,
-                }}
+                role="listitem"
+                className="chord-cell__item"
+                // Runtime geometry ONLY: the cell's width IS the chord's beat count. This
+                // moved off the <button> and onto its wrapper, because the wrapper is now the
+                // flex child. Losing it makes every chord the same width — and NO a11y test
+                // would catch that.
+                style={{ flex: `${beats} 1 0` }}
               >
-                {onResizeCommit && (
-                  <span
-                    className="chord-cell__resize chord-cell__resize--left"
-                    aria-label={`Resize start of ${chordLabel(s.chord_root, s.chord_quality)}`}
-                    draggable={false}
-                    onPointerDown={(e) => startResize(i, "left", e)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                )}
-                <strong>{masked ? "?" : chordLabel(s.chord_root, s.chord_quality)}</strong>
-                <span className="muted slash-marks">{beatSlashMarks(beats)}</span>
-                {/* The roman numeral names the chord's degree — against a key the player can
-                    see, that is the answer. Masked cells go without it. */}
-                <span className="muted">{masked ? "" : s.roman_numeral}</span>
-                {onResizeCommit && (
-                  <span
-                    className="chord-cell__resize chord-cell__resize--right"
-                    aria-label={`Resize end of ${chordLabel(s.chord_root, s.chord_quality)}`}
-                    draggable={false}
-                    onPointerDown={(e) => startResize(i, "right", e)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                )}
-                {isActive && (
-                  <span
-                    ref={fillRef}
-                    aria-hidden
-                    className="chord-progress"
-                    // Runtime geometry ONLY: how far through the chord we are, repainted
-                    // per-frame by chordProgress.ts. Everything else about this element
-                    // (position, size, colour) lives in CSS.
-                    style={{ transform: "scaleX(0)" }}
-                  />
-                )}
-              </button>
+                <button
+                  type="button"
+                  className="chord-cell"
+                  data-bar-start={onMeasure ? "true" : undefined}
+                  data-selected={selected ? "true" : undefined}
+                  data-playing={isActive ? "true" : undefined}
+                  data-masked={masked ? "true" : undefined}
+                  aria-pressed={selected}
+                  aria-label={label}
+                  data-segment-id={s.id}
+                  onClick={() => {
+                    if (suppressClick.current) {
+                      suppressClick.current = false;
+                      return;
+                    }
+                    onSelect(s.id);
+                    onSeek?.(s.start_time);
+                  }}
+                  // The cell says it is a button, so it has to answer to one. In practice mode
+                  // this is the only way in: clicking a chord *is* the question, and a player on
+                  // the keyboard would otherwise have no way to name a single one.
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault(); // Space scrolls the page otherwise
+                    onSelect(s.id);
+                    onSeek?.(s.start_time);
+                  }}
+                >
+                  {onResizeCommit && (
+                    <span
+                      className="chord-cell__resize chord-cell__resize--left"
+                      aria-label={`Resize start of ${chordLabel(s.chord_root, s.chord_quality)}`}
+                      draggable={false}
+                      onPointerDown={(e) => startResize(i, "left", e)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  <strong>{masked ? "?" : chordLabel(s.chord_root, s.chord_quality)}</strong>
+                  <span className="muted slash-marks">{beatSlashMarks(beats)}</span>
+                  {/* The roman numeral names the chord's degree — against a key the player can
+                      see, that is the answer. Masked cells go without it. */}
+                  <span className="muted">{masked ? "" : s.roman_numeral}</span>
+                  {onResizeCommit && (
+                    <span
+                      className="chord-cell__resize chord-cell__resize--right"
+                      aria-label={`Resize end of ${chordLabel(s.chord_root, s.chord_quality)}`}
+                      draggable={false}
+                      onPointerDown={(e) => startResize(i, "right", e)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  {isActive && (
+                    <span
+                      ref={fillRef}
+                      aria-hidden
+                      className="chord-progress"
+                      // Runtime geometry ONLY: how far through the chord we are, repainted
+                      // per-frame by chordProgress.ts. Everything else about this element
+                      // (position, size, colour) lives in CSS.
+                      style={{ transform: "scaleX(0)" }}
+                    />
+                  )}
+                </button>
+              </span>
             );
           })}
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
