@@ -86,4 +86,38 @@ describe("ThemeProvider", () => {
     renderProbe();
     expect(screen.getByTestId("theme")).toHaveTextContent("dark");
   });
+
+  describe("when localStorage throws (private browsing, storage disabled)", () => {
+    it("still renders and falls back to the OS preference when getItem throws", () => {
+      const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+        throw new DOMException("SecurityError");
+      });
+      try {
+        mockPrefersDark(true);
+        expect(() => renderProbe()).not.toThrow();
+        expect(screen.getByTestId("theme")).toHaveTextContent("dark");
+      } finally {
+        getItemSpy.mockRestore();
+      }
+    });
+
+    it("still toggles for the session and updates <html> when setItem throws, without crashing", async () => {
+      const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new DOMException("SecurityError");
+      });
+      try {
+        mockPrefersDark(false);
+        renderProbe();
+
+        await expect(
+          userEvent.click(screen.getByRole("button", { name: "flip" })),
+        ).resolves.not.toThrow();
+
+        expect(screen.getByTestId("theme")).toHaveTextContent("dark");
+        expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+      } finally {
+        setItemSpy.mockRestore();
+      }
+    });
+  });
 });

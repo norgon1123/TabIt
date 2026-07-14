@@ -17,6 +17,34 @@ function tokensFor(css: string, selector: string): Record<string, string> {
   return out;
 }
 
+/** Pull the numeric magnitude out of a simple CSS length (`rem`, `em`, `px`, `%`), scaled
+ *  onto a common "rem-ish" axis so values in different units stay roughly comparable.
+ *  Returns null for anything that isn't a bare `<number><unit>` — e.g. `calc(...)`. */
+function toComparableLength(value: string): number | null {
+  const m = /^(-?\d*\.?\d+)(rem|em|px|%)$/.exec(value.trim());
+  if (!m) return null;
+  const num = parseFloat(m[1]);
+  switch (m[2]) {
+    case "rem":
+    case "em":
+      return num;
+    case "px":
+      return num / 16; // assumes a 16px root, same convention the type scale itself uses
+    case "%":
+      return num / 100;
+    default:
+      return null;
+  }
+}
+
+/** A token is a plausible CSS length if it's a bare number+unit, or a calc()/clamp()
+ *  expression — not merely present, and not a stray word like "banana". */
+function isPlausibleLength(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  if (toComparableLength(value) !== null) return true;
+  return /^(calc|clamp)\(.+\)$/.test(value.trim());
+}
+
 const css = readFileSync(resolve(__dirname, "../index.css"), "utf8");
 const THEMES = {
   light: tokensFor(css, ':root, [data-theme="light"]'),
@@ -106,16 +134,43 @@ describe("typography", () => {
     expect(root["--font-ui"]).toMatch(/system-ui/);
   });
 
+  const TYPE_SCALE = ["--text-xs", "--text-sm", "--text-md", "--text-lg", "--text-xl", "--text-2xl"];
+
   it("has a type scale rather than magic numbers", () => {
     const root = tokensFor(css, ":root");
-    for (const t of ["--text-xs", "--text-sm", "--text-md", "--text-lg", "--text-xl", "--text-2xl"]) {
+    for (const t of TYPE_SCALE) {
       expect(root[t], `missing type token ${t}`).toBeDefined();
+      expect(
+        isPlausibleLength(root[t]),
+        `${t} (${JSON.stringify(root[t])}) is not a plausible CSS length`,
+      ).toBe(true);
+    }
+  });
+
+  it("increases monotonically from --text-xs through --text-2xl", () => {
+    // A scale whose "large" is smaller than its "small" is not a scale.
+    const root = tokensFor(css, ":root");
+    const values = TYPE_SCALE.map((t) => {
+      const n = toComparableLength(root[t]);
+      if (n === null) throw new Error(`${t} (${root[t]}) is not a comparable length`);
+      return n;
+    });
+    for (let i = 1; i < values.length; i++) {
+      expect(
+        values[i],
+        `${TYPE_SCALE[i]} (${root[TYPE_SCALE[i]]}) should be larger than ${TYPE_SCALE[i - 1]} (${root[TYPE_SCALE[i - 1]]})`,
+      ).toBeGreaterThan(values[i - 1]);
     }
   });
 
   it("sizes chord cells from a token, not from their content", () => {
     // A content-sized cell re-wraps the entire chart the day the typeface changes.
-    expect(tokensFor(css, ":root")["--chord-cell-min"]).toBeDefined();
+    const value = tokensFor(css, ":root")["--chord-cell-min"];
+    expect(value, "missing --chord-cell-min").toBeDefined();
+    expect(
+      isPlausibleLength(value),
+      `--chord-cell-min (${JSON.stringify(value)}) is not a plausible CSS length`,
+    ).toBe(true);
   });
 
   it("declares no font-family outside the font tokens", () => {
