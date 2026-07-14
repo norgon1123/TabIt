@@ -9,7 +9,15 @@ name: Refresh context docs
 # There is no loop risk: the paths filter below deliberately EXCLUDES AGENTS.md and
 # CONTEXT.md, so merging the docs PR this workflow opens cannot retrigger it.
 #
-# Requires repo secret ANTHROPIC_API_KEY.
+# Auth: uses a Claude subscription (Max), NOT an API key. A Pro/Max plan includes no API
+# credits — console.anthropic.com billing is a separate ledger. Instead, mint a long-lived
+# OAuth token from the subscription and store it as a repo secret:
+#
+#     claude setup-token                                   # prints a token (valid ~1 year)
+#     gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo norgon1123/tabit
+#
+# The token does NOT auto-renew — it must be regenerated when it expires.
+# To use API billing instead, swap the input below for `anthropic_api_key`.
 
 on:
   push:
@@ -43,7 +51,7 @@ jobs:
       - name: Regenerate the docs
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: >-
             --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git diff:*),Bash(git log:*),Bash(ls:*)"
           prompt: |
