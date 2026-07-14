@@ -24,6 +24,21 @@ const CHART = {
   ],
 };
 
+test("has no inline styles left in the title row", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  const { container } = renderWithProviders(<ChartEditorPage />, {
+    route: "/recordings/r1",
+    path: "/recordings/:recordingId",
+  });
+
+  expect(await screen.findByRole("heading", { name: /how do you want to open/i })).toBeInTheDocument();
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
 test("shows BPM, key, and the chord timeline", async () => {
   login();
   server.use(

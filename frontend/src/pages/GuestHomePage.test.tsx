@@ -79,6 +79,12 @@ async function open(mode: "edit" | "practice" = "edit") {
   fireEvent.click(await screen.findByRole("button", { name }));
 }
 
+test("has no inline styles left", async () => {
+  const { container } = renderWithProviders(<GuestHomePage />);
+  await screen.findByText(/drag a song here/i);
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
 test("a logged-out visitor is invited to upload, without being asked to log in", async () => {
   renderWithProviders(<GuestHomePage />);
 

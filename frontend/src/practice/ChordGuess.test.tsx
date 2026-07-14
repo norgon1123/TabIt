@@ -20,6 +20,11 @@ async function guess(root: string, quality: string) {
   await userEvent.click(screen.getByRole("button", { name: "Submit" }));
 }
 
+test("has no inline styles left", () => {
+  const { container } = render(<ChordGuess segment={SEGMENT} onSolved={vi.fn()} />);
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
 test("a wrong answer is refused, marked invalid, and shakes", async () => {
   const onSolved = vi.fn();
   const { container } = render(<ChordGuess segment={SEGMENT} onSolved={onSolved} />);

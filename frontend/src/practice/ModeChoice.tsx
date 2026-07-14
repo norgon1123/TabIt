@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import Card from "../ui/Card";
+import Button from "../ui/Button";
 import { PRACTICE_ACCESS, practiceLock, type ChartMode, type PracticeAccess } from "./gate";
 
 export type { ChartMode };
@@ -25,19 +27,17 @@ export default function ModeChoice({
   const locked = practiceLock(user, access);
 
   return (
-    <div className="card mode-choice" style={{ marginTop: 16 }}>
-      <h2 style={{ margin: "0 0 4px" }}>How do you want to open this song?</h2>
-      <p className="muted" style={{ margin: "0 0 16px" }}>
-        You can switch at any time.
-      </p>
+    <Card className="mode-choice">
+      <h2 className="mode-choice__title">How do you want to open this song?</h2>
+      <p className="muted mode-choice__subtitle">You can switch at any time.</p>
 
       <div className="mode-choice__options">
-        <button className="mode-choice__option primary" onClick={() => onChoose("edit")}>
+        <Button variant="primary" className="mode-choice__option" onClick={() => onChoose("edit")}>
           <strong>Open the chart</strong>
           <span>The chords, as Tabit heard them — play along, correct anything it got wrong.</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
           className="mode-choice__option"
           disabled={locked != null}
           aria-describedby={locked ? "practice-locked" : undefined}
@@ -48,14 +48,14 @@ export default function ModeChoice({
             The chords are hidden. Listen, name each one, and it is revealed when you get it
             right.
           </span>
-        </button>
+        </Button>
       </div>
 
       {locked && (
-        <p id="practice-locked" className="muted" style={{ margin: "12px 0 0" }}>
+        <p id="practice-locked" className="muted mode-choice__locked">
           {locked} <Link to="/register">Create an account</Link>
         </p>
       )}
-    </div>
+    </Card>
   );
 }

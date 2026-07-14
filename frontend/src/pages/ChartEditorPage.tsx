@@ -4,6 +4,8 @@ import { useRecording } from "../chart/useRecording";
 import { useReanalyze } from "../chart/useReanalyze";
 import Spinner from "../components/Spinner";
 import ModeChoice from "../practice/ModeChoice";
+import Stack from "../ui/Stack";
+import Button from "../ui/Button";
 import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
 import { useAuth } from "../auth/AuthContext";
 
@@ -41,29 +43,29 @@ export default function ChartEditorPage() {
   return (
     <div className="container">
       <p><Link to="/">&larr; Library</Link></p>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>{recording?.original_filename ?? "Chart"}</h1>
+      <Stack gap={3} wrap>
+        <h1 className="no-margin">{recording?.original_filename ?? "Chart"}</h1>
 
         {/* Re-analysis rewrites the chart from scratch, which mid-practice would swap the
             questions out from under the player. It belongs to the editor. */}
         {mode === "edit" && (
-          <button onClick={() => reanalyze()} disabled={reanalyzing || inProgress}>
+          <Button onClick={() => reanalyze()} disabled={reanalyzing || inProgress}>
             Re-analyze
-          </button>
+          </Button>
         )}
 
         {mode && canPractice(user) && (
-          <button onClick={() => choose(practice ? "edit" : "practice")}>
+          <Button onClick={() => choose(practice ? "edit" : "practice")}>
             {practice ? "Show the chords" : "Practice mode"}
-          </button>
+          </Button>
         )}
 
         {inProgress && (
-          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} className="muted">
+          <Stack gap={1} className="muted">
             <Spinner label="Analyzing" /> Analyzing&hellip;
-          </span>
+          </Stack>
         )}
-      </div>
+      </Stack>
 
       {mode == null ? (
         <ModeChoice onChoose={choose} />

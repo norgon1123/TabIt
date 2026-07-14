@@ -251,6 +251,14 @@ a { color: var(--accent); }
    escape valve for a control (a toggle, an "add" button) that should hug its own content
    instead, same job "justify-self: start" did inside the CSS Grid this replaces. */
 .self-start { align-self: flex-start; }
+/* A heading sitting inline in a Stack row next to a button (the page title, next to
+   "Re-analyze") — the heading's own default margin would misalign it against the button
+   beside it, so it is reset to nothing and the Stack's gap does the spacing instead. */
+.no-margin { margin: 0; }
+
+/* ---- GuestHomePage ------------------------------------------------------------------ */
+.guest-chart { margin-top: var(--space-5); }
+.guest-cta { margin-top: var(--space-6); }
 .chart-panel {
   position: absolute;
   z-index: 10;
@@ -374,6 +382,8 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 .ok { color: var(--ok); }
 
 .chord-guess { display: grid; gap: 8px; border-color: var(--line); }
+.chord-guess form { display: grid; gap: var(--space-2); }
+.chord-guess p { margin: 0; }
 /* Wrong: red, and a shake — the same "no" a locked door gives you. The colour is the
    lasting signal (it stays until the next attempt); the shake is the reflex. */
 .chord-guess--wrong { border-color: var(--danger); }
@@ -398,6 +408,10 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 
 /* The mode question: two doors, side by side, the same size. Practice is not a footnote on
    the chart — it is the other half of what Tabit is for. */
+.mode-choice { margin-top: var(--space-4); }
+.mode-choice__title { margin: 0 0 var(--space-1); }
+.mode-choice__subtitle { margin: 0 0 var(--space-4); }
+.mode-choice__locked { margin: var(--space-3) 0 0; }
 .mode-choice__options { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .mode-choice__option {
   display: grid;
