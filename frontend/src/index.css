@@ -115,18 +115,35 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 .container { max-width: 880px; margin: 0 auto; padding: 16px; }
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--control-border);
-  background: var(--surface); color: var(--text); padding: 8px 12px; }
+button {
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--control-border);   /* a control's boundary — 3:1, not the hairline */
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-2) var(--space-3);
+}
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+button.danger  { background: transparent; border-color: var(--danger); color: var(--danger); }
+button.icon    { padding: var(--space-1) var(--space-2); line-height: 1; border-color: transparent; color: var(--muted); background: transparent; }
 button:disabled { opacity: 0.5; cursor: default; }
+
+/* Defined once, here, so no call site has to remember it. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 input, select { font: inherit; background: var(--surface); color: var(--text);
   border: 1px solid var(--control-border); border-radius: 8px; padding: 8px; }
 a { color: var(--accent); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
-button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color: var(--muted); }
 
 /* A chart panel (the segment editor; the practice-mode chord guess) sits just off the right
    edge of the chord chart, its top aligned with the row of the chord it belongs to — near
@@ -225,6 +242,31 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
   height: 100%;
 }
 .mode-choice__option span { font-size: 0.9em; opacity: 0.85; }
+
+/* ---- Stack --------------------------------------------------------------------------
+   The flex row/column. Components declare INTENT via data attributes; the pixel values
+   live here, so a theme or a layout change can retarget every Stack in the app at once. */
+.stack { display: flex; }
+.stack[data-direction="row"]    { flex-direction: row; }
+.stack[data-direction="column"] { flex-direction: column; }
+
+.stack[data-gap="1"] { gap: var(--space-1); }
+.stack[data-gap="2"] { gap: var(--space-2); }
+.stack[data-gap="3"] { gap: var(--space-3); }
+.stack[data-gap="4"] { gap: var(--space-4); }
+.stack[data-gap="5"] { gap: var(--space-5); }
+.stack[data-gap="6"] { gap: var(--space-6); }
+
+.stack[data-align="start"]    { align-items: flex-start; }
+.stack[data-align="center"]   { align-items: center; }
+.stack[data-align="baseline"] { align-items: baseline; }
+.stack[data-align="stretch"]  { align-items: stretch; }
+
+.stack[data-justify="start"]   { justify-content: flex-start; }
+.stack[data-justify="center"]  { justify-content: center; }
+.stack[data-justify="between"] { justify-content: space-between; }
+
+.stack[data-wrap="true"] { flex-wrap: wrap; }
 
 @media (max-width: 600px) {
   .mode-choice__options { grid-template-columns: 1fr; }
