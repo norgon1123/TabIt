@@ -26,6 +26,11 @@ copy.
   without torch. Same pattern for the `[chordino]` extra (native Vamp plugin).
 - **Accounts are optional** — a logged-out visitor gets the whole experience for one song,
   stored nowhere. See *Guest mode*.
+- **A small design system underpins the UI** — `frontend/src/ui/` (`Button`, `Stack`,
+  `Card`, `Field`, `Panel`) and `frontend/src/theme/` (light/dark theming). Inline `style`
+  for colour/spacing/layout is banned outside two named, justified exceptions
+  (`ui/noInlineStyle.test.ts`); colour pairs and reduced-motion coverage are enforced by
+  tests that read `index.css` as text, not by a separate token module. See *Frontend map*.
 
 ## Charts are beat-native
 
@@ -73,13 +78,16 @@ guest gets a `401` from), audio kept on disk, and several songs at once.
 ## Backend map (`app/`)
 
 - `main.py` — app construction, router wiring, lifespan: `create_all`, then
-  `run_additive_migrations`, warns if ffmpeg is missing, shuts down the job dispatcher.
-  Health at `GET /api/health`.
+  `run_additive_migrations`, warns if ffmpeg is missing, purges any guest audio left on disk
+  by a process that died mid-analysis (guest data doesn't survive a restart anyway), and
+  shuts down the job dispatcher on exit. Health at `GET /api/health`.
 - `config.py` — `TABIT_`-prefixed settings via pydantic-settings (reads `.env`).
 - `db.py`, `models.py`, `schemas.py` — engine/session, ORM models, Pydantic I/O shapes.
 - `migrations.py` — additive, idempotent `ALTER TABLE ... ADD COLUMN` migrations, kept from
   before the DB became disposable. Still runs on startup, but **no new ones are written** —
-  a breaking schema change means dropping the DB (see *Invariants*).
+  a breaking schema change means dropping the DB (see *Invariants*). `scripts/migrate_beats.py`
+  runs the same additive step out-of-band against a DB the app isn't currently pointed at;
+  it delegates to `run_additive_migrations` rather than adding anything new.
 - `deps.py`, `security.py` — DB/session dependencies, `Principal` (signed-in user *or*
   guest), current-user + owned-recording resolution, Argon2 hashing.
 - `guest.py`, `chart_store.py`, `chart_seed.py` — the account-free path: the in-memory guest
@@ -194,17 +202,56 @@ finished and the file has been deleted).
 
 - `api/` — typed REST client (`client.ts`), `types.ts`, `music.ts`.
 - `auth/` — `AuthContext` (session-cookie auth state).
+- `theme/` — light/dark theming: `ThemeContext` (`useTheme`/`ThemeProvider` — persists the
+  choice to `localStorage`, falls back to `prefers-color-scheme` on first visit, sets
+  `data-theme` on `<html>` for the CSS to key off) and `contrast.ts` (pure WCAG 2.1 contrast
+  maths, no DOM). There is no separate palette or motion module: `palette.test.ts` and
+  `motion.test.ts` read `index.css` as text and assert its custom-property colour pairs
+  clear AA contrast (4.5:1 text / 3:1 UI) and that every animation has a
+  `prefers-reduced-motion` fallback — the stylesheet stays the single source of truth for
+  both rather than a TS module the CSS could drift from.
+- `ui/` — the shared component layer every screen is built from: `Button`
+  (`type="button"` by default so a stray button can't submit a form; variant is a class, not
+  an inline style, so it can respond to the theme), `Stack` (the one flex row/column —
+  spacing travels as data attributes, never inline styles), `Card`, `Field` (the `<label>`
+  wraps the control rather than pointing at it with `htmlFor`; errors are `role="alert"`),
+  `Panel` (the sheet that appears beside the chart — segment editor, practice guess — takes
+  focus on mount and returns it on unmount via `useReturnFocus`). `noInlineStyle.test.ts`
+  enforces the rule that makes the theme system meaningful: inline `style` is banned for
+  colour/spacing/layout everywhere except two named, justified exceptions (runtime-computed
+  geometry in `Timeline.tsx` and `ScrubBar.tsx`).
 - `pages/` — `HomePage` (the library when signed in, `GuestHomePage` when not),
   `GuestHomePage` (upload + the chord sheet on one page), `LibraryPage`, `ChartEditorPage`,
   `LoginPage`, `RegisterPage`.
-- `chart/` — `ChartSheet` (the chord sheet both pages render), `useChart` (query/mutation
-  hook), `useRecording`, `useReanalyze`, `useMediaClock` (playback clock), `Timeline`,
-  `SegmentEditor`, `ScrubBar`, `TransposeControl`, `TempoControl`, `TimeSignatureControl`,
-  `KeyControl` (click-to-edit key correction: re-reads the same chords' roman numerals
-  against a new tonic/mode, never moves a chord — `PATCH /charts/{id}/settings`),
-  `chordProgress` (paints the active chord's fill bar as a CSS transition timed to its
-  remaining real time), `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat math,
-  half-beat snapping), `timeMath` (pixel↔time, centisecond formatting).
+- `chart/` — `ChartSheet` (the chord sheet both pages render, laid out as three zones — a
+  receding context bar, the chart itself, a pinned control deck). `PlaybackContext`
+  (`usePlayback`) wraps `useMediaClock` in a context so the context bar and the deck can
+  share one playback clock without lifting it into every page that renders a chart.
+  - Zone 1 — `ChartContextBar`: title, back link, mode actions. Dims while the song plays
+    (chrome you're not using is chrome in the way when your eyes are on your hands) but
+    never disappears — it stays in the DOM, focusable, one Tab away.
+  - Zone 2 — `Timeline` (the chord grid), `SegmentEditor`, `KeyControl` (click-to-edit key
+    correction: re-reads the same chords' roman numerals against a new tonic/mode, never
+    moves a chord — `PATCH /charts/{id}/settings`), `TransposeControl`, `TempoControl`,
+    `TimeSignatureControl`.
+  - Zone 3 — `ControlDeck`, pinned to the bottom: play/pause, `ScrubBar`, the clock, and
+    whatever the sheet hands it as children (tempo/key summary, `WhereAmI`). Deliberately
+    silent — no live regions — because during playback the user is listening, and speech
+    competes with the music; it speaks only when spoken to (the scrubber's
+    `aria-valuetext`).
+  - `AnalyzingIndicator` — a spinner that only announces to a screen reader while nothing is
+    playing, for the same reason the deck is silent.
+  - `WhereAmI` — an on-demand "bar N, beat N" position announcement for screen-reader users.
+    **Currently disabled**: its import and render are commented out in `ChartSheet.tsx`
+    while the accessibility approach is reconsidered. The component and its tests are
+    intact — re-enabling is a two-line restore.
+  - `musicalPosition` — bar/beat-from-seconds math off the beat grid; what `WhereAmI` and
+    the scrubber's `aria-valuetext` both read from.
+  - `chordProgress` (paints the active chord's fill bar as a CSS transition timed to its
+    remaining real time), `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat
+    math, half-beat snapping), `timeMath` (pixel↔time, centisecond formatting), `useChart`
+    (query/mutation hook), `useRecording`, `useReanalyze`, `useMediaClock` (the underlying
+    playback clock `PlaybackContext` wraps).
 - `guest/` — `useGuestSong`: holds the visitor's File for playback (the server deleted its
   copy) and for re-analysis (which re-uploads it).
 - `library/` — `useRecordings`, `uploadRecording` (the one upload path, guest or not),
@@ -214,7 +261,13 @@ finished and the file has been deleted).
 - `practice/` — learning mode: `ModeChoice` (the chart-or-practice question), `ChordGuess`
   (the answer form), `usePracticeSession` (what has been named), `answer` (marking),
   `gate` (**who may practise — the one place that decides**). See *Practice mode*.
-- `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`, `Spinner`.
+- `components/` — `Header` (also renders `ThemeToggle`), `ProtectedRoute`,
+  `AnalysisStatusBadge`, `Spinner`, `SkipLink` (off-screen-until-focused link to
+  `#main-content`, first in the tab order — every screen renders inside one `<main
+  id="main-content">` in `App.tsx`, which is both the skip target and a landmark for
+  screen-reader navigation), `ThemeToggle` (labelled by the action it performs — e.g.
+  "Switch to dark mode" — not the current state, so a screen reader can't mistake it for a
+  status report).
 
 ## Practice mode (`frontend/src/practice/`)
 

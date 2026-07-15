@@ -214,7 +214,11 @@ comment in `pyproject.toml` and `docs/technical-plan-phase-0-1.md`.
   response shapes in `app/schemas.py`; ORM models in `app/models.py`.
 - **Frontend** — data fetching through TanStack Query hooks (`useChart`, `useRecordings`).
   Beat math in `chart/beatMath.ts` / `chart/beatGrid.ts`; pixel↔time and time formatting
-  in `chart/timeMath.ts`; chart wrapping/layout in `chart/chartLayout.ts`.
+  in `chart/timeMath.ts`; chart wrapping/layout in `chart/chartLayout.ts`. Shared UI
+  components live in `ui/` (`Button`, `Stack`, `Card`, `Field`, `Panel`); light/dark theming
+  in `theme/` (`ThemeContext`, `contrast.ts`). See `CONTEXT.md` for the chart page's
+  three-zone layout (`ChartContextBar` / `Timeline` / `ControlDeck`) and the
+  no-inline-style rule `ui/noInlineStyle.test.ts` enforces.
 
 ## Configuration
 
@@ -238,11 +242,21 @@ Changing a chord engine? **Measure it, don't eyeball it.** The harness scores pr
 against hand-corrected MIREX `.lab` ground truth in `tests/eval/` using `mir_eval`
 (needs the `[ml]` extra):
 
+    # single engine vs baseline (spike 0.1)
     python scripts/eval_chords.py --dataset tests/eval --engine librosa --baseline chordino
-    python scripts/bootstrap_labels.py path/to/clip.m4a --engine chordino  # starter .lab
-    python scripts/separation_spike.py path/to/song.m4a --out-dir /tmp/stems
 
-Report the per-clip **win rate** alongside the weighted mean — the eval set is small
-enough that a single clip can swing the average. Record findings in
-`docs/phase-0-findings.md`; the plan and gate live in `docs/technical-plan-phase-0-1.md`
-and `docs/multi-instrument-roadmap.md`.
+    # A/B/C gate report (spike 0.3): deep on stem vs deep on mix vs chordino
+    python scripts/eval_chords.py --dataset tests/eval-stems \
+        --engines deep,chordino --baseline chordino --out gate-report.md
+
+    python scripts/bootstrap_labels.py path/to/clip.m4a --engine chordino  # starter .lab
+    python scripts/validate_labels.py --dataset tests/eval   # lint .lab files before scoring
+    python scripts/separation_spike.py path/to/song.m4a --out-dir /tmp/stems
+    # build a stem dataset for the deep-model stem condition (spike 0.3)
+    python scripts/make_eval_stems.py --stem harmonic --out tests/eval-stems
+
+Against `--baseline`, `eval_chords.py` reports the per-clip **win rate** and a bootstrap
+CI on the duration-weighted majmin delta — the eval set is small enough that one or two
+clips can swing the average — with a PASS verdict only once the CI's lower bound clears
+`--gate-margin`. Record findings in `docs/phase-0-findings.md`; the plan and gate live in
+`docs/technical-plan-phase-0-1.md` and `docs/multi-instrument-roadmap.md`.
