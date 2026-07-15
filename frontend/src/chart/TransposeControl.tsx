@@ -10,8 +10,10 @@ export default function TransposeControl({ onTranspose, busy }: Props) {
   return (
     <Stack className="card" gap={2} wrap>
       <span>Transpose:</span>
-      <Button onClick={() => onTranspose(-1)} disabled={busy}>−1</Button>
-      <Button onClick={() => onTranspose(1)} disabled={busy}>+1</Button>
+      {/* The visible "−1"/"+1" is kept inside the accessible name (WCAG 2.5.3, Label in Name)
+          while the words say what it does. */}
+      <Button aria-label="Transpose down a semitone (−1)" onClick={() => onTranspose(-1)} disabled={busy}>−1</Button>
+      <Button aria-label="Transpose up a semitone (+1)" onClick={() => onTranspose(1)} disabled={busy}>+1</Button>
       <span className="muted">(move the chords — roman numerals stay the same)</span>
     </Stack>
   );

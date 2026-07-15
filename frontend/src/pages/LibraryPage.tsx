@@ -58,6 +58,7 @@ function RecordingName({
     <Stack gap={2}>
       <input
         autoFocus
+        aria-label={`Rename ${recording.original_filename}`}
         value={name}
         disabled={busy}
         onChange={(e) => setName(e.target.value)}
@@ -100,6 +101,7 @@ export default function LibraryPage() {
       <Stack className="search-row" gap={2} wrap>
         <input
           type="search"
+          aria-label="Search recordings"
           placeholder="Search recordings"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

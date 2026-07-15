@@ -191,3 +191,24 @@ test("cancelling a rename does not call the API and restores the original name",
   expect(screen.queryByText("Something else entirely.m4a")).not.toBeInTheDocument();
   expect(patchSpy).not.toHaveBeenCalled();
 });
+
+test("labels the search box for a screen reader", async () => {
+  login();
+  server.use(http.get("/api/recordings", () => HttpResponse.json(TWO)));
+  renderWithProviders(<LibraryPage />);
+  await screen.findByText("Autumn Leaves.m4a");
+  // A placeholder is not a reliable accessible name; a searchbox with no name announces as
+  // "search, edit". aria-label gives it one.
+  expect(screen.getByRole("searchbox", { name: /search recordings/i })).toBeInTheDocument();
+});
+
+test("labels the rename field with the recording it renames", async () => {
+  login();
+  server.use(http.get("/api/recordings", () => HttpResponse.json([TWO[0]])));
+  renderWithProviders(<LibraryPage />);
+  await screen.findByText("Autumn Leaves.m4a");
+
+  await userEvent.click(screen.getByRole("button", { name: /rename/i }));
+  // The visible filename it replaces is gone once editing; the field must name itself.
+  expect(screen.getByRole("textbox", { name: /rename autumn leaves/i })).toBeInTheDocument();
+});

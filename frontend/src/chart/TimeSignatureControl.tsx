@@ -20,16 +20,16 @@ export default function TimeSignatureControl({
     <Stack className="card" gap={4} wrap>
       <Stack gap={2}>
         <span>Beats / measure: <strong>{beatsPerMeasure}</strong></span>
-        <Button disabled={busy || beatsPerMeasure <= 1}
+        <Button aria-label="Fewer beats per measure" disabled={busy || beatsPerMeasure <= 1}
                 onClick={() => onChange({ beats_per_measure: beatsPerMeasure - 1 })}>−</Button>
-        <Button disabled={busy || beatsPerMeasure >= 16}
+        <Button aria-label="More beats per measure" disabled={busy || beatsPerMeasure >= 16}
                 onClick={() => onChange({ beats_per_measure: beatsPerMeasure + 1 })}>+</Button>
       </Stack>
       <Stack gap={2}>
         <span>Bar-line shift: <strong>{measureOffset}</strong></span>
-        <Button disabled={busy || measureOffset <= 0}
+        <Button aria-label="Shift the bar line earlier" disabled={busy || measureOffset <= 0}
                 onClick={() => onChange({ measure_offset: measureOffset - 1 })}>◀</Button>
-        <Button disabled={busy || measureOffset >= beatsPerMeasure - 1}
+        <Button aria-label="Shift the bar line later" disabled={busy || measureOffset >= beatsPerMeasure - 1}
                 onClick={() => onChange({ measure_offset: measureOffset + 1 })}>▶</Button>
       </Stack>
     </Stack>

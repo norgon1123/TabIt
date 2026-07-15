@@ -106,7 +106,7 @@ test("beats/measure edits still reach the server from inside Advanced options", 
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await screen.findByText("I");
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
-  await userEvent.click(screen.getByRole("button", { name: "−" })); // 4 → 3 beats per measure
+  await userEvent.click(screen.getByRole("button", { name: /fewer beats per measure/i })); // 4 → 3
   await waitFor(() => expect(patched).toEqual({ beats_per_measure: 3 }));
 });
 
