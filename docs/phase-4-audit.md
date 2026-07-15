@@ -35,7 +35,8 @@ with `blend()` in `theme/contrast.ts`) computes the effective colour and asserts
 |---|---|---|---|---|
 | Practice spotlight — masked `?` (`--muted` @ `opacity 0.72`) | 4.5 (text) | **3.38 → 6.44** | **4.05 → 6.69** | **Fixed** — desaturate only |
 | Practice spotlight — bar-line (`--bar-line` @ 0.72) | 3 (graphic) | **2.77 → 4.59** | 3.65 → 5.81 | **Fixed** (same) |
-| Receded context bar — title/link text (`--text` @ `opacity 0.45`) | 4.5 (text) | **2.84 → 4.90** | 4.01 → 6.86 | **Fixed** — floor 0.45 → 0.65 |
+| Receded context bar — title (`--text` @ `opacity 0.45`) | 4.5 (text) | **2.84 → 5.20** | 4.01 → 7.02 | **Fixed** — floor 0.45 → 0.65 |
+| Receded context bar — back **link** (`--accent` @ 0.65) | 4.5 (text) | **2.76 → 5.20** | **4.34 → 7.02** | **Fixed** — link is now `--text`+underline, not accent |
 | Current chord — `--text` on `color-mix(--accent 12%)` | 4.5 (text) | 13.8 ✓ | 12.4 ✓ | none (passes) |
 | Dropzone idle — text on `color-mix(--accent 8%, surface)` | 4.5 | 15.3 ✓ | 12.0 ✓ | none (passes) |
 | Dropzone **while uploading** — hint (`--muted` @ `opacity 0.6`) | 4.5 | 2.56 | 2.81 | **Documented, not changed** — see below |
@@ -51,9 +52,14 @@ with `blend()` in `theme/contrast.ts`) computes the effective colour and asserts
   desaturates only (`saturate(0.35)`, no opacity), so the chart stays fully AA-readable while
   still receding into a desaturated backdrop against the fully-saturated deck and guess panel.
   That *relative* saturation is the spotlight.
-- **Receded context bar** (Phase 2) dimmed the title/links to `opacity: 0.45`, i.e. 2.84:1 in
-  light. Raised to `0.65`, the visible-recede floor that stays AA in both themes. It still
-  restores to full opacity on `:hover`/`:focus-within`.
+- **Receded context bar** (Phase 2) dimmed to `opacity: 0.45`, i.e. 2.84:1 in light. Raised to
+  `0.65`, the visible-recede floor at which `--text` stays AA in both themes; it still restores
+  to full opacity on `:hover`/`:focus-within`. The `← Library` **link** needed a second fix: the
+  global `a { color: var(--accent) }` made it accent, which dims to 2.76:1 at 0.65 (accent is
+  only 5.0:1 to begin with, so *any* dim breaks it). At 0.65 only `--text` survives, so the
+  context-bar link is now `--text` + underline — which also honours the rule that `--accent` is
+  reserved for "now / active". `contrastStates.test.ts` now guards the link's token specifically,
+  not just the title's.
 
 ### Documented, not changed — and why
 

@@ -346,12 +346,17 @@ a { color: var(--accent); }
 /* ---- Zone 1: the context bar --------------------------------------------------------- */
 .chart-context-bar { padding-bottom: var(--space-3); transition: opacity 200ms ease; }
 .chart-context-bar__title { margin: 0; font-size: var(--text-xl); }
+/* The back link is --text, not the global accent link colour, for two reasons: --accent is
+   reserved for "now / active" and a back link is neither, and — decisively — accent (5.0:1)
+   dimmed to the receded 0.65 falls to 2.76:1, below AA, whereas --text survives at 5.2:1.
+   The underline carries the link affordance the colour no longer does. */
+.chart-context-bar a { color: var(--text); text-decoration: underline; }
 
-/* Recedes while playing — eyes on hands, not on chrome. It DIMS; it does not disappear:
-   a control you cannot find is worse than one you can ignore, and it stays focusable. */
-/* Recedes during playback, but its title and links are still TEXT — the static receded state
-   must clear AA (4.5:1). 0.45 fell to 2.84:1 in the light theme; 0.65 is the visible-recede
-   floor that stays AA in both themes. It still restores to full on :hover/:focus-within. */
+/* Recedes while playing — eyes on hands, not on chrome. It DIMS but does not disappear: a
+   control you cannot find is worse than one you can ignore, and it stays focusable. Its title
+   and links are still TEXT, so the static receded state must clear AA (4.5:1): 0.45 fell to
+   2.84:1 in light; 0.65 is the visible-recede floor that stays AA in both themes (and the link
+   is --text, above, so it survives the dim). It restores to full on :hover/:focus-within. */
 .chart-context-bar[data-receded="true"] { opacity: 0.65; }
 .chart-context-bar[data-receded="true"]:hover,
 .chart-context-bar[data-receded="true"]:focus-within { opacity: 1; }

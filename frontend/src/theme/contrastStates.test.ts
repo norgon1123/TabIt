@@ -47,9 +47,27 @@ describe.each(Object.entries(THEMES))("stateful contrast — %s theme", (_name, 
     expect(contrastRatio(effective, t["--bg"])).toBeGreaterThanOrEqual(AA_TEXT);
   });
 
+  it("keeps the receded context bar's LINK AA, not just its title", () => {
+    // The back link sits in the receded bar. The GLOBAL `a { color: var(--accent) }` would dim
+    // to 2.76:1 at 0.65 — below AA — so the bar must override the link to a token that survives
+    // the recede. Resolve whatever token it uses and check the composite; this catches a future
+    // re-accenting of the link, which the --text-only title check above would miss.
+    const linkRule = /\.chart-context-bar\s+a\s*\{([^}]*)\}/.exec(css);
+    expect(linkRule, "context-bar link colour is set explicitly").not.toBeNull();
+    const colorVar = /color:\s*var\((--[\w-]+)\)/.exec(linkRule![1]);
+    expect(colorVar, "link colour uses a token").not.toBeNull();
+    const m = /\.chart-context-bar\[data-receded="true"\]\s*\{[^}]*opacity:\s*([0-9.]+)/.exec(css);
+    const alpha = parseFloat(m![1]);
+    const effective = blend(t[colorVar![1]], t["--bg"], alpha);
+    expect(contrastRatio(effective, t["--bg"])).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
   it("keeps the current chord's label AA on its tinted background", () => {
-    // color-mix(--accent 12%, transparent) over the page: verify --text still clears AA.
-    const tint = blend(t["--accent"], t["--bg"], 0.12);
+    // color-mix(--accent N%, transparent) over the page: read N from the stylesheet (rather
+    // than hardcoding it) so raising the tint can never silently push --text below AA.
+    const pct = /\.chord-cell\[data-playing="true"\][^}]*color-mix\(in srgb,\s*var\(--accent\)\s*(\d+)%/.exec(css);
+    expect(pct, "playing-cell tint percentage present").not.toBeNull();
+    const tint = blend(t["--accent"], t["--bg"], parseInt(pct![1], 10) / 100);
     expect(contrastRatio(t["--text"], tint)).toBeGreaterThanOrEqual(AA_TEXT);
   });
 });
