@@ -121,4 +121,16 @@ describe("the scrubber speaks music, not seconds", () => {
     expect(slider).toHaveAttribute("aria-valuemin", "0");
     expect(slider).toHaveAttribute("aria-valuemax", "16");
   });
+
+  it("seeks with the arrow keys — the keyboard path to scrubbing", () => {
+    // The scrubber is a real slider, so it must move from the keyboard, not just the pointer.
+    // This behaviour existed but was asserted nowhere; lock it.
+    const onSeek = vi.fn();
+    render(<ScrubBar currentTime={8} duration={16} playing={false} rate={1} grid={GRID} onSeek={onSeek} />);
+    const slider = screen.getByRole("slider");
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(onSeek).toHaveBeenCalledWith(13); // 8 + 5
+    fireEvent.keyDown(slider, { key: "ArrowLeft" });
+    expect(onSeek).toHaveBeenLastCalledWith(3); // 8 - 5
+  });
 });
