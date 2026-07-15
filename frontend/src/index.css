@@ -216,6 +216,7 @@ a { color: var(--accent); }
   padding: var(--space-2);
   text-align: center;
   color: var(--text);
+  transition: transform 120ms ease;   /* the current-chord lift; reduced-motion resets it below */
 }
 /* The measure rule. Heavier than --line by BOTH colour and width — two channels, so it
    still reads as "a bar starts here" for someone who cannot see the colour difference.
@@ -223,11 +224,21 @@ a { color: var(--accent); }
 .chord-cell[data-bar-start="true"] { border-left: 3px solid var(--bar-line); }
 .chord-cell[data-selected="true"]  { border-left-color: var(--accent); }
 
-/* "Playing" gets colour AND a border. The old hardcoded dark-slate background was one
-   channel, and a subtle one at that. */
+/* "Playing" gets THREE channels — colour, a border, AND a scale bump. Hue is never the only
+   signal: the border is presence (not hue) and the scale is size (not hue), so "this chord is
+   now" still reads for a player who cannot see the colour. The old app had only the colour. */
 .chord-cell[data-playing="true"] {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: var(--accent);
+  transform: scale(1.06);
+  z-index: 1;                          /* lift above its neighbours, not under them */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Drop the phase's motion. Colour and border stay — two channels, one of them (border
+     presence) not hue — so a reduced-motion player loses nothing the colourblind rule needs. */
+  .chord-cell { transition: none; }
+  .chord-cell[data-playing="true"] { transform: none; }
 }
 
 .chord-cell[data-masked="true"] strong { color: var(--muted); }
