@@ -194,17 +194,36 @@ finished and the file has been deleted).
 
 - `api/` — typed REST client (`client.ts`), `types.ts`, `music.ts`.
 - `auth/` — `AuthContext` (session-cookie auth state).
+- `theme/` — light/dark theming (`ThemeContext`, choice persisted to `localStorage`) plus
+  the WCAG contrast maths (`contrast.ts`): pure functions that `palette.test.ts` uses to
+  prove no inaccessible colour pair can reach `index.css`. AA thresholds are the contract —
+  4.5:1 for text, 3:1 for UI/graphical objects (borders, focus rings, chart bar lines).
+- `ui/` — the design-system primitives shared across screens: `Button`, `Card`, `Field`,
+  `Panel` (the group that appears beside the chart — segment editor, practice guess; carries
+  `role="group"` + label), `Stack`, and `useReturnFocus` (send focus back to the trigger when
+  a panel closes). `noInlineStyle.test.ts` guards the token system against inline-style leaks.
 - `pages/` — `HomePage` (the library when signed in, `GuestHomePage` when not),
   `GuestHomePage` (upload + the chord sheet on one page), `LibraryPage`, `ChartEditorPage`,
   `LoginPage`, `RegisterPage`.
-- `chart/` — `ChartSheet` (the chord sheet both pages render), `useChart` (query/mutation
-  hook), `useRecording`, `useReanalyze`, `useMediaClock` (playback clock), `Timeline`,
-  `SegmentEditor`, `ScrubBar`, `TransposeControl`, `TempoControl`, `TimeSignatureControl`,
-  `KeyControl` (click-to-edit key correction: re-reads the same chords' roman numerals
-  against a new tonic/mode, never moves a chord — `PATCH /charts/{id}/settings`),
-  `chordProgress` (paints the active chord's fill bar as a CSS transition timed to its
-  remaining real time), `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat math,
-  half-beat snapping), `timeMath` (pixel↔time, centisecond formatting).
+- `chart/` — the chord sheet and its play-along shell (see *Play-along zones*):
+  - `ChartSheet` — the chord sheet both pages render; `useChart` (query/mutation hook),
+    `useRecording`, `useReanalyze`, `Timeline`.
+  - `PlaybackContext` — the one place playback state lives, so the transport and the context
+    bar can share it without one owning the other; `useMediaClock` is the `<audio>`-backed
+    clock underneath it.
+  - `ControlDeck` (Zone 3 — the transport: play, scrubber, clock, and the handed-in tempo and
+    key), `ChartContextBar` (Zone 1 — song identity, back link, mode switch; *recedes* while a
+    song plays), `ScrubBar`, `AnalyzingIndicator` (an "Analyzing…" status that stays silent to
+    assistive tech while a song is playing).
+  - `musicalPosition` — translates wall-clock seconds into the bar/beat a player actually
+    counts; `WhereAmI` is the on-demand "where am I" read-out built on it (import currently
+    commented out in `ChartSheet`, pending a rethink of the live-region trade-off).
+  - `SegmentEditor`, `TransposeControl`, `TempoControl`, `TimeSignatureControl`, `KeyControl`
+    (click-to-edit key correction: re-reads the same chords' roman numerals against a new
+    tonic/mode, never moves a chord — `PATCH /charts/{id}/settings`).
+  - `chordProgress` (paints the active chord's fill bar as a CSS transition timed to its
+    remaining real time), `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat math,
+    half-beat snapping), `timeMath` (pixel↔time, centisecond formatting).
 - `guest/` — `useGuestSong`: holds the visitor's File for playback (the server deleted its
   copy) and for re-analysis (which re-uploads it).
 - `library/` — `useRecordings`, `uploadRecording` (the one upload path, guest or not),
@@ -214,7 +233,28 @@ finished and the file has been deleted).
 - `practice/` — learning mode: `ModeChoice` (the chart-or-practice question), `ChordGuess`
   (the answer form), `usePracticeSession` (what has been named), `answer` (marking),
   `gate` (**who may practise — the one place that decides**). See *Practice mode*.
-- `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`, `Spinner`.
+- `components/` — `Header`, `ProtectedRoute`, `AnalysisStatusBadge`, `Spinner`, `SkipLink`
+  (skip-to-content landmark), `ThemeToggle`.
+
+## Play-along zones (`frontend/src/chart/`)
+
+The chart page is built for playing *along* to the recording, so the redesign splits its chrome
+into three zones around the music, and the guiding rule is that chrome you are not using while
+your eyes are on your hands is chrome in the way:
+
+- **Zone 1 — `ChartContextBar`:** what song this is, the back link, and the chart/practice mode
+  switch. It **recedes** during playback.
+- **Zone 2 — `ChartSheet`:** the chords themselves, the one thing that must never recede.
+- **Zone 3 — `ControlDeck`:** the transport — play, the scrubber, the clock, and (handed in by
+  the sheet) tempo and key. Always in the same place.
+
+`PlaybackContext` is the shared seam the three zones read and drive, replacing a clock threaded
+through the page. The scrubber speaks bar/beat (`musicalPosition`), not raw seconds, because
+"bar 12, beat 2" tells a musician where to put their hands and "87 seconds" tells them nothing —
+this is why Phase 2 replaced the native `<audio>` slider. Accessibility is a first-class
+constraint here, verified against WCAG AA in both themes (`docs/phase-4-audit.md`): the contrast
+maths in `theme/`, the return-focus behaviour in `ui/`, and the deliberately-quiet playback
+status all come from that work.
 
 ## Practice mode (`frontend/src/practice/`)
 

@@ -214,7 +214,9 @@ comment in `pyproject.toml` and `docs/technical-plan-phase-0-1.md`.
   response shapes in `app/schemas.py`; ORM models in `app/models.py`.
 - **Frontend** — data fetching through TanStack Query hooks (`useChart`, `useRecordings`).
   Beat math in `chart/beatMath.ts` / `chart/beatGrid.ts`; pixel↔time and time formatting
-  in `chart/timeMath.ts`; chart wrapping/layout in `chart/chartLayout.ts`.
+  in `chart/timeMath.ts`; chart wrapping/layout in `chart/chartLayout.ts`; playback state in
+  `chart/PlaybackContext.tsx`. Shared UI primitives in `ui/`; theming and the WCAG contrast
+  maths in `theme/`; shared test setup/MSW handlers in `test/`.
 
 ## Configuration
 
