@@ -5,6 +5,10 @@ import { server } from "../test/server";
 import { renderWithProviders } from "../test/utils";
 import LoginPage from "./LoginPage";
 
+function renderLoginPage() {
+  return renderWithProviders(<LoginPage />);
+}
+
 test("submitting valid credentials calls the login endpoint", async () => {
   let body: unknown = null;
   server.use(
@@ -13,7 +17,7 @@ test("submitting valid credentials calls the login endpoint", async () => {
       return HttpResponse.json({ id: "u1", username: "alice" });
     }),
   );
-  renderWithProviders(<LoginPage />);
+  renderLoginPage();
   await userEvent.type(screen.getByLabelText(/username/i), "alice");
   await userEvent.type(screen.getByLabelText(/password/i), "password123");
   await userEvent.click(screen.getByRole("button", { name: /log in/i }));
@@ -26,9 +30,54 @@ test("shows the error detail on 401", async () => {
       HttpResponse.json({ detail: "Invalid credentials" }, { status: 401 }),
     ),
   );
-  renderWithProviders(<LoginPage />);
+  renderLoginPage();
   await userEvent.type(screen.getByLabelText(/username/i), "alice");
   await userEvent.type(screen.getByLabelText(/password/i), "wrongpass1");
   await userEvent.click(screen.getByRole("button", { name: /log in/i }));
   expect(await screen.findByText("Invalid credentials")).toBeInTheDocument();
+});
+
+test("the error is announced, not just painted red", async () => {
+  server.use(
+    http.post("/api/auth/login", () =>
+      HttpResponse.json({ detail: "Invalid credentials" }, { status: 401 }),
+    ),
+  );
+  renderLoginPage();
+  await userEvent.type(screen.getByLabelText(/username/i), "alice");
+  await userEvent.type(screen.getByLabelText(/password/i), "wrongpass1");
+  await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Invalid credentials");
+});
+
+test("submitting by pressing Enter in the password field logs in", async () => {
+  let called = false;
+  server.use(
+    http.post("/api/auth/login", () => {
+      called = true;
+      return HttpResponse.json({ id: "u1", username: "alice" });
+    }),
+  );
+  renderLoginPage();
+  await userEvent.type(screen.getByLabelText(/username/i), "alice");
+  await userEvent.type(screen.getByLabelText(/password/i), "password123{enter}");
+  expect(called).toBe(true);
+});
+
+it("has no inline styles left", () => {
+  const { container } = renderLoginPage();
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
+it("labels every input", () => {
+  renderLoginPage();
+  expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+});
+
+it("submits with a real submit button", () => {
+  // Button defaults to type=button. The login form's submit MUST opt in explicitly,
+  // or pressing Enter in the password field does nothing.
+  renderLoginPage();
+  expect(screen.getByRole("button", { name: /log in/i })).toHaveAttribute("type", "submit");
 });

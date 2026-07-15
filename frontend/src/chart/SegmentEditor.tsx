@@ -3,14 +3,15 @@ import type { SegmentOut, SegmentWindowInput } from "../api/types";
 import type { SegmentPatch } from "./useChart";
 import { ROOTS, QUALITIES, QUALITY_LABELS } from "../api/music";
 import { redistributeLength } from "./chartLayout";
+import Panel from "../ui/Panel";
+import Stack from "../ui/Stack";
+import Field from "../ui/Field";
+import Button from "../ui/Button";
 
 interface Props {
   segment: SegmentOut;
   allSegments: SegmentOut[];
   maxTotalBeats: number;
-  /** Offset, in px, from the top of the chart area to the row of the chord being edited.
-   *  Ignored below the breakpoint where the panel drops back into the flow. */
-  top?: number;
   onResize: (windows: SegmentWindowInput[]) => void;
   onSave: (patch: SegmentPatch) => Promise<void>;
   onDelete: () => void;
@@ -23,7 +24,6 @@ export default function SegmentEditor({
   segment,
   allSegments,
   maxTotalBeats,
-  top = 0,
   onResize,
   onSave,
   onDelete,
@@ -83,42 +83,32 @@ export default function SegmentEditor({
   }
 
   return (
-    <div className="card chart-panel segment-editor" style={{ display: "grid", gap: 8, top }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <strong>Edit segment</strong>
-        {onClose && (
-          <button className="icon" aria-label="Close segment editor" onClick={onClose}>
-            &times;
-          </button>
-        )}
-      </div>
-      <label>
-        Root
-        <select value={root} onChange={(e) => setRoot(e.target.value)}>
-          {ROOTS.map((r) => (<option key={r} value={r}>{r}</option>))}
-        </select>
-      </label>
-      <label>
-        Quality
-        <select value={quality} onChange={(e) => setQuality(e.target.value)}>
-          {QUALITIES.map((q) => (<option key={q} value={q}>{QUALITY_LABELS[q]}</option>))}
-        </select>
-      </label>
-      <label>
-        Beats
-        <input
-          type="number"
-          step="0.5"
-          min="0.5"
-          value={beats}
-          onChange={(e) => changeBeats(Number(e.target.value))}
-        />
-      </label>
-      {error && <p className="error">{error}</p>}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="primary" onClick={saveChord} disabled={busy}>Save</button>
-        <button className="danger" onClick={onDelete} disabled={busy}>Delete</button>
-      </div>
-    </div>
+    <Panel title="Edit segment" onClose={onClose} className="segment-editor">
+      <Stack direction="column" gap={2} align="stretch">
+        <Field label="Root">
+          <select value={root} onChange={(e) => setRoot(e.target.value)}>
+            {ROOTS.map((r) => (<option key={r} value={r}>{r}</option>))}
+          </select>
+        </Field>
+        <Field label="Quality">
+          <select value={quality} onChange={(e) => setQuality(e.target.value)}>
+            {QUALITIES.map((q) => (<option key={q} value={q}>{QUALITY_LABELS[q]}</option>))}
+          </select>
+        </Field>
+        <Field label="Beats" error={error ?? undefined}>
+          <input
+            type="number"
+            step="0.5"
+            min="0.5"
+            value={beats}
+            onChange={(e) => changeBeats(Number(e.target.value))}
+          />
+        </Field>
+        <Stack gap={2} align="stretch">
+          <Button variant="primary" onClick={saveChord} disabled={busy}>Save</Button>
+          <Button variant="danger" onClick={onDelete} disabled={busy}>Delete</Button>
+        </Stack>
+      </Stack>
+    </Panel>
   );
 }

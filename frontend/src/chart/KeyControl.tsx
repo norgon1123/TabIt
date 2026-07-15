@@ -22,6 +22,21 @@ interface Props {
 export default function KeyControl({ keyTonic, keyMode, onChange, busy }: Props) {
   const [editing, setEditing] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+
+  // Return focus to the trigger when the editor closes (Enter, Escape, or click-away) —
+  // otherwise a keyboard user lands on document.body and has to Tab back from the top, the
+  // same courtesy Panel extends via useReturnFocus. Deferred to a microtask so the Enter that
+  // closes cannot re-activate the just-focused trigger and re-open the editor; the wasEditing
+  // guard means it fires only on a real close, never on the initial mount.
+  useEffect(() => {
+    if (wasEditing.current && !editing) {
+      const trigger = triggerRef.current;
+      queueMicrotask(() => trigger?.focus());
+    }
+    wasEditing.current = editing;
+  }, [editing]);
 
   // Close on the document, not on the dropdowns' own focus: a save re-renders the sheet,
   // and a widget that only listened to its own blur could be left open with no way back.
@@ -46,6 +61,7 @@ export default function KeyControl({ keyTonic, keyMode, onChange, busy }: Props)
   if (!editing) {
     return (
       <button
+        ref={triggerRef}
         type="button"
         className="inline-edit"
         disabled={busy}

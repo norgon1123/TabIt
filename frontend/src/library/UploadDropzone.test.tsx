@@ -10,6 +10,10 @@ function dropFile(file: File) {
   fireEvent.drop(zone, { dataTransfer: { files: [file] } });
 }
 
+function renderDropzone() {
+  return renderWithProviders(<UploadDropzone onUpload={vi.fn()} busy={false} />);
+}
+
 test("uploads a file dropped on the zone", () => {
   const onUpload = vi.fn();
   renderWithProviders(<UploadDropzone onUpload={onUpload} busy={false} />);
@@ -45,4 +49,30 @@ test("ignores a drop while an upload is already in flight", () => {
   dropFile(song());
 
   expect(onUpload).not.toHaveBeenCalled();
+});
+
+test("has no inline styles left", () => {
+  const { container } = renderDropzone();
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
+test("is reachable and operable from the keyboard", async () => {
+  // A drag-and-drop region that only responds to drag is unusable without a mouse.
+  // The "Choose a file" button is the keyboard path — tab to it and press Enter,
+  // and it must actually trigger the hidden file input's click(), not just exist.
+  const { container } = renderDropzone();
+  const input = container.querySelector("input[type=file]") as HTMLInputElement;
+  const clickSpy = vi.spyOn(input, "click");
+
+  // The file input is hidden with `display: none` (a real browser removes it from the
+  // tab order), but jsdom doesn't apply the stylesheet, so tabbing through it here would
+  // land on an element a real user could never reach. Focus the visible button directly —
+  // exactly where a keyboard user actually arrives — then operate it with the keyboard.
+  const button = screen.getByRole("button", { name: /choose a file/i });
+  button.focus();
+  expect(button).toHaveFocus();
+
+  await userEvent.keyboard("{Enter}");
+
+  expect(clickSpy).toHaveBeenCalled();
 });

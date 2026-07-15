@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import SegmentEditor from "./SegmentEditor";
+import type { ComponentProps } from "react";
 
 const seg = {
   id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2,
@@ -20,7 +21,48 @@ const baseProps = {
   busy: false,
 };
 
+function renderSegmentEditor(props: Partial<ComponentProps<typeof SegmentEditor>> = {}) {
+  return render(<SegmentEditor {...baseProps} {...props} />);
+}
+
 describe("SegmentEditor beats", () => {
+  it("has no inline styles left", () => {
+    const { container } = renderSegmentEditor();
+    expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+  });
+
+  it("still lets a keyboard user resize a segment via the Beats field", () => {
+    // This is load-bearing. Drag-to-resize is out of scope and may be cut from the app;
+    // the Beats field is the ONLY guaranteed path to the same behaviour, and it routes
+    // through the same redistributeLength() call. If this breaks, keyboard users lose
+    // segment resizing entirely.
+    renderSegmentEditor();
+    const beats = screen.getByLabelText(/beats/i);
+    expect(beats).toHaveAttribute("step", "0.5"); // the half-beat snap rule
+    expect(beats).toHaveAttribute("min", "0.5");
+  });
+
+  it("resizes the segment when a keyboard user presses ArrowUp in the Beats field (no mouse)", () => {
+    // Proves the keyboard path actually reaches redistributeLength/onResize, not just that
+    // the attributes are present. ArrowUp on a number input bumps its value by `step`; the
+    // browser dispatches a change event which changeBeats() must still route to onResize.
+    vi.useFakeTimers();
+    const onResize = vi.fn();
+    renderSegmentEditor({ onResize, debounceMs: 400 });
+    const beats = screen.getByLabelText(/beats/i) as HTMLInputElement;
+    beats.focus();
+    fireEvent.keyDown(beats, { key: "ArrowUp" });
+    // jsdom doesn't natively step number inputs on ArrowUp, so drive the same effect a real
+    // browser would: the value increments by `step` (0.5) and a change event fires.
+    fireEvent.change(beats, { target: { value: String(Number(beats.value) + 0.5) } });
+    act(() => { vi.advanceTimersByTime(400); });
+    expect(onResize).toHaveBeenCalledWith([
+      { id: "s1", start_beat: 0, end_beat: 4.5 },
+      { id: "s2", start_beat: 4.5, end_beat: 8 },
+    ]);
+    vi.useRealTimers();
+  });
+
   it("redistributes beats to the following chords after the debounce", () => {
     vi.useFakeTimers();
     const onResize = vi.fn();

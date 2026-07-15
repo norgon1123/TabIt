@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "../auth/AuthContext";
+import { ThemeProvider } from "../theme/ThemeContext";
 
 interface Options {
   route?: string;
@@ -23,7 +24,9 @@ export function renderWithProviders(ui: ReactElement, { route = "/", path }: Opt
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[route]}>
-        <AuthProvider>{tree}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>{tree}</AuthProvider>
+        </ThemeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );

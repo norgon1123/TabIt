@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ChartSheet from "../chart/ChartSheet";
+import { PlaybackProvider } from "../chart/PlaybackContext";
 import { useRecording } from "../chart/useRecording";
 import { useGuestSong } from "../guest/useGuestSong";
 import UploadDropzone from "../library/UploadDropzone";
-import Spinner from "../components/Spinner";
+import AnalyzingIndicator from "../chart/AnalyzingIndicator";
 import ModeChoice from "../practice/ModeChoice";
+import Stack from "../ui/Stack";
+import Button from "../ui/Button";
 import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
 import { useAuth } from "../auth/AuthContext";
 
@@ -37,7 +40,7 @@ export default function GuestHomePage() {
   const practice = mode === "practice";
 
   return (
-    <div className="container">
+    <div className="container guest-home">
       <h1>Turn a recording into a chord chart</h1>
       <p className="muted">
         Drop in a practice recording and Tabit works out the tempo, key and chords. No account
@@ -57,48 +60,49 @@ export default function GuestHomePage() {
       )}
 
       {recordingId && audioUrl && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <h2 style={{ margin: 0 }}>{filename ?? "Chart"}</h2>
+        // AnalyzingIndicator (below, in the Stack) calls usePlayback() and can be on screen
+        // before a mode is chosen and ChartSheet exists — so the provider has to wrap this
+        // whole block, not just ChartSheet, or it throws outside its context.
+        <PlaybackProvider>
+          <div className="guest-chart">
+            <Stack gap={3} wrap>
+              <h2 className="no-margin">{filename ?? "Chart"}</h2>
 
-            {/* Re-analysis re-cuts the chart, which mid-practice would swap the questions
-                out from under the player. It belongs to the chart. */}
-            {mode === "edit" && (
-              <button onClick={analyzeAgain} disabled={busy}>
-                Re-analyze
-              </button>
-            )}
+              {/* Re-analysis re-cuts the chart, which mid-practice would swap the questions
+                  out from under the player. It belongs to the chart. */}
+              {mode === "edit" && (
+                <Button onClick={analyzeAgain} disabled={busy}>
+                  Re-analyze
+                </Button>
+              )}
 
-            {mode && canPractice(user) && (
-              <button onClick={() => choose(practice ? "edit" : "practice")}>
-                {practice ? "Show the chords" : "Practice mode"}
-              </button>
-            )}
+              {mode && canPractice(user) && (
+                <Button onClick={() => choose(practice ? "edit" : "practice")}>
+                  {practice ? "Show the chords" : "Practice mode"}
+                </Button>
+              )}
 
-            {inProgress && (
-              <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} className="muted">
-                <Spinner label="Analyzing" /> Analyzing&hellip;
-              </span>
+              {inProgress && <AnalyzingIndicator />}
+            </Stack>
+
+            {mode == null ? (
+              <ModeChoice onChoose={choose} />
+            ) : (
+              <ChartSheet
+                recordingId={recordingId}
+                // The server deleted the upload when analysis finished; play the local copy.
+                audioSrc={audioUrl}
+                analysis={analysis}
+                duration={duration}
+                inProgress={inProgress}
+                practice={practice}
+              />
             )}
           </div>
-
-          {mode == null ? (
-            <ModeChoice onChoose={choose} />
-          ) : (
-            <ChartSheet
-              recordingId={recordingId}
-              // The server deleted the upload when analysis finished; play the local copy.
-              audioSrc={audioUrl}
-              analysis={analysis}
-              duration={duration}
-              inProgress={inProgress}
-              practice={practice}
-            />
-          )}
-        </div>
+        </PlaybackProvider>
       )}
 
-      <p className="muted" style={{ marginTop: 32 }}>
+      <p className="muted guest-cta">
         <Link to="/register">Create an account</Link> to save your chord sheets and work on
         several songs at once — this one disappears when you leave.
       </p>

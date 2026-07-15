@@ -118,6 +118,37 @@ describe("TempoControl", () => {
     expect(onChange).toHaveBeenCalledWith(72);
   });
 
+  test("a keyboard user can Tab from the tempo field to ÷2 and use it", async () => {
+    // Tabbing out of the input used to blur it, which committed and unmounted the whole
+    // editor — so ÷2/×2 were destroyed before focus could land, leaving them mouse-only.
+    const onChange = vi.fn();
+    render(<TempoControl bpm={120} onChange={onChange} busy={false} />);
+    await openEditor();
+    await userEvent.tab(); // input -> ÷2
+    const half = screen.queryByTitle("Half-time");
+    expect(half).not.toBeNull();
+    expect(half).toHaveFocus();
+    await userEvent.click(half!);
+    expect(onChange).toHaveBeenCalledWith(60);
+  });
+
+  test("names the rescale buttons for a screen reader", async () => {
+    // "÷2, button" tells a screen-reader user nothing about what it does.
+    render(<TempoControl bpm={144} onChange={vi.fn()} busy={false} />);
+    await openEditor();
+    expect(screen.getByRole("button", { name: "Half-time" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Double-time" })).toBeInTheDocument();
+  });
+
+  test("returns focus to the trigger when the editor closes", async () => {
+    // Escape/Enter/click-away unmounted the input and left focus on document.body; a keyboard
+    // user had to Tab back from the top. Focus now returns to the tempo button.
+    render(<TempoControl bpm={144} onChange={vi.fn()} busy={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /tempo:/i }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("button", { name: /tempo:/i })).toHaveFocus();
+  });
+
   test("shows a whole tempo for a chart analysed before that rule", () => {
     render(<TempoControl bpm={143.6} onChange={vi.fn()} busy={false} />);
     expect(screen.getByRole("button", { name: /tempo:/i })).toHaveTextContent("144 BPM");

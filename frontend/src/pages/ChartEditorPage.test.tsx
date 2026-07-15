@@ -24,6 +24,21 @@ const CHART = {
   ],
 };
 
+test("has no inline styles left in the title row", async () => {
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  const { container } = renderWithProviders(<ChartEditorPage />, {
+    route: "/recordings/r1",
+    path: "/recordings/:recordingId",
+  });
+
+  expect(await screen.findByRole("heading", { name: /how do you want to open/i })).toBeInTheDocument();
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
 test("shows BPM, key, and the chord timeline", async () => {
   login();
   server.use(
@@ -117,6 +132,8 @@ test("player appears on its own once analysis finishes", async () => {
   // (last arg) above that, or it dies on the default 5s timeout before waitFor can settle.
   await waitFor(() => expect(container.querySelector("audio")).not.toBeNull(), { timeout: 10000 });
   const player = container.querySelector("audio")!;
-  expect(player).toHaveAttribute("controls");
+  // The control deck is the transport now, not the native player — no `controls` attribute,
+  // so there is no duplicate set of play/scrub UI on the page.
+  expect(player).not.toHaveAttribute("controls");
   expect(player).toHaveAttribute("src", "/api/recordings/r1/audio");
 }, 15000);

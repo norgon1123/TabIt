@@ -1,6 +1,27 @@
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
 
+// Node 22+ ships its own experimental global `localStorage`/`sessionStorage`, which is
+// inert without a `--localstorage-file` flag. Vitest's jsdom environment only forwards a
+// window property onto globalThis when the name is either absent from globalThis or on
+// its known-keys allowlist; since Node's own (non-functional) `localStorage` already
+// exists as a global and predates that allowlist, jsdom's real, working Storage never
+// gets copied over. Point the globals at jsdom's implementation directly.
+{
+  const jsdomWindow = (globalThis as unknown as { jsdom?: { window: Window } }).jsdom
+    ?.window;
+  if (jsdomWindow) {
+    Object.defineProperty(globalThis, "localStorage", {
+      get: () => jsdomWindow.localStorage,
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, "sessionStorage", {
+      get: () => jsdomWindow.sessionStorage,
+      configurable: true,
+    });
+  }
+}
+
 // jsdom 25 does not ship PointerEvent. Polyfill it so that
 // @testing-library/dom can create proper pointer events with clientX/pointerId.
 if (typeof window !== "undefined" && !window.PointerEvent) {

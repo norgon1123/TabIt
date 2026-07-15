@@ -1,67 +1,428 @@
+/* ---- Tokens -------------------------------------------------------------------------
+   The single source of truth for every visual value in Tabit. Nothing below this block,
+   and nothing in a component, may hardcode a colour, a space, a radius or a size.
+
+   Two themes, ONE design. Light is warm paper; dark is warm charcoal. They are the same
+   app in different light — not two personalities behind a switch. Both are deliberately
+   warm: the old near-black blue-grey was blue-cold DAW chrome, which told a beginner "this
+   tool is not for you."
+
+   Theme is about the room the user is in. Mode (chart vs practice) is about what the app
+   is doing. They are orthogonal — practice mode must NOT be "the dark theme".
+
+   Every pair here is contrast-tested at WCAG AA by theme/palette.test.ts. If you change a
+   colour, that test tells you whether you are allowed to.
+
+   Three tokens do the job the old `--line` was doing alone, because it was doing two jobs
+   and one of them badly:
+
+     --line            decorative hairline — a card's edge, the divider between two chords
+                       in the same bar. NOT WCAG-governed (a card is not a control, and a
+                       chord is identified by its label). But kept perceptible at ~1.85:1,
+                       because a card differs from the page by only 1.05:1 — the border and
+                       the shadow are what make a card visible at all, not its fill.
+     --control-border  the boundary of an input, select or button. A real UI component
+                       boundary, so WCAG 1.4.11 applies: 3:1, enforced.
+     --bar-line        the measure rule on the chart. A graphical object that says "a bar
+                       starts here": 3:1, enforced, and heavier than --line by BOTH colour
+                       and width. Two channels, never hue alone.
+
+   Every value below has been checked — all 30 governed pairs clear AA in both themes. */
+
+:root, [data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #fdf9f3;              /* warm paper, not sterile #ffffff */
+  --surface: #ffffff;         /* a card, raised off the paper */
+  --text: #1f1b16;            /* warm ink                          16.3:1 on bg */
+  --muted: #635a50;           /*                                    6.4:1 on bg */
+  --line: #c4b8a6;            /* decorative hairline                1.9:1 — see above */
+  --control-border: #958b7e;  /* input/button boundary              3.2:1 on bg, 3.4:1 on surface */
+  --bar-line: #7d7060;        /* the measure rule                   4.6:1 on bg */
+  --accent: #b8480f;          /* "now / active". Nothing else may borrow it.  5.0:1 on bg */
+  --on-accent: #ffffff;       /* label on an accent fill            5.3:1 on accent */
+  --danger: #b3261e;          /*                                    6.2:1 on bg */
+  --ok: #1c7a52;              /*                                    5.1:1 on bg */
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #1a1714;              /* warm charcoal — brown-black, NOT the old blue-black */
+  --surface: #232019;
+  --text: #f2ede4;            /*                                   15.3:1 on bg */
+  --muted: #a89d8d;           /*                                    6.7:1 on bg */
+  --line: #4a443b;            /* decorative hairline                1.9:1 */
+  --control-border: #787063;  /* input/button boundary              3.7:1 on bg, 3.3:1 on surface */
+  --bar-line: #9c9280;        /* the measure rule                   5.8:1 on bg */
+  --accent: #ff9d4d;          /*                                    8.7:1 on bg */
+  --on-accent: #241505;       /*                                    8.6:1 on accent */
+  --danger: #ff8a80;          /*                                    7.8:1 on bg */
+  --ok: #5fd39b;              /*                                    9.6:1 on bg */
+}
+
 :root {
-  --bg: #14161a;
-  --panel: #1e2127;
-  --text: #e6e8ec;
-  --muted: #9aa0a8;
-  --accent: #4f8cff;
-  /* Chart rules: --line is the divider between chords, --bar-line the heavier
-     rule at a measure start. Both stay neutral — the accent means "selected or
-     playing", and nothing else may borrow it. */
-  --line: #2c313a;
-  --bar-line: #5a6270;
-  --danger: #ff5d5d;
-  --ok: #46c98b;
-  font-family: system-ui, -apple-system, sans-serif;
+  /* ---- Space. A 4px base. Nothing in the app may invent a gap. ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* ---- Radius ---- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ---- Type. Figtree is variable, so the weight range is free. ---- */
+  --font-ui: "Figtree Variable", system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-ui);
+  --font-chart: var(--font-ui);
+
+  --text-xs: 0.78rem;
+  --text-sm: 0.88rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.6rem;
+  --text-2xl: 2.1rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  --weight-normal: 400;
+  --weight-medium: 550;
+  --weight-bold: 700;
+
+  /* ---- Shadow ---- */
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 18%);
+
+  /* ---- Chart geometry ----
+     The chord cell is sized from a TOKEN, never from its content. A content-sized cell
+     re-wraps the whole chart the day someone swaps the typeface for a wider one — this
+     token means a font change can alter the chart's texture but never its layout.
+     Wide enough for the longest label the app can produce (e.g. "F#m7"). */
+  --chord-cell-min: 4.5rem;
+
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: var(--leading-normal);
+}
+
+[data-theme="dark"] {
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 45%);
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 .container { max-width: 880px; margin: 0 auto; padding: 16px; }
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid #2c313a;
-  background: var(--panel); color: var(--text); padding: 8px 12px; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+
+/* #root is the whole app: the header, then whichever page matched the route. A flex column
+   at least one viewport tall is what lets a PAGE push its own trailing content (the control
+   deck, see below) down to the true bottom of the screen instead of wherever the document's
+   own content happens to end. `100dvh`, not `100vh` — `vh` is measured against the browser
+   chrome's largest state, so on mobile (where the URL bar collapses on scroll) it leaves a
+   gap under the "pinned" deck; `dvh` tracks the chrome as it actually is. `min-height`, not
+   `height`: a chart longer than one screen must still be free to grow past it and scroll. */
+#root { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-header { flex: 0 0 auto; }
+/* The <main> landmark wraps the router, so it — not the page — is now #root's growing flex
+   child. It has to carry the flex chain through: grow to fill the viewport, and be a flex
+   column itself, so .chart-page's `flex: 1 1 auto` still stretches and keeps the control deck
+   pinned to the bottom on a short chart (the sticky deck floats mid-page without this). */
+#main-content { flex: 1 1 auto; display: flex; flex-direction: column; }
+button {
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--control-border);   /* a control's boundary — 3:1, not the hairline */
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-2) var(--space-3);
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.danger  { background: transparent; border-color: var(--danger); color: var(--danger); }
+button.icon    { padding: var(--space-1) var(--space-2); line-height: 1; border-color: transparent; color: var(--muted); background: transparent; }
 button:disabled { opacity: 0.5; cursor: default; }
-input, select { font: inherit; background: var(--panel); color: var(--text);
-  border: 1px solid #2c313a; border-radius: 8px; padding: 8px; }
+
+/* Defined once, here, so no call site has to remember it. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input, select { font: inherit; background: var(--surface); color: var(--text);
+  border: 1px solid var(--control-border); border-radius: 8px; padding: 8px; }
 a { color: var(--accent); }
-.card { background: var(--panel); border: 1px solid #2c313a; border-radius: 12px; padding: 12px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.card[data-padding="1"] { padding: var(--space-1); }
+.card[data-padding="2"] { padding: var(--space-2); }
+.card[data-padding="3"] { padding: var(--space-3); }
+.card[data-padding="4"] { padding: var(--space-4); }
+.card[data-padding="5"] { padding: var(--space-5); }
+.card[data-padding="6"] { padding: var(--space-6); }
+
+.field { display: grid; gap: var(--space-1); }
+.field__label { display: grid; gap: var(--space-1); }
+.field__name { font-size: var(--text-sm); color: var(--muted); }
+.field__hint { font-size: var(--text-xs); }
+.field .error { margin: 0; font-size: var(--text-sm); }
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
-button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color: var(--muted); }
 
-/* A chart panel (the segment editor; the practice-mode chord guess) sits just off the right
-   edge of the chord chart, its top aligned with the row of the chord it belongs to — near
-   the click, not across the page. It is absolutely positioned (not fixed) against
-   `.chart-area`, so it stays pinned to that chord's line and scrolls away with it rather
-   than trailing the viewport. Selecting a chord therefore never reflows the chart under the
-   pointer.
-
-   The panel is narrow, but the 880px container only leaves room beside it on a wide
-   screen; below that it drops back into the flow, directly under the chart. */
-.chart-area { position: relative; }
-.chart-panel {
+/* Available to a screen reader, invisible on screen. The standard clip-rect recipe —
+   display:none and visibility:hidden would hide it from assistive tech too. */
+.visually-hidden {
   position: absolute;
-  z-index: 10;
-  left: calc(100% + 16px);
-  width: 190px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
-.chart-panel label { display: grid; gap: 4px; }
+
+/* Off-screen until focused, then it drops into the top-left corner. A keyboard user gets it
+   on the first Tab; nobody else ever sees it. */
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: -3rem;
+  z-index: 100;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  transition: top 120ms ease;
+}
+.skip-link:focus { top: var(--space-3); }
+@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+
+/* ---- Chord chart ----------------------------------------------------------------------
+   The chart itself: a column of lines, each a row of chord cells. Chord cells are real
+   <button>s (Timeline.tsx) so a keyboard user can Tab to one and press Enter/Space to open
+   the segment editor — that focusability is what makes cutting drag-to-resize safe. */
+.chord-cell {
+  position: relative;
+  width: 100%;                        /* fills its item; the item now carries the flex ratio */
+  min-width: var(--chord-cell-min);   /* sized from a token, never from content */
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--font-chart);
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  padding: var(--space-2);
+  text-align: center;
+  color: var(--text);
+  transition: transform 120ms ease;   /* the current-chord lift; reduced-motion resets it below */
+}
+/* The measure rule. Heavier than --line by BOTH colour and width — two channels, so it
+   still reads as "a bar starts here" for someone who cannot see the colour difference.
+   Keep the width ratio at 3:1 (3px vs 1px), which is what the app already ships. */
+.chord-cell[data-bar-start="true"] { border-left: 3px solid var(--bar-line); }
+.chord-cell[data-selected="true"]  { border-left-color: var(--accent); }
+
+/* "Playing" gets THREE channels — colour, a border, AND a scale bump. Hue is never the only
+   signal: the border is presence (not hue) and the scale is size (not hue), so "this chord is
+   now" still reads for a player who cannot see the colour. The old app had only the colour. */
+.chord-cell[data-playing="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent);
+  transform: scale(1.06);
+  z-index: 1;                          /* lift above its neighbours, not under them */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Drop the phase's motion. Colour and border stay — two channels, one of them (border
+     presence) not hue — so a reduced-motion player loses nothing the colourblind rule needs. */
+  .chord-cell { transition: none; }
+  .chord-cell[data-playing="true"] { transform: none; }
+}
+
+.chord-cell[data-masked="true"] strong { color: var(--muted); }
+.chord-cell[data-masked="true"]:hover strong { color: var(--text); }
+
+/* Reveal-as-reward: the chord the player just named settles into the cell it was hiding in.
+   The reveal IS the reward — and, unlike a green flash, it needs no colour to be read, which
+   is the point: "correct" is now carried by information appearing where a "?" was, a channel
+   a colourblind player gets in full. The motion is garnish; a reduced-motion user gets the
+   chord instantly, which is the reward itself. */
+.chord-cell[data-revealed="true"] strong { animation: tabit-settle 320ms ease-out; }
+@keyframes tabit-settle {
+  from { transform: translateY(-35%) scale(0.85); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chord-cell[data-revealed="true"] strong { animation: none; }
+}
+
+/* The chord's own progress fill. Position/size are design values and live here; the
+   transform is repainted per-frame by chordProgress.ts and stays inline in Timeline.tsx —
+   that value is data (how far through the chord we are), not a design choice. */
+.chord-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 100%;
+  transform-origin: left;
+  background: var(--accent);
+}
+
+/* Drag-to-resize handles. Unchanged behaviour, no new investment — only the positioning
+   moved out of the inline style and into these two classes. */
+.chord-cell__resize { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.chord-cell__resize--left { left: 0; }
+.chord-cell__resize--right { right: 0; }
+
+.chart-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.chart-line  { list-style: none; display: flex; justify-content: flex-start; gap: 0; }
+/* The flex CHILD, carrying the beat-derived ratio set inline. */
+.chord-cell__item { display: flex; min-width: 0; }
+
+/* ---- The docked editing panel --------------------------------------------------------
+   Was: absolutely positioned, its `top` measured from the DOM on every chart change and
+   every window resize, so it lined up with its chord's row. That was fragile, it fought
+   every responsive change, and it was the last inline style in src/ui.
+
+   Now: a docked column beside the chart. On a narrow screen it drops below — which is a
+   natural bottom sheet the day the phone app lands. */
+.chart-workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .chart-workspace[data-panel-open="true"] {
+    grid-template-columns: 1fr minmax(14rem, 18rem);
+  }
+}
+
+/* ---- Practice mode: the spotlight ---------------------------------------------------
+   Practice is listen-and-answer, so the chart recedes and desaturates and the two lit things
+   on screen become the ones in use: the deck (to listen) and the guess panel (to answer).
+   This is a MODE treatment, not a theme — it dims with opacity and desaturates with a filter,
+   RELATIVE to whatever theme the user is in, so it never swaps a token and a dark-theme user
+   gets the spotlight too. The dimming is on .chart-lines only: the guess panel is a sibling,
+   and the deck is outside this subtree, so both stay fully lit without any re-lighting. */
+/* Desaturation ONLY — never opacity. `opacity` composites the chart toward the page and
+   crushes text contrast (the masked "?" fell to 3.4:1, below the 4.5 AA floor); `saturate()`
+   changes chroma, not luminance, so the chart stays fully AA-readable while visibly receding
+   into a desaturated backdrop against the fully-saturated deck and guess panel. That relative
+   saturation IS the spotlight. Verified by theme/contrastStates.test.ts. */
+.chart-workspace[data-practice="true"] .chart-lines {
+  filter: saturate(0.35);
+  transition: filter 200ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-workspace[data-practice="true"] .chart-lines { transition: none; }
+}
+
+/* ---- Zone 1: the context bar --------------------------------------------------------- */
+.chart-context-bar { padding-bottom: var(--space-3); transition: opacity 200ms ease; }
+.chart-context-bar__title { margin: 0; font-size: var(--text-xl); }
+/* The back link is --text, not the global accent link colour, for two reasons: --accent is
+   reserved for "now / active" and a back link is neither, and — decisively — accent (5.0:1)
+   dimmed to the receded 0.65 falls to 2.76:1, below AA, whereas --text survives at 5.2:1.
+   The underline carries the link affordance the colour no longer does. */
+.chart-context-bar a { color: var(--text); text-decoration: underline; }
+
+/* Recedes while playing — eyes on hands, not on chrome. It DIMS but does not disappear: a
+   control you cannot find is worse than one you can ignore, and it stays focusable. Its title
+   and links are still TEXT, so the static receded state must clear AA (4.5:1): 0.45 fell to
+   2.84:1 in light; 0.65 is the visible-recede floor that stays AA in both themes (and the link
+   is --text, above, so it survives the dim). It restores to full on :hover/:focus-within. */
+.chart-context-bar[data-receded="true"] { opacity: 0.65; }
+.chart-context-bar[data-receded="true"]:hover,
+.chart-context-bar[data-receded="true"]:focus-within { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-context-bar { transition: none; }
+}
+
+/* ---- Zone 2: the chart is the hero --------------------------------------------------
+   It was boxed into the same 880px column as a login form. It is the product; give it
+   the room.
+
+   It is also a flex column now, and `flex: 1 1 auto` so it takes the leftover height #root
+   reserved above (see #root, top of this file) instead of merely sizing to its content:
+   that leftover is exactly what lets .chart-page__body's own flex:1 (below) push the
+   control deck down to the real bottom of a short screen. */
+.chart-page { flex: 1 1 auto; display: flex; flex-direction: column;
+  max-width: 1100px; margin: 0 auto; padding: var(--space-4); }
+
+/* ---- ChartSheet -------------------------------------------------------------------- */
+/* Everything ChartSheet renders EXCEPT the control deck (which follows as its sibling) —
+   the chart, the practice status line, Advanced options. `flex: 1 1 auto` is what actually
+   pins the deck: it soaks up whatever height .chart-page (or GuestHomePage's .guest-chart)
+   has going spare, which is precisely the gap between a short chart and the bottom of the
+   screen, so the deck — laid out after this box — lands flush with it. */
+.chart-page__body { flex: 1 1 auto; }
+.chart-key-summary { margin: 0 0 var(--space-1); }
+.chart-practice-status { margin: var(--space-3) 0 0; }
+.chart-audio { width: 100%; }
+.chart-advanced { margin-top: var(--space-3); }
+/* A Stack aligned "stretch" stretches every child full-width, including this one — the
+   escape valve for a control (a toggle, an "add" button) that should hug its own content
+   instead, same job "justify-self: start" did inside the CSS Grid this replaces. */
+.self-start { align-self: flex-start; }
+/* A heading sitting inline in a Stack row next to a button (the page title, next to
+   "Re-analyze") — the heading's own default margin would misalign it against the button
+   beside it, so it is reset to nothing and the Stack's gap does the spacing instead. */
+.no-margin { margin: 0; }
+
+/* ---- GuestHomePage ------------------------------------------------------------------ */
+/* Also a flex column with flex:1 — same reasoning as .chart-page above. GuestHomePage has
+   marketing copy both above (the pitch, the dropzone) AND below (the "create an account"
+   CTA) the chart, so it cannot itself be the thing that stretches; this inner box is, and
+   it is what gives ChartSheet's .chart-page__body a floor to push the deck against on a
+   short guest chart, same as the signed-in editor. */
+.guest-chart { flex: 1 1 auto; display: flex; flex-direction: column; margin-top: var(--space-5); }
+/* This page's own #root flex item (see #root, top of file), scoped separately from the
+   generic .container so LoginPage/RegisterPage/LibraryPage — which have no bottom-pinned
+   deck to feed — are untouched. */
+.guest-home { flex: 1 1 auto; display: flex; flex-direction: column; }
+.guest-cta { margin-top: var(--space-6); }
+.chart-panel { position: static; width: auto; box-shadow: var(--shadow-panel); }
+.chart-panel label { display: grid; gap: var(--space-1); }
 .chart-panel select, .chart-panel input { width: 100%; }
 .segment-editor .primary, .segment-editor .danger { flex: 1; }
 .chord-guess .primary { width: 100%; }
-
-@media (max-width: 1320px) {
-  .chart-panel {
-    position: static;
-    width: auto;
-    margin-top: 12px;
-    box-shadow: none;
-  }
-}
 @media (max-width: 600px) { .container { padding: 12px; } }
 
+.scrub-bar { position: relative; height: 14px; cursor: pointer; touch-action: none; }
 .scrub-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scrub-track { position: absolute; left: 0; right: 0; top: 6px; height: 4px;
+  background: var(--control-border); border-radius: 2px; }
+.scrub-fill { position: absolute; left: 0; top: 6px; height: 4px; width: 100%;
+  transform-origin: left; background: var(--accent); border-radius: 2px; }
+.scrub-knob { position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px;
+  border-radius: 50%; background: var(--accent); }
 
 /* Click-to-edit chart settings (tempo, key) sitting above the player. At rest they read
    as plain text; the box only appears under the pointer, so the line stays a sentence
@@ -69,13 +430,43 @@ button.icon { padding: 2px 8px; line-height: 1; border-color: transparent; color
 .inline-edit { display: inline-flex; align-items: center; gap: 6px; font: inherit;
   color: var(--text); background: transparent; border: 1px solid transparent;
   border-radius: 8px; padding: 4px 8px; cursor: pointer; }
-button.inline-edit:hover:not(:disabled) { background: var(--panel); border-color: var(--line); }
+button.inline-edit:hover:not(:disabled) { background: var(--surface); border-color: var(--line); }
 button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.inline-edit--editing { background: var(--panel); border-color: var(--line); padding: 3px 6px;
+.inline-edit--editing { background: var(--surface); border-color: var(--line); padding: 3px 6px;
   cursor: default; }
 .inline-edit--editing input, .inline-edit--editing select { padding: 3px 4px; border-radius: 6px; }
 .inline-edit--editing input { width: 4.5rem; }
 .inline-edit__btn { padding: 2px 6px; border-radius: 6px; font-size: 0.85em; }
+
+/* ---- Library ----------------------------------------------------------------------- */
+.search-row { margin-top: var(--space-3); }
+.search-input { flex: 1 1 200px; }
+.recording-list { list-style: none; padding: 0; display: grid; gap: var(--space-3); }
+.recording-meta { font-size: var(--text-sm); margin-top: var(--space-1); }
+
+/* ---- Upload dropzone -----------------------------------------------------------------
+   An interactive region, so its boundary is a control boundary: --control-border, not the
+   decorative hairline. The dashed edge IS the affordance — it must be visible. The border
+   alone shifts hue, chroma AND value against --bg, so it is a real signal on its own — but
+   the fill is a second channel and must be a real one too, not dead weight. A plain
+   var(--surface) fill is ~1:1 against --bg in the light theme (imperceptible), so the fill
+   is mixed with --accent instead: token-driven (not a hardcoded overlay), so it shows up in
+   both themes. */
+.dropzone {
+  border: 2px dashed var(--control-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  text-align: center;
+  background: transparent;
+}
+.dropzone[data-dragging="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.dropzone[data-busy="true"] { opacity: 0.6; }
+.dropzone__input { display: none; }
+.dropzone__lead { margin: 0 0 var(--space-3); }
+.dropzone__hint { margin: var(--space-3) 0 0; font-size: var(--text-sm); }
 
 @keyframes tabit-spin {
   to {
@@ -83,16 +474,57 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
   }
 }
 
+/* ---- Header ---------------------------------------------------------------------
+   The hairline under the header is decorative chrome, not a control boundary — --line,
+   not --control-border. */
+.app-header { border-bottom: 1px solid var(--line); }
+.app-header .container { padding-top: var(--space-3); padding-bottom: var(--space-3); }
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+  text-decoration: none;
+  color: var(--text);
+}
+
+/* ---- Spinner --------------------------------------------------------------------
+   Sized in em so it scales with whatever text it sits beside (e.g. the status badge)
+   rather than carrying its own pixel size as an inline style. */
+.spinner {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1em;
+  height: 1em;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tabit-spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2s; }
+}
+
+/* ---- Analysis status badge --------------------------------------------------------
+   Status colour is SUPPLEMENTARY. The badge always renders the status word, so a
+   colourblind user loses nothing. Never let the hue be the only channel. */
+.status { font-weight: var(--weight-bold); }
+.status__meta { font-weight: var(--weight-normal); }
+.status--pending { color: var(--muted); }
+.status--running { color: var(--accent); }
+.status--done    { color: var(--ok); }
+.status--failed  { color: var(--danger); }
+
 /* ---- Practice mode ------------------------------------------------------------------
    The chord is a question until the player names it. A masked cell keeps its shape, its
    beats and its bar lines — only the answer is withheld, so the chart still reads as a
-   chart and the "?" reads as a gap the player fills. */
-.chord-cell--masked strong { color: var(--muted); }
-.chord-cell--masked:hover strong { color: var(--text); }
+   chart and the "?" reads as a gap the player fills. (Styling itself lives on
+   .chord-cell[data-masked="true"], above.) */
 
 .ok { color: var(--ok); }
 
 .chord-guess { display: grid; gap: 8px; border-color: var(--line); }
+.chord-guess form { display: grid; gap: var(--space-2); }
+.chord-guess p { margin: 0; }
 /* Wrong: red, and a shake — the same "no" a locked door gives you. The colour is the
    lasting signal (it stays until the next attempt); the shake is the reflex. */
 .chord-guess--wrong { border-color: var(--danger); }
@@ -117,6 +549,10 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 
 /* The mode question: two doors, side by side, the same size. Practice is not a footnote on
    the chart — it is the other half of what Tabit is for. */
+.mode-choice { margin-top: var(--space-4); }
+.mode-choice__title { margin: 0 0 var(--space-1); }
+.mode-choice__subtitle { margin: 0 0 var(--space-4); }
+.mode-choice__locked { margin: var(--space-3) 0 0; }
 .mode-choice__options { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .mode-choice__option {
   display: grid;
@@ -127,6 +563,86 @@ button.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-off
 }
 .mode-choice__option span { font-size: 0.9em; opacity: 0.85; }
 
+/* ---- Stack --------------------------------------------------------------------------
+   The flex row/column. Components declare INTENT via data attributes; the pixel values
+   live here, so a theme or a layout change can retarget every Stack in the app at once. */
+.stack { display: flex; }
+.stack[data-direction="row"]    { flex-direction: row; }
+.stack[data-direction="column"] { flex-direction: column; }
+
+.stack[data-gap="1"] { gap: var(--space-1); }
+.stack[data-gap="2"] { gap: var(--space-2); }
+.stack[data-gap="3"] { gap: var(--space-3); }
+.stack[data-gap="4"] { gap: var(--space-4); }
+.stack[data-gap="5"] { gap: var(--space-5); }
+.stack[data-gap="6"] { gap: var(--space-6); }
+
+.stack[data-align="start"]    { align-items: flex-start; }
+.stack[data-align="center"]   { align-items: center; }
+.stack[data-align="baseline"] { align-items: baseline; }
+.stack[data-align="stretch"]  { align-items: stretch; }
+
+.stack[data-justify="start"]   { justify-content: flex-start; }
+.stack[data-justify="center"]  { justify-content: center; }
+.stack[data-justify="between"] { justify-content: space-between; }
+
+.stack[data-wrap="true"] { flex-wrap: wrap; }
+
 @media (max-width: 600px) {
   .mode-choice__options { grid-template-columns: 1fr; }
+}
+
+/* ---- Zone 3: the control deck --------------------------------------------------------
+   Pinned to the bottom, because a phone is on the roadmap and the bottom edge is the thumb
+   zone. Costs nothing to take now.
+
+   `position: sticky; bottom: 0` on its own does NOT pin anything: sticky only holds an
+   element in place while it would otherwise scroll out of its containing block — i.e. it
+   does nothing at all unless the containing block is taller than the viewport. A chart
+   short enough to fit on screen (this app's median case, and the phone form factor this
+   deck was justified by is a SHORTER screen, so short pages are the common case there, not
+   the edge case) has nothing for `sticky` to hold against, and the deck just sits at the
+   end of the document flow whever that happens to land — which measured out to the middle
+   of the page, not the bottom.
+
+   The fix is the flex column on #root/.chart-page/.guest-chart above: it guarantees the
+   deck's containing block is at least one viewport tall, so on a short chart the deck
+   lands at the bottom via ordinary flex layout (chart-page__body's flex:1 pushes it there),
+   and `sticky` only has to take over once a long chart makes the page taller than the
+   screen. `margin-top: auto` is the belt to that braces — it independently pushes the deck
+   to the end of its flex container's free space, so the two mechanisms agree rather than
+   one silently depending on the other.
+
+   The negative right/bottom/left margin cancels its parent page's own padding (--space-4,
+   on both .chart-page and .container) so the bar's background/border/shadow reach the real
+   edges of the screen — a thumb-zone bottom bar with a 16px gap under it is not pinned, it
+   is floating 16px above pinned. `.control-deck__row`'s own max-width + margin:auto (below)
+   re-centers the CONTENT back onto the chart's column, so only the chrome bleeds. */
+.control-deck {
+  position: sticky;
+  bottom: 0;
+  margin: auto calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+  z-index: 20;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-3) var(--space-4);
+}
+.control-deck__row { width: 100%; max-width: 1100px; margin: 0 auto; }
+.control-deck__play { min-width: 3rem; }
+.control-deck__time {
+  font-variant-numeric: tabular-nums;   /* so the clock does not jitter as digits change */
+  font-size: var(--text-sm);
+}
+.control-deck__scrub { flex: 1 1 auto; min-width: 8rem; }
+.control-deck__extra { flex: 0 0 auto; }
+
+/* Narrow screens: the deck WRAPS, it does not amputate. Tempo, key and "Where am I?" live
+   only here — hiding them would make them unreachable on the exact form factor the deck's
+   bottom-pinning was justified by. Play and the clock stay on the first line; the scrubber
+   and the extras wrap onto their own full-width lines below it. */
+@media (max-width: 700px) {
+  .control-deck__row { flex-wrap: wrap; }
+  .control-deck__scrub { flex-basis: 100%; order: 3; }
+  .control-deck__extra { order: 4; flex-basis: 100%; }
 }

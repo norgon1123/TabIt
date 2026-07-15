@@ -81,3 +81,12 @@ test("is not editable while a mutation is in flight", () => {
   render(<KeyControl keyTonic="A" keyMode="minor" onChange={vi.fn()} busy />);
   expect(screen.getByRole("button", { name: /key:/i })).toBeDisabled();
 });
+
+test("returns focus to the trigger when the editor closes", async () => {
+  // Closing with Escape (or Enter/click-away) used to leave focus on document.body, so a
+  // keyboard user had to Tab back from the top. Focus now returns to the key button.
+  render(<KeyControl keyTonic="C" keyMode="major" onChange={vi.fn()} busy={false} />);
+  await userEvent.click(screen.getByRole("button", { name: /key:/i }));
+  await userEvent.keyboard("{Escape}");
+  expect(screen.getByRole("button", { name: /key:/i })).toHaveFocus();
+});

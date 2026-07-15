@@ -6,6 +6,9 @@ export interface MediaClock {
   playing: boolean;
   rate: number;
   seek: (time: number) => void;
+  play: () => void;
+  pause: () => void;
+  toggle: () => void;
   /** Callback ref to attach to the <audio> element. */
   ref: (el: HTMLAudioElement | null) => void;
 }
@@ -65,5 +68,26 @@ export function useMediaClock(): MediaClock {
     [duration],
   );
 
-  return { currentTime, duration, playing, rate, seek, ref };
+  // The deck can paint before the <audio> mounts, so every one of these is a no-op
+  // against a null ref rather than a throw. A play button that explodes on first
+  // paint is worse than one that does nothing for a frame.
+  const play = useCallback(() => {
+    // A rejected play() (autoplay policy, no user gesture) is not an error we can act
+    // on — the element stays paused and `playing` stays false, which is already the
+    // truth.
+    void elRef.current?.play()?.catch(() => {});
+  }, []);
+
+  const pause = useCallback(() => {
+    elRef.current?.pause();
+  }, []);
+
+  const toggle = useCallback(() => {
+    const el = elRef.current;
+    if (!el) return;
+    if (el.paused) void el.play()?.catch(() => {});
+    else el.pause();
+  }, []);
+
+  return { currentTime, duration, playing, rate, seek, play, pause, toggle, ref };
 }

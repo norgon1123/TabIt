@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { vi } from "vitest";
@@ -13,6 +13,12 @@ vi.mock("../library/audioDuration", () => ({
 
 function login() {
   server.use(http.get("/api/auth/me", () => HttpResponse.json({ id: "u1", username: "alice" })));
+}
+
+function renderLibraryPage() {
+  login();
+  server.use(http.get("/api/recordings", () => HttpResponse.json([])));
+  return renderWithProviders(<LibraryPage />);
 }
 
 const TWO = [
@@ -128,4 +134,81 @@ test("toggling sort reverses recording order", async () => {
   await userEvent.click(screen.getByRole("button", { name: /newest first/i }));
   const namesAfter = screen.getAllByText(/\.m4a$/).map((n) => n.textContent);
   expect(namesAfter[0]).toBe("Autumn Leaves.m4a");
+});
+
+test("has no inline styles left", async () => {
+  const { container } = renderLibraryPage();
+  await screen.findByText(/no recordings yet/i);
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
+test("renaming a recording PATCHes the new name to the server", async () => {
+  login();
+  let method: string | null = null;
+  let body: unknown = null;
+  server.use(
+    http.get("/api/recordings", () => HttpResponse.json([TWO[0]])),
+    http.patch("/api/recordings/:id", async ({ request, params }) => {
+      method = request.method;
+      body = await request.json();
+      expect(params.id).toBe("r1");
+      return HttpResponse.json({ ...TWO[0], original_filename: (body as { original_filename: string }).original_filename });
+    }),
+  );
+  renderWithProviders(<LibraryPage />);
+  await screen.findByText("Autumn Leaves.m4a");
+
+  await userEvent.click(screen.getByRole("button", { name: /rename/i }));
+  const input = screen.getByDisplayValue("Autumn Leaves.m4a");
+  await userEvent.clear(input);
+  await userEvent.type(input, "Autumn Leaves (remaster).m4a");
+  await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+  await waitFor(() => expect(method).toBe("PATCH"));
+  expect(body).toEqual({ original_filename: "Autumn Leaves (remaster).m4a" });
+});
+
+test("cancelling a rename does not call the API and restores the original name", async () => {
+  login();
+  const patchSpy = vi.fn();
+  server.use(
+    http.get("/api/recordings", () => HttpResponse.json([TWO[0]])),
+    http.patch("/api/recordings/:id", async ({ request }) => {
+      patchSpy(await request.json());
+      return HttpResponse.json(TWO[0]);
+    }),
+  );
+  renderWithProviders(<LibraryPage />);
+  await screen.findByText("Autumn Leaves.m4a");
+
+  await userEvent.click(screen.getByRole("button", { name: /rename/i }));
+  const input = screen.getByDisplayValue("Autumn Leaves.m4a");
+  await userEvent.clear(input);
+  await userEvent.type(input, "Something else entirely.m4a");
+  await userEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+  expect(screen.getByText("Autumn Leaves.m4a")).toBeInTheDocument();
+  expect(screen.queryByText("Something else entirely.m4a")).not.toBeInTheDocument();
+  expect(patchSpy).not.toHaveBeenCalled();
+});
+
+test("labels the search box for a screen reader", async () => {
+  login();
+  server.use(http.get("/api/recordings", () => HttpResponse.json(TWO)));
+  renderWithProviders(<LibraryPage />);
+  await screen.findByText("Autumn Leaves.m4a");
+  // A placeholder is not a reliable accessible name; a searchbox with no name announces as
+  // "search, edit". aria-label gives it one.
+  expect(screen.getByRole("searchbox", { name: /search recordings/i })).toBeInTheDocument();
+});
+
+test("labels the rename field with the recording it renames", async () => {
+  login();
+  server.use(http.get("/api/recordings", () => HttpResponse.json([TWO[0]])));
+  renderWithProviders(<LibraryPage />);
+  await screen.findByText("Autumn Leaves.m4a");
+
+  await userEvent.click(screen.getByRole("button", { name: /rename/i }));
+  // The visible filename it replaces is gone once editing; the field must name itself.
+  expect(screen.getByRole("textbox", { name: /rename autumn leaves/i })).toBeInTheDocument();
 });

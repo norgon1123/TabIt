@@ -2,11 +2,22 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
 import { beatSlashMarks } from "./beatMath";
+import type { BeatGridInfo } from "./musicalPosition";
 
 const segments = [
   { id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
   { id: "s2", start_beat: 4, end_beat: 8, start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
 ];
+
+// bpm 120 -> a beat every 0.5s; beatsPerMeasure 4, no pickup. Matches `segments` above:
+// s1 starts at t=0 (bar 1, beat 1), s2 starts at t=2 (bar 2, beat 1).
+const GRID: BeatGridInfo = {
+  beatTimes: Array.from({ length: 9 }, (_, i) => i * 0.5),
+  bpm: 120,
+  duration: 4,
+  beatsPerMeasure: 4,
+  measureOffset: 0,
+};
 
 function renderTimeline(props: Partial<React.ComponentProps<typeof Timeline>> = {}) {
   return render(
@@ -18,6 +29,7 @@ function renderTimeline(props: Partial<React.ComponentProps<typeof Timeline>> = 
       currentTime={0}
       selectedId={null}
       onSelect={() => {}}
+      grid={GRID}
       {...props}
     />,
   );
@@ -40,9 +52,22 @@ test("clicking a segment selects it and seeks to its start (#8)", async () => {
   expect(onSeek).toHaveBeenCalledWith(2);
 });
 
+test("a keyboard user can tab to a chord and press Enter to select it", async () => {
+  // The chord cells are real <button>s for exactly this reason: in practice mode,
+  // clicking a chord *is* the question, and a keyboard user has no other way to reach it.
+  const onSelect = vi.fn();
+  const onSeek = vi.fn();
+  renderTimeline({ onSelect, onSeek });
+  await userEvent.tab();
+  expect(document.activeElement).toHaveAttribute("data-segment-id", "s1");
+  await userEvent.keyboard("{Enter}");
+  expect(onSelect).toHaveBeenCalledWith("s1");
+  expect(onSeek).toHaveBeenCalledWith(0);
+});
+
 test("highlights the chord under the playhead (#3)", () => {
   const { container } = renderTimeline({ currentTime: 3 }); // inside s2 [2,4)
-  const playing = container.querySelectorAll(".playing");
+  const playing = container.querySelectorAll('[data-playing="true"]');
   expect(playing).toHaveLength(1);
   expect(playing[0]).toHaveAttribute("data-segment-id", "s2");
 });
@@ -61,18 +86,29 @@ test("fills the active chord's progress bar to the current fraction when paused"
   expect(bar.style.transform).toBe("scaleX(0.5)");
 });
 
-test("measure bar lines are neutral — the accent marks only selection/playback", () => {
-  // s1 and s2 both start a measure (beats 0 and 4, beatsPerMeasure 4), so both get a
-  // bar line on their left edge. Only the selected one may wear the accent colour.
-  const { container } = renderTimeline({ selectedId: "s1" });
-  const cellStyle = (id: string) =>
-    (container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement).getAttribute("style")!;
+it("marks the cell that starts a measure, so the bar line can be drawn", () => {
+  // The bar line is a graphical object and gets its 3:1 contrast from --bar-line, which
+  // palette.test.ts enforces. What THIS test cares about is that the right cell is
+  // marked — not how many pixels wide the rule is, which is a design decision the CSS
+  // is allowed to change without breaking the suite.
+  //
+  // NB: the module-level `segments` fixture (s1 @ beat 0, s2 @ beat 4, 4 beats/measure)
+  // has BOTH cells landing on a measure boundary, so it can't distinguish "marked" from
+  // "not marked" — use a fixture where only one of the two does.
+  const segs = [
+    { id: "s1", start_beat: 2, end_beat: 4, start_time: 1, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
+    { id: "s2", start_beat: 4, end_beat: 8, start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
+  ];
+  const { container } = renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
+  const cell = (id: string) => container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement;
+  expect(cell("s2")).toHaveAttribute("data-bar-start", "true");
+  expect(cell("s1")).not.toHaveAttribute("data-bar-start");
+});
 
-  expect(cellStyle("s2")).toContain("border-left: 3px solid var(--bar-line)");
-  expect(cellStyle("s2")).not.toContain("var(--accent)");
-  // The selected cell's bar line gives way to the accent, so its box stays even.
-  expect(cellStyle("s1")).toContain("border-left: 2px solid var(--accent)");
-  expect(cellStyle("s1")).not.toContain("var(--bar-line)");
+it("marks the selected cell", () => {
+  const { container } = renderTimeline({ selectedId: "s1" });
+  const cell = (id: string) => container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement;
+  expect(cell("s1")).toHaveAttribute("data-selected", "true");
 });
 
 // A CSS transition only animates when the browser already holds a computed value to
@@ -130,4 +166,166 @@ it("renders slash marks for a 4-beat chord", () => {
   // Render Timeline with the new props (mirror the existing test's render call).
   renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
   expect(screen.getByText(beatSlashMarks(4))).toBeInTheDocument(); // "╱ ╱ ╱ ╱"
+});
+
+// Fixture shared by the width-guard test below — this file has no module-level BASE, so
+// one is built locally rather than disturbing the fixtures every other test already uses.
+const BASE = { chord_root: "C", chord_quality: "maj", roman_numeral: "I" };
+
+it("sizes each cell by its beat count — the width IS the rhythm", () => {
+  // A 4-beat chord must be twice as wide as a 2-beat one. That is not decoration: it is how
+  // the chart shows rhythm.
+  //
+  // The ratio must sit on the .chord-cell__item wrapper, because THAT is the flex child of
+  // the .chart-line row. If it drifts back onto the <button>, the wrapper falls back to
+  // `flex: 0 1 auto`, sizes to its content, and every chord renders the same width — the
+  // chart silently stops showing rhythm. jsdom does no layout, so this test is the only
+  // thing standing between that regression and production: it must name the exact element,
+  // not accept the ratio "wherever it landed". An earlier version of this test did the
+  // latter and was green even with the ratio on the wrong element.
+  const segs = [
+    { ...BASE, id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2 },
+    { ...BASE, id: "s2", start_beat: 4, end_beat: 6, start_time: 2, end_time: 3 },
+  ];
+  renderTimeline({ segments: segs });
+
+  const buttonFor = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-segment-id="${id}"]`)!;
+  const wrapperFor = (id: string) => buttonFor(id).closest<HTMLElement>(".chord-cell__item")!;
+
+  // jsdom's CSSOM normalises the flex shorthand's zero flex-basis to "0px" (confirmed by
+  // setting el.style.flex directly — it is a serialisation quirk of this test environment,
+  // not a property of which element carries the ratio), so the expected strings say "0px"
+  // rather than the literal "0". The ratio under test — 4:1 vs 2:1 — is unchanged.
+  //
+  // The ratio is on the flex child...
+  expect(wrapperFor("s1").style.flex).toBe("4 1 0px");
+  expect(wrapperFor("s2").style.flex).toBe("2 1 0px");
+
+  // ...and NOT on the button, which is not the flex child and would size to content.
+  expect(buttonFor("s1").style.flex).toBe("");
+  expect(buttonFor("s2").style.flex).toBe("");
+
+  // And the wrapper really is a child of the flex row, not floating somewhere else.
+  expect(wrapperFor("s1").parentElement).toHaveClass("chart-line");
+});
+
+describe("the chart is a semantic sequence, not a pile of divs", () => {
+  it("names itself, so a screen-reader user can find it", () => {
+    renderTimeline();
+    expect(screen.getByRole("list", { name: /chord chart/i })).toBeInTheDocument();
+  });
+
+  it("tells a player where each chord IS, how long it lasts, and whether a bar starts", () => {
+    // "C, button" is what the chart said before. It gave a blind or low-vision player no
+    // idea where in the song they were, how long to stay on the chord, or that a bar
+    // started there. All three are things a sighted player reads off the page instantly.
+    renderTimeline();
+    const cells = screen.getAllByRole("button", { name: /bar \d+/i });
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells[0]).toHaveAccessibleName(/bar 1, beat 1/i);
+    expect(cells[0]).toHaveAccessibleName(/beats/i);
+  });
+
+  it("says a bar starts here, without relying on the colour that says so visually", () => {
+    // The measure rule is a graphical object. A screen reader cannot see 3px of --bar-line.
+    renderTimeline();
+    const barStart = screen.getAllByRole("button", { name: /starts a bar/i });
+    expect(barStart.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a masked chord's secret while still saying where it is", () => {
+    // Practice mode: the chord is the question. The position and the length are the
+    // question's CONTEXT and must survive — a player needs the rhythm to guess against.
+    renderTimeline({ maskedIds: new Set(["s1"]) });
+    const masked = screen.getByRole("button", { name: /hidden chord/i });
+    expect(masked).toHaveAccessibleName(/bar 1/i);
+    expect(masked).not.toHaveAccessibleName(/major|minor|\bC\b/i);
+  });
+});
+
+test("reveal-as-reward: a chord that just left the masked set settles into its cell (#Phase3)", () => {
+  const { container, rerender } = render(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      masking
+      maskedIds={new Set(["s1", "s2"])}
+    />,
+  );
+  // First paint: both are still questions, so nothing has just been revealed. The settle
+  // must not play on a chord that was masked from the start — only on the transition.
+  expect(container.querySelector('[data-revealed="true"]')).toBeNull();
+
+  // s2 is named — it leaves the masked set while masking is still on. The cell it was hiding
+  // in flags the settle so the chord can animate in. The reward is the information appearing.
+  rerender(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      masking
+      maskedIds={new Set(["s1"])}
+    />,
+  );
+  expect(container.querySelector('[data-segment-id="s2"]')).toHaveAttribute("data-revealed", "true");
+  // s1 is still a question; it did not just get revealed.
+  expect(container.querySelector('[data-segment-id="s1"]')).not.toHaveAttribute("data-revealed");
+});
+
+test("reveal-as-reward does not fire in edit mode, where nothing was ever masked (#Phase3)", () => {
+  // maskedIds defaults to NO_MASK, so no cell is a fresh reveal. Without the "only on the
+  // transition out of masked" guard, this would flag every chord on first paint.
+  const { container } = renderTimeline();
+  expect(container.querySelector('[data-revealed="true"]')).toBeNull();
+});
+
+test("leaving practice does NOT settle-animate every unnamed chord (#Phase3)", () => {
+  // "Show the chords" empties the masked set, but the player NAMED nothing — so no cell may
+  // flag a reveal. The reward is for a chord you named, not for the whole chart un-hiding at
+  // once. This also protects the reward on a practice→edit→practice round-trip: without the
+  // gate, every cell would be flagged data-revealed here and the real settle could never
+  // replay (an animation runs only when its attribute first appears).
+  const { container, rerender } = render(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      masking
+      maskedIds={new Set(["s1", "s2"])}
+    />,
+  );
+
+  // Flip to edit: masking off, mask empty. The bulk transition must be swallowed.
+  rerender(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      masking={false}
+      maskedIds={new Set()}
+    />,
+  );
+  expect(container.querySelectorAll('[data-revealed="true"]')).toHaveLength(0);
 });

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -80,8 +80,9 @@ test("a wrong answer keeps the chord hidden; the right one reveals it", async ()
   open("/recordings/r1?mode=practice");
 
   await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
-  // Both chords run four beats, so they share an accessible name; the second cell is s2.
-  const masked = screen.getAllByRole("button", { name: /hidden chord, 4 beats/i });
+  // Both chords run four beats (Task 8's label also states each cell's bar/beat, which now
+  // differs between them), so match on the shared "4 beats" fragment; the second cell is s2.
+  const masked = screen.getAllByRole("button", { name: /hidden chord.*4 beats/i });
   expect(masked).toHaveLength(2);
   await userEvent.click(masked[1]);
 
@@ -93,7 +94,10 @@ test("a wrong answer keeps the chord hidden; the right one reveals it", async ()
   await userEvent.selectOptions(within(form as HTMLElement).getByLabelText("Quality"), "Major");
   await userEvent.click(within(form as HTMLElement).getByRole("button", { name: "Submit" }));
 
-  expect(await screen.findByRole("alert")).toHaveTextContent(/not that one/i);
+  // Polite (role="status"), not assertive: the guess answers a question the user just
+  // asked, but nothing about it is urgent enough to interrupt over the music.
+  const wrongMessage = await screen.findByText(/not that one/i);
+  expect(wrongMessage).toHaveAttribute("role", "status");
   expect(form.className).toMatch(/chord-guess--wrong/);
   expect(screen.getAllByText("?")).toHaveLength(2); // still hidden
   expect(screen.queryByText("Gdom7")).toBeNull();
@@ -187,6 +191,51 @@ test("a chart with no chords does not congratulate the player on naming all zero
 
   expect(await screen.findByText(/no chords in this chart/i)).toBeInTheDocument();
   expect(screen.queryByText(/all 0 chords named/i)).toBeNull();
+});
+
+// This is the rule the whole phase turns on: during playback the user is LISTENING, and a
+// live region narrating "3 of 8 chords named" over the top of the song is actively hostile
+// — the assistive equivalent of someone shouting chords at you while you practise. The text
+// stays on screen either way; only the role (and so the announcement) comes and goes.
+test("the practice status line stops announcing while playing, and speaks again once paused", async () => {
+  login();
+  serveChart();
+  const { container } = open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+
+  const status = () => container.querySelector(".chart-practice-status");
+  expect(status()).toHaveAttribute("role", "status");
+
+  const audio = container.querySelector("audio")!;
+  fireEvent.play(audio);
+  await waitFor(() => expect(status()).not.toHaveAttribute("role"));
+  // Still visible — it just stopped speaking.
+  expect(status()).toHaveTextContent(/0 of 2 chords named/i);
+
+  fireEvent.pause(audio);
+  await waitFor(() => expect(status()).toHaveAttribute("role", "status"));
+});
+
+test("practice mode dims the chart into a spotlight (#Phase3)", async () => {
+  login();
+  serveChart();
+  const { container } = open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  // The chart recedes and desaturates so the deck and the guess panel are the lit things.
+  // The attribute is the hook the theme-independent CSS dims against; assert the contract.
+  expect(container.querySelector(".chart-workspace")).toHaveAttribute("data-practice", "true");
+});
+
+test("the editing chart is NOT dimmed — the spotlight is a practice-only treatment (#Phase3)", async () => {
+  login();
+  serveChart();
+  const { container } = open("/recordings/r1?mode=edit");
+
+  await screen.findByText("Gdom7");
+  // Mode is about what the app is doing; the editor is not practice, so no spotlight.
+  expect(container.querySelector(".chart-workspace")).not.toHaveAttribute("data-practice");
 });
 
 test("the player can give up and switch to the chart", async () => {

@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { barBeatAt, formatMusicalPosition, type BeatGridInfo } from "./musicalPosition";
 
 interface ScrubBarProps {
   currentTime: number;
   duration: number;
   playing: boolean;
   rate: number;
+  /** The chart's beat grid, so the slider can announce where it is in MUSIC. */
+  grid: BeatGridInfo;
   onSeek: (time: number) => void;
 }
 
-export default function ScrubBar({ currentTime, duration, playing, rate, onSeek }: ScrubBarProps) {
+export default function ScrubBar({ currentTime, duration, playing, rate, grid, onSeek }: ScrubBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
@@ -82,6 +85,13 @@ export default function ScrubBar({ currentTime, duration, playing, rate, onSeek 
       aria-valuemin={0}
       aria-valuemax={duration || 0}
       aria-valuenow={currentTime}
+      // Seconds are meaningless to someone practising. A screen reader reads valuetext in
+      // preference to valuenow, so this is what a player actually hears when they move the
+      // scrubber — and it is why the native <audio> element's own slider had to go.
+      //
+      // Deliberately NOT a live region: during playback the user is LISTENING, and speech
+      // competes with the music. This speaks when spoken to.
+      aria-valuetext={formatMusicalPosition(barBeatAt(grid, currentTime))}
       tabIndex={0}
       className="scrub-bar"
       onPointerDown={onPointerDown}
@@ -89,42 +99,22 @@ export default function ScrubBar({ currentTime, duration, playing, rate, onSeek 
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown}
-      style={{ position: "relative", height: 14, cursor: "pointer", touchAction: "none" }}
     >
-      <div
-        aria-hidden
-        style={{ position: "absolute", left: 0, right: 0, top: 6, height: 4, background: "#2c313a", borderRadius: 2 }}
-      />
+      <div aria-hidden className="scrub-track" />
       <div
         ref={fillRef}
         aria-hidden
         className="scrub-fill"
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 6,
-          height: 4,
-          width: "100%",
-          transformOrigin: "left",
-          transform: `scaleX(${frac})`,
-          background: "var(--accent)",
-          borderRadius: 2,
-        }}
+        // Runtime geometry ONLY: how far along the track playback has reached.
+        // Position, size, and colour live in CSS.
+        style={{ transform: `scaleX(${frac})` }}
       />
       <div
         ref={knobRef}
         aria-hidden
         className="scrub-knob"
-        style={{
-          position: "absolute",
-          top: 2,
-          left: `${frac * 100}%`,
-          width: 10,
-          height: 10,
-          marginLeft: -5,
-          borderRadius: "50%",
-          background: "var(--accent)",
-        }}
+        // Runtime geometry ONLY: the knob's position along the track.
+        style={{ left: `${frac * 100}%` }}
       />
     </div>
   );

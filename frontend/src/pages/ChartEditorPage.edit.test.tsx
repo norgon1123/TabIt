@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -106,13 +106,15 @@ test("beats/measure edits still reach the server from inside Advanced options", 
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await screen.findByText("I");
   await userEvent.click(screen.getByRole("button", { name: /advanced options/i }));
-  await userEvent.click(screen.getByRole("button", { name: "−" })); // 4 → 3 beats per measure
+  await userEvent.click(screen.getByRole("button", { name: /fewer beats per measure/i })); // 4 → 3
   await waitFor(() => expect(patched).toEqual({ beats_per_measure: 3 }));
 });
 
-test("the editor is positioned against the chart area, not the viewport", async () => {
-  // It must anchor to the chord's row inside the chart (and scroll with it), so it has to
-  // render inside the positioned .chart-area rather than as a page-level floating rail.
+test("opens the editor for the chord that was selected", async () => {
+  // The old assertion here checked `editor.style.top !== ""` — it was testing the
+  // absolute-positioning MECHANISM, not any behaviour a user could observe. The docked
+  // panel has no `top`, and good riddance. What actually matters is that the panel that
+  // opens belongs to the chord you clicked.
   login();
   server.use(
     http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
@@ -121,10 +123,9 @@ test("the editor is positioned against the chart area, not the viewport", async 
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await userEvent.click(await screen.findByText("I"));
 
-  const editor = (await screen.findByText("Edit segment")).closest(".segment-editor");
-  expect(editor).not.toBeNull();
-  expect(editor!.closest(".chart-area")).not.toBeNull();
-  expect((editor as HTMLElement).style.top).not.toBe("");
+  const editor = screen.getByRole("group", { name: /edit segment/i });
+  expect(editor).toBeInTheDocument();
+  expect(within(editor).getByLabelText(/beats/i)).toBeInTheDocument();
 });
 
 test("clicking off the selected chord closes the editor, clicking another keeps it", async () => {
@@ -148,6 +149,40 @@ test("clicking off the selected chord closes the editor, clicking another keeps 
   await waitFor(() => expect(screen.queryByText("Edit segment")).not.toBeInTheDocument());
 });
 
+test("keyboard-only: Tab to a chord, Enter opens the segment editor with a half-beat Beats field", async () => {
+  // Drag-to-resize handles are out of scope entirely (no keyboard support, possibly removed
+  // later) ONLY because this path is claimed to exist: Tab to a chord cell, press Enter, and
+  // resize it via the Beats field instead of dragging. Timeline.test.tsx proves the cell is
+  // focusable and that Enter fires onSelect, but only against a mock callback — it can't see
+  // whether ChartSheet actually wires that callback up to render SegmentEditor. This test
+  // renders the real page end to end so that wiring is under test too. If someone breaks it,
+  // the accessibility justification for cutting drag-to-resize silently stops being true — do
+  // not delete this as "redundant" with the Timeline unit test; it covers different code.
+  login();
+  server.use(
+    http.get("/api/recordings/r1", () => HttpResponse.json(RECORDING)),
+    http.get("/api/recordings/r1/chart", () => HttpResponse.json(CHART)),
+  );
+  renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
+  await screen.findByText("I"); // chart loaded
+
+  // Tab through whatever precedes the chart (library link, re-analyze, tempo, key, ...)
+  // until focus lands on a chord cell. No .click() anywhere in this test.
+  let guard = 0;
+  while (!(document.activeElement as HTMLElement | null)?.hasAttribute("data-segment-id")) {
+    if (++guard > 40) throw new Error("never reached a chord cell by tabbing");
+    await userEvent.tab();
+  }
+  expect(document.activeElement).toHaveAttribute("data-segment-id", "s1");
+
+  await userEvent.keyboard("{Enter}");
+
+  const editor = await screen.findByRole("group", { name: "Edit segment" });
+  const beats = within(editor).getByLabelText(/beats/i);
+  expect(beats).toHaveAttribute("step", "0.5");
+  expect(beats).toHaveAttribute("min", "0.5");
+});
+
 test("editing beats redistributes via the batch endpoint", async () => {
   login();
   let body: unknown = null;
@@ -161,7 +196,11 @@ test("editing beats redistributes via the batch endpoint", async () => {
   );
   renderWithProviders(<ChartEditorPage />, { route: "/recordings/r1?mode=edit", path: "/recordings/:recordingId" });
   await userEvent.click(await screen.findByText("I")); // select C on the timeline
-  const beats = await screen.findByLabelText(/beats/i);
+  // Scoped to the editor panel: an unscoped query now also matches a chord cell's own
+  // aria-label (Task 8 — cells announce their beat count, e.g. "...4 beats..."), which
+  // collides with /beats/i across the whole document.
+  const editor = await screen.findByRole("group", { name: /edit segment/i });
+  const beats = within(editor).getByLabelText(/beats/i);
   fireEvent.change(beats, { target: { value: "6" } });
   await waitFor(() => expect(body).toEqual({ segments: [
     { id: "s1", start_beat: 0, end_beat: 6 },

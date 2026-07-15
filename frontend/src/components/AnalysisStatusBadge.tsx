@@ -2,13 +2,6 @@ import type { AnalysisOut, ChartSummaryOut } from "../api/types";
 import { formatDuration } from "../chart/timeMath";
 import Spinner from "./Spinner";
 
-const COLORS: Record<string, string> = {
-  pending: "var(--muted)",
-  running: "var(--accent)",
-  done: "var(--ok)",
-  failed: "var(--danger)",
-};
-
 export default function AnalysisStatusBadge({
   analysis,
   chart,
@@ -26,23 +19,25 @@ export default function AnalysisStatusBadge({
   const tonic = chart?.key_tonic ?? analysis?.detected_key_tonic;
   const mode = chart?.key_mode ?? analysis?.detected_key_mode;
   return (
-    <span style={{ color: COLORS[status] ?? "var(--muted)", fontWeight: 600 }}>
+    // Colour is SUPPLEMENTARY here — the status word always renders alongside it, so the
+    // `status--*` class (not an inline colour) is what a colourblind user does not need.
+    <span className={`status status--${status}`}>
       {inProgress && (
         <>
-          <Spinner size={12} label={status} />{" "}
+          <Spinner label={status} />{" "}
         </>
       )}
       {status}
       {durationSeconds != null && (
-        <span className="muted" style={{ fontWeight: 400 }}> · {formatDuration(durationSeconds)}</span>
+        <span className="status__meta muted"> · {formatDuration(durationSeconds)}</span>
       )}
       {status === "done" && bpm != null && (
-        <span className="muted" style={{ fontWeight: 400 }}>
+        <span className="status__meta muted">
           {" "}· {bpm} BPM · {tonic} {mode}
         </span>
       )}
       {analysis?.status === "failed" && analysis.error && (
-        <span className="muted" style={{ fontWeight: 400 }}> · {analysis.error}</span>
+        <span className="status__meta muted"> · {analysis.error}</span>
       )}
     </span>
   );

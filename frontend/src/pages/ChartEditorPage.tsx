@@ -1,9 +1,12 @@
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import ChartSheet from "../chart/ChartSheet";
+import { PlaybackProvider } from "../chart/PlaybackContext";
+import ChartContextBar from "../chart/ChartContextBar";
 import { useRecording } from "../chart/useRecording";
 import { useReanalyze } from "../chart/useReanalyze";
-import Spinner from "../components/Spinner";
+import AnalyzingIndicator from "../chart/AnalyzingIndicator";
 import ModeChoice from "../practice/ModeChoice";
+import Button from "../ui/Button";
 import { allowedMode, canPractice, type ChartMode } from "../practice/gate";
 import { useAuth } from "../auth/AuthContext";
 
@@ -39,44 +42,45 @@ export default function ChartEditorPage() {
   if (isLoading) return <p className="muted container">Loading...</p>;
 
   return (
-    <div className="container">
-      <p><Link to="/">&larr; Library</Link></p>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>{recording?.original_filename ?? "Chart"}</h1>
+    <PlaybackProvider>
+      <div className="chart-page">
+        <ChartContextBar
+          title={recording?.original_filename ?? "Chart"}
+          back={<Link to="/">&larr; Library</Link>}
+          actions={
+            <>
+              {/* Re-analysis rewrites the chart from scratch, which mid-practice would swap
+                  the questions out from under the player. It belongs to the editor. */}
+              {mode === "edit" && (
+                <Button onClick={() => reanalyze()} disabled={reanalyzing || inProgress}>
+                  Re-analyze
+                </Button>
+              )}
 
-        {/* Re-analysis rewrites the chart from scratch, which mid-practice would swap the
-            questions out from under the player. It belongs to the editor. */}
-        {mode === "edit" && (
-          <button onClick={() => reanalyze()} disabled={reanalyzing || inProgress}>
-            Re-analyze
-          </button>
-        )}
+              {mode && canPractice(user) && (
+                <Button onClick={() => choose(practice ? "edit" : "practice")}>
+                  {practice ? "Show the chords" : "Practice mode"}
+                </Button>
+              )}
 
-        {mode && canPractice(user) && (
-          <button onClick={() => choose(practice ? "edit" : "practice")}>
-            {practice ? "Show the chords" : "Practice mode"}
-          </button>
-        )}
+              {inProgress && <AnalyzingIndicator />}
+            </>
+          }
+        />
 
-        {inProgress && (
-          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }} className="muted">
-            <Spinner label="Analyzing" /> Analyzing&hellip;
-          </span>
+        {mode == null ? (
+          <ModeChoice onChoose={choose} />
+        ) : (
+          <ChartSheet
+            recordingId={id}
+            audioSrc={`/api/recordings/${id}/audio`}
+            analysis={analysis}
+            duration={duration}
+            inProgress={inProgress}
+            practice={practice}
+          />
         )}
       </div>
-
-      {mode == null ? (
-        <ModeChoice onChoose={choose} />
-      ) : (
-        <ChartSheet
-          recordingId={id}
-          audioSrc={`/api/recordings/${id}/audio`}
-          analysis={analysis}
-          duration={duration}
-          inProgress={inProgress}
-          practice={practice}
-        />
-      )}
-    </div>
+    </PlaybackProvider>
   );
 }

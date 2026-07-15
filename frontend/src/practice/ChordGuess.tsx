@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { SegmentOut } from "../api/types";
 import { ROOTS, QUALITIES, QUALITY_LABELS, chordLabel } from "../api/music";
 import { isCorrectGuess } from "./answer";
+import Panel from "../ui/Panel";
+import Field from "../ui/Field";
+import Button from "../ui/Button";
 
 /** How long the correct answer stays up, in green, before the form dismisses itself. */
 const REVEAL_MS = 700;
@@ -10,9 +13,6 @@ type Verdict = "idle" | "wrong" | "right";
 
 interface Props {
   segment: SegmentOut;
-  /** Offset, in px, from the top of the chart area to the row of the chord being named —
-   *  the same measurement the segment editor uses, so the form lands beside its chord. */
-  top?: number;
   /** Already named — in this sitting, or a moment ago. The form has nothing left to ask. */
   solved?: boolean;
   /** The player got it. Fired the instant they submit, not when the flash ends. */
@@ -34,7 +34,6 @@ interface Props {
  */
 export default function ChordGuess({
   segment,
-  top = 0,
   solved = false,
   onSolved,
   onClose,
@@ -90,46 +89,32 @@ export default function ChordGuess({
   // asking a question whose answer is on screen behind the panel.
   if (solved && verdict !== "right") {
     return (
-      <div ref={card} className="card chart-panel chord-guess" style={{ top }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <strong>{chordLabel(segment.chord_root, segment.chord_quality)}</strong>
-          {onClose && (
-            <button className="icon" aria-label="Close chord guess" onClick={onClose}>
-              &times;
-            </button>
-          )}
-        </div>
-        <p className="muted" style={{ margin: 0 }}>You named this one.</p>
-      </div>
+      <Panel
+        ref={card}
+        title={chordLabel(segment.chord_root, segment.chord_quality)}
+        onClose={onClose}
+        className="chord-guess"
+      >
+        <p className="muted">You named this one.</p>
+      </Panel>
     );
   }
 
   return (
-    <div
+    <Panel
       ref={card}
+      title="Name that chord"
+      onClose={onClose}
       className={[
-        "card",
-        "chart-panel",
         "chord-guess",
         verdict === "wrong" && "chord-guess--wrong",
         verdict === "right" && "chord-guess--right",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={{ top }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <strong>Name that chord</strong>
-        {onClose && (
-          <button className="icon" aria-label="Close chord guess" onClick={onClose}>
-            &times;
-          </button>
-        )}
-      </div>
-
-      <form onSubmit={submit} style={{ display: "grid", gap: 8 }}>
-        <label>
-          Root
+      <form onSubmit={submit}>
+        <Field label="Root">
           <select
             aria-invalid={verdict === "wrong"}
             value={root}
@@ -141,9 +126,8 @@ export default function ChordGuess({
           >
             {ROOTS.map((r) => (<option key={r} value={r}>{r}</option>))}
           </select>
-        </label>
-        <label>
-          Quality
+        </Field>
+        <Field label="Quality">
           <select
             aria-invalid={verdict === "wrong"}
             value={quality}
@@ -155,23 +139,33 @@ export default function ChordGuess({
           >
             {QUALITIES.map((q) => (<option key={q} value={q}>{QUALITY_LABELS[q]}</option>))}
           </select>
-        </label>
+        </Field>
 
+        {/* Never gated on !playing: the user just submitted a guess, so this ANSWERS a
+            question rather than volunteering speech over the music. Silencing it during
+            playback would leave a blind player with no idea whether they got it right —
+            and practice mode's ear-training quiz is the single most valuable feature this
+            app has for exactly that player.
+
+            Polite, not assertive: role="status" (not "alert") because nothing about a
+            wrong guess is urgent enough to interrupt whatever the reader is already
+            saying, over the top of the song. Same reasoning as WhereAmI's polite
+            live region — the user asked, they can wait a beat for the answer. */}
         {verdict === "wrong" && (
-          <p className="error" role="alert" style={{ margin: 0 }}>
+          <p className="error" role="status">
             Not that one — listen again and try another.
           </p>
         )}
         {verdict === "right" && (
-          <p className="ok" role="status" style={{ margin: 0 }}>
+          <p className="ok" role="status">
             {chordLabel(segment.chord_root, segment.chord_quality)} — that's it.
           </p>
         )}
 
-        <button className="primary" type="submit" disabled={verdict === "right"}>
+        <Button variant="primary" type="submit" disabled={verdict === "right"}>
           Submit
-        </button>
+        </Button>
       </form>
-    </div>
+    </Panel>
   );
 }

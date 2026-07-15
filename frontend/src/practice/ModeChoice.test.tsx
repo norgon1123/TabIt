@@ -3,6 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../test/utils";
 import ModeChoice from "./ModeChoice";
 
+test("has no inline styles left", () => {
+  const { container } = renderWithProviders(<ModeChoice onChoose={vi.fn()} />);
+  expect(Array.from(container.querySelectorAll("[style]"))).toEqual([]);
+});
+
 test("asks the question and reports which door was taken", async () => {
   const onChoose = vi.fn();
   renderWithProviders(<ModeChoice onChoose={onChoose} />);
