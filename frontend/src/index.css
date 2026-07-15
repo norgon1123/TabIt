@@ -301,6 +301,22 @@ a { color: var(--accent); }
   }
 }
 
+/* ---- Practice mode: the spotlight ---------------------------------------------------
+   Practice is listen-and-answer, so the chart recedes and desaturates and the two lit things
+   on screen become the ones in use: the deck (to listen) and the guess panel (to answer).
+   This is a MODE treatment, not a theme — it dims with opacity and desaturates with a filter,
+   RELATIVE to whatever theme the user is in, so it never swaps a token and a dark-theme user
+   gets the spotlight too. The dimming is on .chart-lines only: the guess panel is a sibling,
+   and the deck is outside this subtree, so both stay fully lit without any re-lighting. */
+.chart-workspace[data-practice="true"] .chart-lines {
+  filter: saturate(0.5);
+  opacity: 0.72;
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-workspace[data-practice="true"] .chart-lines { transition: none; }
+}
+
 /* ---- Zone 1: the context bar --------------------------------------------------------- */
 .chart-context-bar { padding-bottom: var(--space-3); transition: opacity 200ms ease; }
 .chart-context-bar__title { margin: 0; font-size: var(--text-xl); }

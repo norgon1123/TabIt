@@ -171,7 +171,11 @@ export default function ChartSheet({
           </p>
         )}
 
-        <div className="chart-workspace" data-panel-open={selected ? "true" : undefined}>
+        <div
+          className="chart-workspace"
+          data-panel-open={selected ? "true" : undefined}
+          data-practice={practice ? "true" : undefined}
+        >
           <Timeline
             segments={chart.segments}
             beatsPerMeasure={chart.beats_per_measure}

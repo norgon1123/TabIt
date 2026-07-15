@@ -217,6 +217,27 @@ test("the practice status line stops announcing while playing, and speaks again 
   await waitFor(() => expect(status()).toHaveAttribute("role", "status"));
 });
 
+test("practice mode dims the chart into a spotlight (#Phase3)", async () => {
+  login();
+  serveChart();
+  const { container } = open("/recordings/r1?mode=practice");
+
+  await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
+  // The chart recedes and desaturates so the deck and the guess panel are the lit things.
+  // The attribute is the hook the theme-independent CSS dims against; assert the contract.
+  expect(container.querySelector(".chart-workspace")).toHaveAttribute("data-practice", "true");
+});
+
+test("the editing chart is NOT dimmed — the spotlight is a practice-only treatment (#Phase3)", async () => {
+  login();
+  serveChart();
+  const { container } = open("/recordings/r1?mode=edit");
+
+  await screen.findByText("Gdom7");
+  // Mode is about what the app is doing; the editor is not practice, so no spotlight.
+  expect(container.querySelector(".chart-workspace")).not.toHaveAttribute("data-practice");
+});
+
 test("the player can give up and switch to the chart", async () => {
   login();
   serveChart();
