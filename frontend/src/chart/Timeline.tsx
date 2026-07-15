@@ -102,6 +102,26 @@ export default function Timeline({
     });
   }, [activeId, ordered, currentTime, playing, rate]);
 
+  // Reveal-as-reward: when a chord is named it leaves the masked set, and the cell it was
+  // hiding in should settle the chord into place — the reward IS the information appearing,
+  // a channel a colourblind player gets in full, unlike a green flash. We track the ids that
+  // have EVER left the masked set this sitting; the set only grows, so each cell gets the
+  // flag once and CSS plays the settle once (an animation runs only when first applied to an
+  // element). No timer, no replay, and — crucially — nothing fires on first paint, because a
+  // cell that was masked from the start never "transitioned" out of it.
+  const prevMasked = useRef<ReadonlySet<string>>(maskedIds);
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(NO_MASK);
+  useEffect(() => {
+    const newly = [...prevMasked.current].filter((id) => !maskedIds.has(id));
+    prevMasked.current = maskedIds;
+    if (newly.length === 0) return;
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      newly.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [maskedIds]);
+
   function startResize(index: number, edge: "left" | "right", e: React.PointerEvent) {
     e.stopPropagation();
     suppressClick.current = false;
@@ -181,6 +201,7 @@ export default function Timeline({
                   data-selected={selected ? "true" : undefined}
                   data-playing={isActive ? "true" : undefined}
                   data-masked={masked ? "true" : undefined}
+                  data-revealed={revealed.has(s.id) ? "true" : undefined}
                   aria-pressed={selected}
                   aria-label={label}
                   data-segment-id={s.id}

@@ -243,3 +243,48 @@ describe("the chart is a semantic sequence, not a pile of divs", () => {
     expect(masked).not.toHaveAccessibleName(/major|minor|\bC\b/i);
   });
 });
+
+test("reveal-as-reward: a chord that just left the masked set settles into its cell (#Phase3)", () => {
+  const { container, rerender } = render(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      maskedIds={new Set(["s1", "s2"])}
+    />,
+  );
+  // First paint: both are still questions, so nothing has just been revealed. The settle
+  // must not play on a chord that was masked from the start — only on the transition.
+  expect(container.querySelector('[data-revealed="true"]')).toBeNull();
+
+  // s2 is named — it leaves the masked set. The cell it was hiding in flags the settle so
+  // the chord can animate in. The reward is the information appearing, not a colour.
+  rerender(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      maskedIds={new Set(["s1"])}
+    />,
+  );
+  expect(container.querySelector('[data-segment-id="s2"]')).toHaveAttribute("data-revealed", "true");
+  // s1 is still a question; it did not just get revealed.
+  expect(container.querySelector('[data-segment-id="s1"]')).not.toHaveAttribute("data-revealed");
+});
+
+test("reveal-as-reward does not fire in edit mode, where nothing was ever masked (#Phase3)", () => {
+  // maskedIds defaults to NO_MASK, so no cell is a fresh reveal. Without the "only on the
+  // transition out of masked" guard, this would flag every chord on first paint.
+  const { container } = renderTimeline();
+  expect(container.querySelector('[data-revealed="true"]')).toBeNull();
+});

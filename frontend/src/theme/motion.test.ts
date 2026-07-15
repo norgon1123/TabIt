@@ -48,3 +48,23 @@ describe("the current-chord lift is a third, non-hue channel", () => {
     expect(reduced).toMatch(/\.chord-cell\[data-playing="true"\]\s*\{[^}]*transform:\s*none/);
   });
 });
+
+describe("reveal-as-reward reads without colour, and without motion", () => {
+  it("settles the revealed chord into its cell", () => {
+    // The reward is the chord appearing where a "?" was — an information channel, not a hue.
+    const body = ruleBody('.chord-cell[data-revealed="true"] strong');
+    expect(body).not.toBeNull();
+    expect(body).toMatch(/animation:\s*tabit-settle/);
+  });
+
+  it("still defines the tabit-settle keyframes it names", () => {
+    expect(css).toMatch(/@keyframes\s+tabit-settle\s*\{/);
+  });
+
+  it("neutralises the settle under prefers-reduced-motion, leaving the chord itself intact", () => {
+    // A reduced-motion user gets the revealed chord with no animation. The information — the
+    // <strong> chord label — is rendered regardless, so turning the motion off costs nothing.
+    const reduced = reducedMotionBlocks();
+    expect(reduced).toMatch(/\.chord-cell\[data-revealed="true"\]\s*strong\s*\{[^}]*animation:\s*none/);
+  });
+});

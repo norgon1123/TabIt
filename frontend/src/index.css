@@ -244,6 +244,20 @@ a { color: var(--accent); }
 .chord-cell[data-masked="true"] strong { color: var(--muted); }
 .chord-cell[data-masked="true"]:hover strong { color: var(--text); }
 
+/* Reveal-as-reward: the chord the player just named settles into the cell it was hiding in.
+   The reveal IS the reward — and, unlike a green flash, it needs no colour to be read, which
+   is the point: "correct" is now carried by information appearing where a "?" was, a channel
+   a colourblind player gets in full. The motion is garnish; a reduced-motion user gets the
+   chord instantly, which is the reward itself. */
+.chord-cell[data-revealed="true"] strong { animation: tabit-settle 320ms ease-out; }
+@keyframes tabit-settle {
+  from { transform: translateY(-35%) scale(0.85); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chord-cell[data-revealed="true"] strong { animation: none; }
+}
+
 /* The chord's own progress fill. Position/size are design values and live here; the
    transform is repainted per-frame by chordProgress.ts and stays inline in Timeline.tsx —
    that value is data (how far through the chord we are), not a design choice. */
