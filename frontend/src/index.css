@@ -125,6 +125,11 @@ body { margin: 0; background: var(--bg); color: var(--text); }
    `height`: a chart longer than one screen must still be free to grow past it and scroll. */
 #root { display: flex; flex-direction: column; min-height: 100dvh; }
 .app-header { flex: 0 0 auto; }
+/* The <main> landmark wraps the router, so it — not the page — is now #root's growing flex
+   child. It has to carry the flex chain through: grow to fill the viewport, and be a flex
+   column itself, so .chart-page's `flex: 1 1 auto` still stretches and keeps the control deck
+   pinned to the bottom on a short chart (the sticky deck floats mid-page without this). */
+#main-content { flex: 1 1 auto; display: flex; flex-direction: column; }
 button {
   font: inherit;
   font-weight: var(--weight-medium);
