@@ -255,6 +255,7 @@ test("reveal-as-reward: a chord that just left the masked set settles into its c
       selectedId={null}
       onSelect={() => {}}
       grid={GRID}
+      masking
       maskedIds={new Set(["s1", "s2"])}
     />,
   );
@@ -262,8 +263,8 @@ test("reveal-as-reward: a chord that just left the masked set settles into its c
   // must not play on a chord that was masked from the start — only on the transition.
   expect(container.querySelector('[data-revealed="true"]')).toBeNull();
 
-  // s2 is named — it leaves the masked set. The cell it was hiding in flags the settle so
-  // the chord can animate in. The reward is the information appearing, not a colour.
+  // s2 is named — it leaves the masked set while masking is still on. The cell it was hiding
+  // in flags the settle so the chord can animate in. The reward is the information appearing.
   rerender(
     <Timeline
       segments={segments}
@@ -274,6 +275,7 @@ test("reveal-as-reward: a chord that just left the masked set settles into its c
       selectedId={null}
       onSelect={() => {}}
       grid={GRID}
+      masking
       maskedIds={new Set(["s1"])}
     />,
   );
@@ -287,4 +289,43 @@ test("reveal-as-reward does not fire in edit mode, where nothing was ever masked
   // transition out of masked" guard, this would flag every chord on first paint.
   const { container } = renderTimeline();
   expect(container.querySelector('[data-revealed="true"]')).toBeNull();
+});
+
+test("leaving practice does NOT settle-animate every unnamed chord (#Phase3)", () => {
+  // "Show the chords" empties the masked set, but the player NAMED nothing — so no cell may
+  // flag a reveal. The reward is for a chord you named, not for the whole chart un-hiding at
+  // once. This also protects the reward on a practice→edit→practice round-trip: without the
+  // gate, every cell would be flagged data-revealed here and the real settle could never
+  // replay (an animation runs only when its attribute first appears).
+  const { container, rerender } = render(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      masking
+      maskedIds={new Set(["s1", "s2"])}
+    />,
+  );
+
+  // Flip to edit: masking off, mask empty. The bulk transition must be swallowed.
+  rerender(
+    <Timeline
+      segments={segments}
+      beatsPerMeasure={4}
+      measureOffset={0}
+      duration={4}
+      currentTime={0}
+      selectedId={null}
+      onSelect={() => {}}
+      grid={GRID}
+      masking={false}
+      maskedIds={new Set()}
+    />,
+  );
+  expect(container.querySelectorAll('[data-revealed="true"]')).toHaveLength(0);
 });

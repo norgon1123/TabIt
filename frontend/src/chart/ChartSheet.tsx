@@ -186,6 +186,9 @@ export default function ChartSheet({
             rate={clock.rate}
             selectedId={selectedId}
             maskedIds={practice ? session.masked : undefined}
+            // Gates the reveal-as-reward so leaving practice does not settle-animate every
+            // still-unnamed chord at once (the mask empties, but nothing was named).
+            masking={practice}
             grid={grid}
             onSelect={setSelectedId}
             onSeek={clock.seek}

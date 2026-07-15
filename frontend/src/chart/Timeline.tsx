@@ -30,6 +30,12 @@ interface Props {
    *  rhythm is the question's context — but shows "?" for the chord, and drops the roman
    *  numeral, which against a known key would hand over the answer. */
   maskedIds?: ReadonlySet<string>;
+  /** True while the chart is in the masking regime (practice mode). It gates the
+   *  reveal-as-reward: a chord leaves the masked set when it is NAMED — but also when the
+   *  player exits practice ("Show the chords"), which empties the whole mask at once. Only
+   *  the first is a reward; `masking` goes false on the second, so that bulk transition is
+   *  swallowed instead of settle-animating the entire chart. */
+  masking?: boolean;
   onSelect: (segmentId: string) => void;
   onSeek?: (time: number) => void;
   onResizeCommit?: (updates: SegmentUpdate[]) => void;
@@ -49,6 +55,7 @@ export default function Timeline({
   rate = 1,
   selectedId,
   maskedIds = NO_MASK,
+  masking = false,
   grid,
   onSelect,
   onSeek,
@@ -112,7 +119,13 @@ export default function Timeline({
   const prevMasked = useRef<ReadonlySet<string>>(maskedIds);
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(NO_MASK);
   useEffect(() => {
-    const newly = [...prevMasked.current].filter((id) => !maskedIds.has(id));
+    // Gate on `masking`: a chord leaving the masked set is only a reward while we are still
+    // in practice. Exiting practice empties the mask (masking goes false) — that bulk
+    // transition is swallowed here (prevMasked stays in sync) so the whole chart does not
+    // settle-animate for chords the player never named.
+    const newly = masking
+      ? [...prevMasked.current].filter((id) => !maskedIds.has(id))
+      : [];
     prevMasked.current = maskedIds;
     if (newly.length === 0) return;
     setRevealed((prev) => {
@@ -120,7 +133,7 @@ export default function Timeline({
       newly.forEach((id) => next.add(id));
       return next;
     });
-  }, [maskedIds]);
+  }, [maskedIds, masking]);
 
   function startResize(index: number, edge: "left" | "right", e: React.PointerEvent) {
     e.stopPropagation();
