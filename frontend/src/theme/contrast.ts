@@ -43,3 +43,15 @@ export function contrastRatio(a: string, b: string): number {
   const darker = Math.min(la, lb);
   return (lighter + 0.05) / (darker + 0.05);
 }
+
+/** The opaque colour produced when `fg` is painted at `alpha` (0–1) over `bg`.
+ *  Straight alpha compositing: out = fg·α + bg·(1−α), per sRGB channel. This is how the
+ *  browser composites an `opacity` or a `color-mix(... transparent)` — so it is how we must
+ *  compute the *effective* colour a user actually sees, which is what AA governs. */
+export function blend(fg: string, bg: string, alpha: number): string {
+  const f = parseHex(fg);
+  const b = parseHex(bg);
+  const ch = (i: number) => Math.round(f[i] * alpha + b[i] * (1 - alpha));
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${hex(ch(0))}${hex(ch(1))}${hex(ch(2))}`;
+}

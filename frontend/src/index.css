@@ -308,10 +308,14 @@ a { color: var(--accent); }
    RELATIVE to whatever theme the user is in, so it never swaps a token and a dark-theme user
    gets the spotlight too. The dimming is on .chart-lines only: the guess panel is a sibling,
    and the deck is outside this subtree, so both stay fully lit without any re-lighting. */
+/* Desaturation ONLY — never opacity. `opacity` composites the chart toward the page and
+   crushes text contrast (the masked "?" fell to 3.4:1, below the 4.5 AA floor); `saturate()`
+   changes chroma, not luminance, so the chart stays fully AA-readable while visibly receding
+   into a desaturated backdrop against the fully-saturated deck and guess panel. That relative
+   saturation IS the spotlight. Verified by theme/contrastStates.test.ts. */
 .chart-workspace[data-practice="true"] .chart-lines {
-  filter: saturate(0.5);
-  opacity: 0.72;
-  transition: opacity 200ms ease, filter 200ms ease;
+  filter: saturate(0.35);
+  transition: filter 200ms ease;
 }
 @media (prefers-reduced-motion: reduce) {
   .chart-workspace[data-practice="true"] .chart-lines { transition: none; }
@@ -323,7 +327,10 @@ a { color: var(--accent); }
 
 /* Recedes while playing — eyes on hands, not on chrome. It DIMS; it does not disappear:
    a control you cannot find is worse than one you can ignore, and it stays focusable. */
-.chart-context-bar[data-receded="true"] { opacity: 0.45; }
+/* Recedes during playback, but its title and links are still TEXT — the static receded state
+   must clear AA (4.5:1). 0.45 fell to 2.84:1 in the light theme; 0.65 is the visible-recede
+   floor that stays AA in both themes. It still restores to full on :hover/:focus-within. */
+.chart-context-bar[data-receded="true"] { opacity: 0.65; }
 .chart-context-bar[data-receded="true"]:hover,
 .chart-context-bar[data-receded="true"]:focus-within { opacity: 1; }
 
