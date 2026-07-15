@@ -6,7 +6,8 @@ import { totalBeats } from "./beatGrid";
 import Timeline, { type SegmentUpdate } from "./Timeline";
 import type { BeatGridInfo } from "./musicalPosition";
 import ControlDeck from "./ControlDeck";
-import WhereAmI from "./WhereAmI";
+// Temporarily disabled while we reconsider this accessibility option — see below.
+// import WhereAmI from "./WhereAmI";
 import SegmentEditor from "./SegmentEditor";
 import TempoControl from "./TempoControl";
 import KeyControl from "./KeyControl";
@@ -276,7 +277,9 @@ export default function ChartSheet({
           on-demand "where am I" — everything you reach for while a song runs. */}
       <ControlDeck grid={grid}>
         {tempoAndKey}
-        <WhereAmI grid={grid} />
+        {/* The on-demand "where am I" is temporarily disabled while we reconsider this
+            accessibility option. Re-enable by restoring the import above and this element. */}
+        {/* <WhereAmI grid={grid} /> */}
       </ControlDeck>
     </>
   );
