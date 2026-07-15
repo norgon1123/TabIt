@@ -193,6 +193,23 @@ a { color: var(--accent); }
   border: 0;
 }
 
+/* Off-screen until focused, then it drops into the top-left corner. A keyboard user gets it
+   on the first Tab; nobody else ever sees it. */
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: -3rem;
+  z-index: 100;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  transition: top 120ms ease;
+}
+.skip-link:focus { top: var(--space-3); }
+@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+
 /* ---- Chord chart ----------------------------------------------------------------------
    The chart itself: a column of lines, each a row of chord cells. Chord cells are real
    <button>s (Timeline.tsx) so a keyboard user can Tab to one and press Enter/Space to open

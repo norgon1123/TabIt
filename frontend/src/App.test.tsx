@@ -17,3 +17,10 @@ test("the saved-chart editor still requires an account", async () => {
 
   expect(await screen.findByRole("heading", { name: /log in/i })).toBeInTheDocument();
 });
+
+test("gives every screen a main landmark to skip to", async () => {
+  // Landmark navigation and the skip link both need a <main>; before this there was none,
+  // so a screen-reader user could not jump to the content of any page.
+  renderWithProviders(<App />, { route: "/" });
+  expect(await screen.findByRole("main")).toBeInTheDocument();
+});
