@@ -138,6 +138,30 @@ rather than a JS breakpoint.
 
 `chartLayout.ts` keeps `boundaryUpdates` and `redistributeLength` unchanged.
 
+### The progress fill sweeps box to box
+
+`.chord-progress` (Round 2 #2) answers one question: *how much of this chord is left?* Today the
+chord is one cell and the fill sweeps across it. Once a vamping chord is eight boxes, a fill
+pinned to the first box would finish eight bars early and stop answering that question at all.
+
+So the fill lives on **whichever fragment is currently sounding**, sweeping each box in turn:
+
+- fragments already past → `scaleX(1)`, no transition;
+- fragments still ahead → `scaleX(0)`, no transition;
+- the sounding fragment → handed to `paintChordFill` with **its own** start/end times.
+
+`paintChordFill` **cannot** be reused unmodified for the first two cases. It clamps `currentTime`
+into the window it is given, so a *future* fragment would paint `scaleX(0)` and then immediately
+transition to full over its own duration — every unplayed box of a vamp would start filling at
+once. Past and future fragments are therefore set explicitly. `chordProgress.ts` itself is
+unchanged.
+
+This needs a fragment's start/end **time**, not just its beats. **`beatGrid.ts` gains
+`timeForBeat`** — the port of `app/audio/beatgrid.py::time_for_beat`, whose private `ensureGrid` /
+`intervalAt` helpers already sit in that file. Per `CLAUDE.md`, beat↔time conversion lives in
+exactly one place per side: it must **not** be interpolated inline from the segment's own
+`start_time` / `end_time`, which would be a second, drifting implementation of the same math.
+
 ### Accessibility — the chord stays the unit
 
 Naively, per-bar rendering would make a chord spanning 8 bars announce itself **8 times** and
@@ -219,10 +243,17 @@ shipping 2px against a comment demanding 3px is not acceptable.
 ## Rendering contract
 
 ```
-| C / / / | C / / / | Am / / / | F  /  ¦ G  / |
-| C / / / | Em / / /| F  / / / | Dm /  ¦ G  / |
-  ^solid 2px = bar          ^dashed 1px = chord change within a bar
+| C ╱ ╱ ╱ ╱ | C ╱ ╱ ╱ ╱ | Am ╱ ╱ ╱ ╱ | F ╱ ╱ ¦ G ╱ ╱ |
+| C ╱ ╱ ╱ ╱ | Em ╱ ╱ ╱ ╱| F ╱ ╱ ╱ ╱  | Dm ╱ ╱ ¦ G ╱ ╱ |
+  ^solid 2px = bar                  ^dashed 1px = chord change within a bar
 ```
+
+**Slash marks are unchanged: one per beat**, via the existing `beatSlashMarks(beats)`. The chord
+name is *stacked above* the slash row rather than sitting inline on beat 1, so the row honestly
+reads "this chord lasts four beats" — it is not the inline lead-sheet idiom where the symbol
+replaces the first slash. `beatMath.ts` and `Timeline.test.tsx:168` are untouched. (The mockups
+during design drew the inline convention, `C ╱ ╱ ╱`; that was mockup shorthand and is **not** what
+ships.)
 
 - Every bar is exactly `1 / --bars-per-line` of the row, regardless of content.
 - Bar lines form a hard vertical grid down the page.
@@ -247,9 +278,16 @@ catches a naive `round()`; `measure_offset > 0` shifting the bar lines.
 **`test_chart_seed.py`**: boundaries land on whole beats; a sub-beat chord is dropped, not
 emitted at zero length; the final chord still clamps to `max_beat` and may be fractional.
 
+**`beatGrid.test.ts`**: `timeForBeat` round-trips against `totalBeats` on a steady grid;
+interpolates a half beat; extrapolates past the final onset and clamps to `duration`; falls back
+to a BPM division on a grid with fewer than two onsets. Cross-check the same cases against
+`tests/test_beatgrid.py::test_time_for_beat_*` — the two sides are ports of each other and must
+not drift.
+
 **`Timeline.test.tsx`**: a chord spanning N bars produces **exactly one** `listitem` and **one**
 tab stop; clicking a continuation fragment selects the chord; resize handles exist only at real
-chord boundaries.
+chord boundaries; on a vamping chord, boxes before the playhead paint full, boxes after it paint
+empty, and only the sounding box carries a transition.
 
 **`palette.test.ts`**: picks up the new values automatically (it reads `index.css` as text, so it
 cannot drift), plus a floor test for `--bar-line-h` mirroring `--line`'s ≥ 1.6.
