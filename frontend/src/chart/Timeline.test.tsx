@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
 import { beatSlashMarks } from "./beatMath";
@@ -86,25 +86,6 @@ test("fills the active chord's progress bar to the current fraction when paused"
   expect(bar.style.transform).toBe("scaleX(0.5)");
 });
 
-it("marks the cell that starts a measure, so the bar line can be drawn", () => {
-  // The bar line is a graphical object and gets its 3:1 contrast from --bar-line, which
-  // palette.test.ts enforces. What THIS test cares about is that the right cell is
-  // marked — not how many pixels wide the rule is, which is a design decision the CSS
-  // is allowed to change without breaking the suite.
-  //
-  // NB: the module-level `segments` fixture (s1 @ beat 0, s2 @ beat 4, 4 beats/measure)
-  // has BOTH cells landing on a measure boundary, so it can't distinguish "marked" from
-  // "not marked" — use a fixture where only one of the two does.
-  const segs = [
-    { id: "s1", start_beat: 2, end_beat: 4, start_time: 1, end_time: 2, chord_root: "C", chord_quality: "maj", roman_numeral: "I" },
-    { id: "s2", start_beat: 4, end_beat: 8, start_time: 2, end_time: 4, chord_root: "G", chord_quality: "maj", roman_numeral: "V" },
-  ];
-  const { container } = renderTimeline({ segments: segs, beatsPerMeasure: 4, measureOffset: 0 });
-  const cell = (id: string) => container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement;
-  expect(cell("s2")).toHaveAttribute("data-bar-start", "true");
-  expect(cell("s1")).not.toHaveAttribute("data-bar-start");
-});
-
 it("marks the selected cell", () => {
   const { container } = renderTimeline({ selectedId: "s1" });
   const cell = (id: string) => container.querySelector(`[data-segment-id="${id}"]`) as HTMLElement;
@@ -172,73 +153,32 @@ it("renders slash marks for a 4-beat chord", () => {
 // one is built locally rather than disturbing the fixtures every other test already uses.
 const BASE = { chord_root: "C", chord_quality: "maj", roman_numeral: "I" };
 
-it("sizes each cell by its beat count — the width IS the rhythm", () => {
-  // A 4-beat chord must be twice as wide as a 2-beat one. That is not decoration: it is how
-  // the chart shows rhythm.
-  //
-  // The ratio must sit on the .chord-cell__item wrapper, because THAT is the flex child of
-  // the .chart-line row. If it drifts back onto the <button>, the wrapper falls back to
-  // `flex: 0 1 auto`, sizes to its content, and every chord renders the same width — the
-  // chart silently stops showing rhythm. jsdom does no layout, so this test is the only
-  // thing standing between that regression and production: it must name the exact element,
-  // not accept the ratio "wherever it landed". An earlier version of this test did the
-  // latter and was green even with the ratio on the wrong element.
-  const segs = [
-    { ...BASE, id: "s1", start_beat: 0, end_beat: 4, start_time: 0, end_time: 2 },
-    { ...BASE, id: "s2", start_beat: 4, end_beat: 6, start_time: 2, end_time: 3 },
-  ];
-  renderTimeline({ segments: segs });
-
-  const buttonFor = (id: string) =>
-    document.querySelector<HTMLElement>(`[data-segment-id="${id}"]`)!;
-  const wrapperFor = (id: string) => buttonFor(id).closest<HTMLElement>(".chord-cell__item")!;
-
-  // jsdom's CSSOM normalises the flex shorthand's zero flex-basis to "0px" (confirmed by
-  // setting el.style.flex directly — it is a serialisation quirk of this test environment,
-  // not a property of which element carries the ratio), so the expected strings say "0px"
-  // rather than the literal "0". The ratio under test — 4:1 vs 2:1 — is unchanged.
-  //
-  // The ratio is on the flex child...
-  expect(wrapperFor("s1").style.flex).toBe("4 1 0px");
-  expect(wrapperFor("s2").style.flex).toBe("2 1 0px");
-
-  // ...and NOT on the button, which is not the flex child and would size to content.
-  expect(buttonFor("s1").style.flex).toBe("");
-  expect(buttonFor("s2").style.flex).toBe("");
-
-  // And the wrapper really is a child of the flex row, not floating somewhere else.
-  expect(wrapperFor("s1").parentElement).toHaveClass("chart-line");
-});
-
 describe("the chart is a semantic sequence, not a pile of divs", () => {
   it("names itself, so a screen-reader user can find it", () => {
     renderTimeline();
     expect(screen.getByRole("list", { name: /chord chart/i })).toBeInTheDocument();
   });
 
-  it("tells a player where each chord IS, how long it lasts, and whether a bar starts", () => {
+  it("tells a player where each chord IS, how long it lasts", () => {
     // "C, button" is what the chart said before. It gave a blind or low-vision player no
-    // idea where in the song they were, how long to stay on the chord, or that a bar
-    // started there. All three are things a sighted player reads off the page instantly.
+    // idea where in the song they were or how long to stay on the chord. Both are things a
+    // sighted player reads off the page instantly.
+    //
+    // A chord is now a single element with role="listitem" (the first fragment's <button>,
+    // its native role overridden so a vamp is ONE list entry, not one per bar) — so the
+    // chord's accessible name is read off the listitem, not a nested button role.
     renderTimeline();
-    const cells = screen.getAllByRole("button", { name: /bar \d+/i });
+    const cells = screen.getAllByRole("listitem", { name: /bar \d+/i });
     expect(cells.length).toBeGreaterThan(0);
     expect(cells[0]).toHaveAccessibleName(/bar 1, beat 1/i);
     expect(cells[0]).toHaveAccessibleName(/beats/i);
-  });
-
-  it("says a bar starts here, without relying on the colour that says so visually", () => {
-    // The measure rule is a graphical object. A screen reader cannot see 3px of --bar-line.
-    renderTimeline();
-    const barStart = screen.getAllByRole("button", { name: /starts a bar/i });
-    expect(barStart.length).toBeGreaterThan(0);
   });
 
   it("keeps a masked chord's secret while still saying where it is", () => {
     // Practice mode: the chord is the question. The position and the length are the
     // question's CONTEXT and must survive — a player needs the rhythm to guess against.
     renderTimeline({ maskedIds: new Set(["s1"]) });
-    const masked = screen.getByRole("button", { name: /hidden chord/i });
+    const masked = screen.getByRole("listitem", { name: /hidden chord/i });
     expect(masked).toHaveAccessibleName(/bar 1/i);
     expect(masked).not.toHaveAccessibleName(/major|minor|\bC\b/i);
   });
@@ -328,4 +268,116 @@ test("leaving practice does NOT settle-animate every unnamed chord (#Phase3)", (
     />,
   );
   expect(container.querySelectorAll('[data-revealed="true"]')).toHaveLength(0);
+});
+
+describe("bar-native layout", () => {
+  const VAMP = [{
+    id: "s1", start_beat: 0, end_beat: 32, start_time: 0, end_time: 16,
+    chord_root: "C", chord_quality: "maj", roman_numeral: "I",
+  }];
+
+  // The file's module-level GRID only spans 9 beats / 4s. A 32-beat vamp needs its own, or
+  // timeForBeat clamps every fragment past beat 8 to t=4 and the sweep test is meaningless.
+  // Still 120 BPM: beat b sits at t = b * 0.5.
+  const VAMP_GRID: BeatGridInfo = {
+    beatTimes: Array.from({ length: 33 }, (_, i) => i * 0.5), // beats 0..32 -> t 0..16
+    bpm: 120,
+    duration: 16,
+    beatsPerMeasure: 4,
+    measureOffset: 0,
+  };
+
+  const renderVamp = (props: Partial<React.ComponentProps<typeof Timeline>> = {}) =>
+    renderTimeline({ segments: VAMP, duration: 16, grid: VAMP_GRID, ...props });
+
+  it("splits a vamping chord into one box per bar", () => {
+    renderVamp();
+    expect(document.querySelectorAll(".chart-bar")).toHaveLength(8);
+  });
+
+  it("announces a vamping chord ONCE, not once per bar", () => {
+    // A chord spanning 8 bars is still ONE chord. Eight boxes is a layout artefact — the same
+    // kind the old .chart-line wrapper was hidden for. If this regresses, a screen-reader user
+    // hears "C, bar 1... C, bar 2..." eight times for a chord that never changed.
+    renderVamp();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("gives a vamping chord ONE tab stop, not eight", () => {
+    renderVamp();
+    expect(document.querySelectorAll("button[data-segment-id]")).toHaveLength(1);
+  });
+
+  it("selects the chord when a continuation box is clicked", async () => {
+    const onSelect = vi.fn();
+    renderVamp({ onSelect });
+    // The 4th bar holds a continuation fragment — no button, but it must still respond.
+    const boxes = document.querySelectorAll<HTMLElement>(".chart-bar .chord-cell");
+    await userEvent.click(boxes[3]);
+    expect(onSelect).toHaveBeenCalledWith("s1");
+  });
+
+  it("gives a vamping chord ONE pair of resize handles, at its real boundaries", () => {
+    // 8 bars must not grow 8 pairs of handles — the 7 interior bar lines are not chord changes.
+    renderVamp({ onResizeCommit: () => {} });
+    expect(document.querySelectorAll(".chord-cell__resize--left")).toHaveLength(1);
+    expect(document.querySelectorAll(".chord-cell__resize--right")).toHaveLength(1);
+  });
+
+  it("sweeps the progress fill box to box across a vamping chord", () => {
+    // .chord-progress answers ONE question: how much of this chord is left? Pinned to the
+    // first box, an 8-bar vamp's fill would finish 8 bars early and answer nothing. Boxes
+    // behind the playhead are full, boxes ahead are empty, and only the sounding box moves.
+    //
+    // VAMP_GRID is 120bpm: beat b sits at t = b*0.5, so bar 3 (beats 8-12) spans t=4..6.
+    // At t=5 we are halfway through bar 3. Paused, so the sounding box snaps rather than
+    // transitioning — which is what makes the fraction assertable.
+    renderVamp({ currentTime: 5 });
+    const fills = document.querySelectorAll<HTMLElement>(".chord-progress");
+    expect(fills).toHaveLength(8); // one per box, not one for the chord
+    expect(fills[0].style.transform).toBe("scaleX(1)"); // bar 1: played
+    expect(fills[1].style.transform).toBe("scaleX(1)"); // bar 2: played
+    expect(fills[3].style.transform).toBe("scaleX(0)"); // bar 4: not yet
+    expect(fills[7].style.transform).toBe("scaleX(0)"); // bar 8: not yet
+    // Paused, so the sounding box snaps to its true fraction rather than transitioning.
+    expect(fills[2].style.transform).toBe("scaleX(0.5)"); // bar 3: halfway
+  });
+
+  it("does not re-select or seek when a resize drag ends on a continuation box", () => {
+    // A vamp's real END lands on a continuation fragment, so its RIGHT resize handle lives in
+    // the aria-hidden <span>, not the <button>. After a pointer drag that began on that handle,
+    // the browser fires a trailing `click` on the box — which must be swallowed, exactly as the
+    // <button> swallows it. Without the suppressClick guard the drag re-selects the chord and
+    // yanks the playhead back to the chord's start.
+    const onSelect = vi.fn();
+    const onSeek = vi.fn();
+    renderVamp({ onSelect, onSeek, onResizeCommit: () => {} });
+    const rightHandle = document.querySelector<HTMLElement>(".chord-cell__resize--right")!;
+    const box = rightHandle.closest<HTMLElement>(".chord-cell")!;
+    // Drag: pointer down on the handle, then release on the window (startResize's listener).
+    fireEvent.pointerDown(rightHandle, { clientX: 100 });
+    fireEvent.pointerUp(window, { clientX: 160 });
+    // The trailing click the browser now delivers to the box:
+    fireEvent.click(box);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSeek).not.toHaveBeenCalled();
+  });
+
+  it("sizes a fragment by its beats — the width IS the rhythm", () => {
+    // The ratio must sit on the fragment, which is the flex child of .chart-bar. If it drifts
+    // onto a descendant, the fragment falls back to `flex: 0 1 auto`, sizes to its content, and
+    // the chart silently stops showing rhythm. jsdom does no layout, so this test is the only
+    // thing standing between that regression and production: it names the exact element.
+    const segs = [
+      { ...BASE, id: "f", start_beat: 0, end_beat: 3, start_time: 0, end_time: 1.5 },
+      { ...BASE, id: "g", start_beat: 3, end_beat: 4, start_time: 1.5, end_time: 2 },
+    ];
+    renderTimeline({ segments: segs, duration: 2 });
+    const cellFor = (id: string) =>
+      document.querySelector<HTMLElement>(`.chart-bar [data-segment-id="${id}"]`)!;
+    // jsdom's CSSOM normalises the flex shorthand's zero basis to "0px".
+    expect(cellFor("f").style.flex).toBe("3 1 0px");
+    expect(cellFor("g").style.flex).toBe("1 1 0px");
+    expect(cellFor("f").parentElement).toHaveClass("chart-bar");
+  });
 });

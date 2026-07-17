@@ -112,6 +112,11 @@
      Wide enough for the longest label the app can produce (e.g. "F#m7"). */
   --chord-cell-min: 4.5rem;
 
+  /* How many bars sit on one line of the sheet. Four is the lead-sheet convention. This is a
+     TOKEN, not a JS constant, so a narrow viewport reflows with a media query instead of a
+     breakpoint in the render path. */
+  --bars-per-line: 4;
+
   font-family: var(--font-ui);
   font-size: 16px;
   line-height: var(--leading-normal);
@@ -119,6 +124,10 @@
 
 [data-theme="dark"] {
   --shadow-panel: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+@media (max-width: 600px) {
+  :root { --bars-per-line: 2; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
@@ -224,13 +233,44 @@ a { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
 
 /* ---- Chord chart ----------------------------------------------------------------------
-   The chart itself: a column of lines, each a row of chord cells. Chord cells are real
-   <button>s (Timeline.tsx) so a keyboard user can Tab to one and press Enter/Space to open
-   the segment editor — that focusability is what makes cutting drag-to-resize safe. */
+   The sheet is a GRID OF BARS, not a row of chords. Every bar is exactly one track wide
+   whatever it holds, so the bar lines form a hard vertical rule down the page — that
+   regularity is the thing that makes a chord grid scannable at playing speed.
+
+   A chord that vamps for eight bars is ONE segment (see barLayout.ts) rendered as eight
+   boxes. Only the first box is a <button>; the rest are aria-hidden. */
+.chart-bars {
+  display: grid;
+  /* minmax() rather than a bare 1fr: a bare 1fr is minmax(auto, 1fr), whose auto floor lets
+     a bar with four chords in it push its track wider than its neighbours — which knocks the
+     bar lines out of alignment between rows. The floor is the token, never the content. */
+  grid-template-columns: repeat(var(--bars-per-line), minmax(var(--chord-cell-min), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* Closes the right-hand end of every row: the grid spans the full width, so its right edge
+     IS each row's final bar line. */
+  border-right: 2px solid var(--bar-line);
+  border-bottom: 1px solid var(--bar-line-h);
+}
+
+.chart-bar {
+  display: flex;
+  min-width: 0;     /* never widen to fit content — see the minmax() note above */
+  overflow: hidden;
+  border-left: 2px solid var(--bar-line);
+  /* Top only; the grid carries the last row's bottom edge. Otherwise adjacent rows would
+     stack two 1px edges into a 2px seam. */
+  border-top: 1px solid var(--bar-line-h);
+}
+
+/* Chord cells are real <button>s (Timeline.tsx) so a keyboard user can Tab to one and press
+   Enter/Space to open the segment editor — that focusability is what makes cutting
+   drag-to-resize safe. A continuation box is a <span> with the same class: same look, no
+   focus, no announcement. */
 .chord-cell {
   position: relative;
-  width: 100%;                        /* fills its item; the item now carries the flex ratio */
-  min-width: var(--chord-cell-min);   /* sized from a token, never from content */
+  min-width: 0;
   height: 64px;
   display: flex;
   flex-direction: column;
@@ -240,19 +280,19 @@ a { color: var(--accent); }
   font-family: var(--font-chart);
   font-variant-numeric: tabular-nums;
   background: transparent;
-  border: 1px solid transparent;
-  border-left: 1px solid var(--line);
+  border: 0;
   border-radius: 0;
   padding: var(--space-2);
   text-align: center;
   color: var(--text);
   transition: transform 120ms ease;   /* the current-chord lift; reduced-motion resets it below */
 }
-/* The measure rule. Heavier than --line by BOTH colour and width — two channels, so it
-   still reads as "a bar starts here" for someone who cannot see the colour difference.
-   Keep the width ratio at 3:1 (3px vs 1px), which is what the app already ships. */
-.chord-cell[data-bar-start="true"] { border-left: 3px solid var(--bar-line); }
-.chord-cell[data-selected="true"]  { border-left-color: var(--accent); }
+
+/* The divider between two chords sharing a bar. Lighter than the bar line by BOTH colour and
+   width, and dashed as a third channel: solid means "bar", dashed means "chord". */
+.chord-cell + .chord-cell { border-left: 1px dashed var(--line); }
+
+.chord-cell[data-selected="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* "Playing" gets THREE channels — colour, a border, AND a scale bump. Hue is never the only
    signal: the border is presence (not hue) and the scale is size (not hue), so "this chord is
@@ -307,11 +347,6 @@ a { color: var(--accent); }
 .chord-cell__resize--left { left: 0; }
 .chord-cell__resize--right { right: 0; }
 
-.chart-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.chart-line  { list-style: none; display: flex; justify-content: flex-start; gap: 0; }
-/* The flex CHILD, carrying the beat-derived ratio set inline. */
-.chord-cell__item { display: flex; min-width: 0; }
-
 /* ---- The docked editing panel --------------------------------------------------------
    Was: absolutely positioned, its `top` measured from the DOM on every chart change and
    every window resize, so it lined up with its chord's row. That was fragile, it fought
@@ -336,19 +371,19 @@ a { color: var(--accent); }
    on screen become the ones in use: the deck (to listen) and the guess panel (to answer).
    This is a MODE treatment, not a theme — it dims with opacity and desaturates with a filter,
    RELATIVE to whatever theme the user is in, so it never swaps a token and a dark-theme user
-   gets the spotlight too. The dimming is on .chart-lines only: the guess panel is a sibling,
+   gets the spotlight too. The dimming is on .chart-bars only: the guess panel is a sibling,
    and the deck is outside this subtree, so both stay fully lit without any re-lighting. */
 /* Desaturation ONLY — never opacity. `opacity` composites the chart toward the page and
    crushes text contrast (the masked "?" fell to 3.4:1, below the 4.5 AA floor); `saturate()`
    changes chroma, not luminance, so the chart stays fully AA-readable while visibly receding
    into a desaturated backdrop against the fully-saturated deck and guess panel. That relative
    saturation IS the spotlight. Verified by theme/contrastStates.test.ts. */
-.chart-workspace[data-practice="true"] .chart-lines {
+.chart-workspace[data-practice="true"] .chart-bars {
   filter: saturate(0.35);
   transition: filter 200ms ease;
 }
 @media (prefers-reduced-motion: reduce) {
-  .chart-workspace[data-practice="true"] .chart-lines { transition: none; }
+  .chart-workspace[data-practice="true"] .chart-bars { transition: none; }
 }
 
 /* ---- Zone 1: the context bar --------------------------------------------------------- */

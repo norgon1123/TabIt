@@ -82,7 +82,7 @@ test("a wrong answer keeps the chord hidden; the right one reveals it", async ()
   await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
   // Both chords run four beats (Task 8's label also states each cell's bar/beat, which now
   // differs between them), so match on the shared "4 beats" fragment; the second cell is s2.
-  const masked = screen.getAllByRole("button", { name: /hidden chord.*4 beats/i });
+  const masked = screen.getAllByRole("listitem", { name: /hidden chord.*4 beats/i });
   expect(masked).toHaveLength(2);
   await userEvent.click(masked[1]);
 
@@ -130,7 +130,7 @@ test("a correct answer sticks even if the player moves straight on to the next c
   open("/recordings/r1?mode=practice");
 
   await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
-  await userEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[1]); // s2
+  await userEvent.click(screen.getAllByRole("listitem", { name: /hidden chord/i })[1]); // s2
 
   const form = (await screen.findByText("Name that chord")).closest(".chord-guess") as HTMLElement;
   await userEvent.selectOptions(within(form).getByLabelText("Root"), "G");
@@ -139,7 +139,7 @@ test("a correct answer sticks even if the player moves straight on to the next c
 
   // Straight on to the other chord, without waiting for the flash to finish. (s1 is first in
   // the chart either way, so this picks it whether or not s2 has already been revealed.)
-  await userEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]);
+  await userEvent.click(screen.getAllByRole("listitem", { name: /hidden chord/i })[0]);
 
   expect(screen.getByText("Gdom7")).toBeInTheDocument(); // still named
   expect(screen.getAllByText("?")).toHaveLength(1);
@@ -147,15 +147,16 @@ test("a correct answer sticks even if the player moves straight on to the next c
 });
 
 // Practice mode's only interaction is clicking a chord, so a chord that cannot be reached
-// from the keyboard cannot be played at all — the cell announces itself as a button, and has
-// to behave like one.
+// from the keyboard cannot be played at all — the cell is a native <button> element (its
+// ARIA role is overridden to "listitem" so a vamp is one list entry, but the element keeps
+// button keyboard behaviour) and has to answer to Enter.
 test("a masked chord opens with the keyboard", async () => {
   login();
   serveChart();
   open("/recordings/r1?mode=practice");
 
   await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
-  screen.getAllByRole("button", { name: /hidden chord/i })[0].focus();
+  screen.getAllByRole("listitem", { name: /hidden chord/i })[0].focus();
   await userEvent.keyboard("{Enter}");
 
   expect(await screen.findByText("Name that chord")).toBeInTheDocument();
@@ -167,7 +168,7 @@ test("clicking a chord you have already named shows it, rather than an empty sel
   open("/recordings/r1?mode=practice");
 
   await waitFor(() => expect(screen.getAllByText("?")).toHaveLength(2));
-  await userEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]); // s1 = C
+  await userEvent.click(screen.getAllByRole("listitem", { name: /hidden chord/i })[0]); // s1 = C
 
   const form = (await screen.findByText("Name that chord")).closest(".chord-guess") as HTMLElement;
   await userEvent.selectOptions(within(form).getByLabelText("Root"), "C");
