@@ -66,9 +66,14 @@ def build_chart_seed(
             pull_beats,
         )
         end_beat = min(end_beat, max_beat)
-        # One whole beat is the shortest chord the snap can now express; two boundaries
-        # snapping onto the same beat would otherwise emit a zero-length segment.
-        if end_beat - cursor < 1.0:
+        # Interior chords snap to whole beats, so the shortest is one beat; anything less is
+        # two boundaries collapsed onto the same beat — a zero-length artefact to drop. The
+        # FINAL chord is the exception: it clamps to the recording's *fractional* max_beat, so
+        # a genuine tail chord can be shorter than a beat and must be kept (down to the
+        # half-beat minimum) rather than silently lost. See the spec's asymmetric-floor rule.
+        reaches_end = end_beat >= max_beat - 1e-9
+        floor = 0.5 if reaches_end else 1.0
+        if end_beat - cursor < floor:
             continue
         segments.append(
             SeededSegment(

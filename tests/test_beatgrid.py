@@ -189,10 +189,18 @@ def test_snap_chart_beat_handles_three_four():
     assert snap_chart_beat(2.0, 3, 0) == pytest.approx(2.0)
 
 
-def test_snap_chart_beat_never_returns_a_negative_beat():
-    assert snap_chart_beat(0.1, 4, 0) == pytest.approx(0.0)
+def test_snap_chart_beat_clamps_a_negative_result_to_zero():
+    # -0.9 is 0.9 from the bar line at 0 (> the 0.75 pull), so it takes the nearest-whole-beat
+    # branch: round_half_up(-0.9) = -1.0, which the clamp must lift to 0.0. Without the
+    # max(0.0, ...) clamp this returns -1.0 — so this input actually exercises the clamp.
+    assert snap_chart_beat(-0.9, 4, 0) == pytest.approx(0.0)
 
 
 def test_snap_chart_beat_rejects_a_destructive_tolerance():
     with pytest.raises(ValueError, match="pull_beats"):
         snap_chart_beat(3.4, 4, 0, pull_beats=1.0)
+
+
+def test_snap_chart_beat_rejects_a_meterless_measure():
+    with pytest.raises(ValueError, match="beats_per_measure"):
+        snap_chart_beat(3.0, 0, 0)

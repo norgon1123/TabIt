@@ -198,16 +198,28 @@ def snap_chart_beat(beat, beats_per_measure, measure_offset, pull_beats=0.75) ->
 
 `snap_half` and `whole_bpm` are untouched.
 
-**`app/chart_seed.py`** calls `snap_chart_beat` instead of `snap_half`. Its skip threshold goes
-`0.5 -> 1.0` beats — the smallest representable length once boundaries are whole. Two boundaries
-snapping to the same beat produce a zero-length segment, which this threshold drops.
+**`app/chart_seed.py`** calls `snap_chart_beat` instead of `snap_half`.
 `build_chart_seed` takes `beats_per_measure` / `measure_offset` as parameters defaulting to
 `4` / `0`, so the detection project passes real values later without reshaping the signature.
 
-The final chord still clamps to `max_beat = total_beats(grid, duration)`, which is fractional.
-Its `end_beat` therefore is *not* a whole beat, and the last bar is genuinely partial. This is
-correct and matches the partial-final-bar rendering: **a chart's total length must never exceed
-the recording's duration.**
+**The minimum-length rule is asymmetric between interior and final chords, and the asymmetry is
+load-bearing.** Interior boundaries snap to whole beats, so the shortest interior chord is one
+whole beat; anything less means two boundaries collapsed onto the same beat, which is a
+zero-length artefact to drop. But the **final** chord clamps to `max_beat = total_beats(grid,
+duration)`, which is *fractional* — the recording does not end on a bar line — so a genuine tail
+chord can legitimately be shorter than a beat. A single interior threshold would silently delete
+it: raise the floor to 1.0 for everyone and the last chord you played vanishes whenever the final
+change lands inside the closing beat.
+
+So the seed applies **a 1.0-beat floor to interior chords and a 0.5-beat floor to the chord that
+reaches `max_beat`** (0.5 being the half-beat minimum used everywhere else in the system). In
+practice, because the cursor always sits on a whole beat, a tail reaching `max_beat` is *always*
+either ≤ 0 beats (its boundary snapped back onto the cursor — a zero-length artefact, dropped) or
+≥ 0.5 beats (its boundary snapped up and clamped to the fractional `max_beat` — kept); the 0.5
+floor is therefore defensive rather than a case a real recording produces. A kept tail's
+`end_beat` is *not* a whole beat, and the last bar is genuinely partial, which is exactly what the
+partial-final-bar rendering expects. **A chart's total length must never exceed the recording's
+duration** — but it must not fall short of it by dropping a real closing chord either.
 
 **Config:** `TABIT_CHART_BAR_PULL_BEATS` (default `0.75`) in `app/config.py`, documented in
 `README.md`.

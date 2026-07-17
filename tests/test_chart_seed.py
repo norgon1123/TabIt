@@ -57,8 +57,27 @@ def test_the_final_chord_clamps_to_the_recording_and_may_be_fractional():
 
 
 def test_the_pull_tolerance_is_honoured():
-    # 1.75s -> beat 3.5. With no pull, it snaps to the nearest whole beat (4 — ties round up),
-    # which is the same answer here; use 3.4 -> beat 6.8 instead to separate the two rules.
-    # 3.40s -> beat 6.8: pull 0.75 -> bar line 8 is 1.2 away -> no pull -> 7.
-    seed = build_chart_seed(_result([_seg(0.0, 3.40), _seg(3.40, 16.0, 7)]))
-    assert seed.segments[0].end_beat == pytest.approx(7.0)
+    # A boundary NOT within pull_beats of a bar line takes its nearest WHOLE beat, not the
+    # bar line. 3.15s -> beat 6.3: nearest bar line (8) is 1.7 away > 0.75, so no pull, and
+    # 6.3 rounds to 6.0. This separates the algorithms: snap_half(6.3) would give 6.5.
+    seed = build_chart_seed(_result([_seg(0.0, 3.15), _seg(3.15, 16.0, 7)]))
+    assert seed.segments[0].end_beat == pytest.approx(6.0)
+
+
+def test_a_real_final_chord_shorter_than_a_beat_is_kept_not_dropped():
+    """A closing chord in the last <1 beat must survive: dropping it makes the chart end
+    before the audio does. Interior chords still need a full beat, but the final chord
+    clamps to the recording's fractional max_beat and is kept down to the half-beat floor."""
+    # duration 15.45s -> max_beat 30.9. C over beats 0-30, then a real G over 30.0-30.9.
+    seed = build_chart_seed(_result([_seg(0.0, 15.0), _seg(15.0, 15.45, 7)], duration=15.45))
+    assert len(seed.segments) == 2
+    assert seed.segments[-1].chord_root != seed.segments[0].chord_root  # the G survived
+    assert seed.segments[-1].end_beat == pytest.approx(30.9)
+    assert seed.segments[-1].start_beat == pytest.approx(30.0)
+
+
+def test_a_tail_sliver_under_half_a_beat_is_still_dropped():
+    # duration 15.15s -> max_beat 30.3. A tail change at beat 30.0 leaves only 0.3 beats —
+    # a sliver (ring-out), below the 0.5 floor, so it is dropped and the prior chord holds.
+    seed = build_chart_seed(_result([_seg(0.0, 15.0), _seg(15.0, 15.15, 7)], duration=15.15))
+    assert [s.chord_root for s in seed.segments] == ["C"]
