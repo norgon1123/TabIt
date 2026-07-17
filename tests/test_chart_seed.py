@@ -76,6 +76,18 @@ def test_a_real_final_chord_shorter_than_a_beat_is_kept_not_dropped():
     assert seed.segments[-1].start_beat == pytest.approx(30.0)
 
 
+def test_the_bar_line_pull_moves_a_boundary_to_the_downbeat():
+    # A boundary at 1.65s -> beat 3.3, which sits 0.7 from the bar line at beat 4 (inside the
+    # 0.75 pull) but rounds to 3 by plain whole-beat rounding. The pull is the whole feature:
+    # with it the chord ends on the downbeat (4.0); with the pull effectively off, it lands on
+    # the nearest whole beat (3.0). Asserting both proves the pull branch is what produces 4.0
+    # -- this test fails if the bar-line pull is removed from snap_chart_beat.
+    pulled = build_chart_seed(_result([_seg(0.0, 1.65), _seg(1.65, 16.0, 7)]))
+    assert pulled.segments[0].end_beat == pytest.approx(4.0)
+    unpulled = build_chart_seed(_result([_seg(0.0, 1.65), _seg(1.65, 16.0, 7)]), pull_beats=0.1)
+    assert unpulled.segments[0].end_beat == pytest.approx(3.0)
+
+
 def test_a_tail_change_inside_the_final_partial_beat_is_not_its_own_chord():
     # duration 15.15s -> max_beat 30.3. A tail change at raw beat 30.3 snaps to the nearest
     # whole beat (30.0), landing on the cursor: a zero-length span, dropped. (The 0.5 tail
