@@ -70,6 +70,11 @@ describe("buildBars", () => {
     expect(buildBars([], 4, 0)).toEqual([]);
   });
 
+  it("returns no bars when a segment's end_beat is non-finite, rather than hanging", () => {
+    expect(buildBars([seg("s1", 0, Infinity)], 4, 0)).toEqual([]);
+    expect(buildBars([seg("s1", 0, NaN)], 4, 0)).toEqual([]);
+  });
+
   it("handles 3/4", () => {
     const bars = buildBars([seg("s1", 0, 9)], 3, 0);
     expect(bars.map((b) => [b.startBeat, b.endBeat])).toEqual([[0, 3], [3, 6], [6, 9]]);

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Timeline from "./Timeline";
 import { beatSlashMarks } from "./beatMath";
@@ -164,21 +164,33 @@ describe("the chart is a semantic sequence, not a pile of divs", () => {
     // idea where in the song they were or how long to stay on the chord. Both are things a
     // sighted player reads off the page instantly.
     //
-    // A chord is now a single element with role="listitem" (the first fragment's <button>,
-    // its native role overridden so a vamp is ONE list entry, not one per bar) — so the
-    // chord's accessible name is read off the listitem, not a nested button role.
+    // The chord's first box is a real <button> (wrapped in a role="listitem" <span> so a vamp
+    // is ONE list entry, not one per bar) — the label lives on the button, which keeps its
+    // native role so a screen reader still announces it as an activatable control.
     renderTimeline();
-    const cells = screen.getAllByRole("listitem", { name: /bar \d+/i });
+    const cells = screen.getAllByRole("button", { name: /bar \d+/i });
     expect(cells.length).toBeGreaterThan(0);
     expect(cells[0]).toHaveAccessibleName(/bar 1, beat 1/i);
     expect(cells[0]).toHaveAccessibleName(/beats/i);
+  });
+
+  it("exposes each chord as a real button inside a listitem, not a role-swapped button", () => {
+    // The regression: putting role="listitem" directly on the <button> overrides its native
+    // button role, so a screen reader announces the chord as a plain list row — losing the
+    // control affordance that IS the interaction in practice mode. role="listitem" belongs on
+    // a wrapper; the button underneath must keep its native role.
+    renderTimeline();
+    const items = screen.getAllByRole("listitem");
+    expect(items.length).toBeGreaterThan(0);
+    const button = within(items[0]).getByRole("button");
+    expect(button).toHaveAttribute("data-segment-id");
   });
 
   it("keeps a masked chord's secret while still saying where it is", () => {
     // Practice mode: the chord is the question. The position and the length are the
     // question's CONTEXT and must survive — a player needs the rhythm to guess against.
     renderTimeline({ maskedIds: new Set(["s1"]) });
-    const masked = screen.getByRole("listitem", { name: /hidden chord/i });
+    const masked = screen.getByRole("button", { name: /hidden chord/i });
     expect(masked).toHaveAccessibleName(/bar 1/i);
     expect(masked).not.toHaveAccessibleName(/major|minor|\bC\b/i);
   });
@@ -364,20 +376,26 @@ describe("bar-native layout", () => {
   });
 
   it("sizes a fragment by its beats — the width IS the rhythm", () => {
-    // The ratio must sit on the fragment, which is the flex child of .chart-bar. If it drifts
-    // onto a descendant, the fragment falls back to `flex: 0 1 auto`, sizes to its content, and
-    // the chart silently stops showing rhythm. jsdom does no layout, so this test is the only
-    // thing standing between that regression and production: it names the exact element.
+    // The ratio must sit on the .chord-cell__item wrapper, which is the flex child of
+    // .chart-bar — NOT on the nested <button>, which keeps its native role. If the ratio
+    // drifts onto the wrong element, the fragment falls back to `flex: 0 1 auto`, sizes to
+    // its content, and the chart silently stops showing rhythm. jsdom does no layout, so
+    // this test is the only thing standing between that regression and production: it names
+    // the exact element.
     const segs = [
       { ...BASE, id: "f", start_beat: 0, end_beat: 3, start_time: 0, end_time: 1.5 },
       { ...BASE, id: "g", start_beat: 3, end_beat: 4, start_time: 1.5, end_time: 2 },
     ];
     renderTimeline({ segments: segs, duration: 2 });
-    const cellFor = (id: string) =>
+    const buttonFor = (id: string) =>
       document.querySelector<HTMLElement>(`.chart-bar [data-segment-id="${id}"]`)!;
+    const wrapperFor = (id: string) => buttonFor(id).parentElement!;
     // jsdom's CSSOM normalises the flex shorthand's zero basis to "0px".
-    expect(cellFor("f").style.flex).toBe("3 1 0px");
-    expect(cellFor("g").style.flex).toBe("1 1 0px");
-    expect(cellFor("f").parentElement).toHaveClass("chart-bar");
+    expect(wrapperFor("f").style.flex).toBe("3 1 0px");
+    expect(wrapperFor("g").style.flex).toBe("1 1 0px");
+    expect(wrapperFor("f")).toHaveClass("chord-cell__item");
+    expect(wrapperFor("f").parentElement).toHaveClass("chart-bar");
+    // The flex ratio must NOT sit on the button itself.
+    expect(buttonFor("f").style.flex).toBe("");
   });
 });

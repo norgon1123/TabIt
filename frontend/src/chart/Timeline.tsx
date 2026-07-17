@@ -241,16 +241,12 @@ export default function Timeline({
               </>
             );
 
-            const common = {
-              className: "chord-cell",
+            const dataAttrs = {
               "data-segment-id": s.id,
               "data-selected": selected ? "true" : undefined,
               "data-playing": isActive ? "true" : undefined,
               "data-masked": masked ? "true" : undefined,
               "data-revealed": revealed.has(s.id) ? "true" : undefined,
-              // Runtime geometry ONLY: the fragment's width IS its beat count within this bar.
-              // It must sit here — this element is the flex child of .chart-bar.
-              style: { flex: `${f.beats} 1 0` },
             } as const;
 
             // A CONTINUATION box: the same chord, still sounding, in a later bar. It is
@@ -259,9 +255,17 @@ export default function Timeline({
             // means "this chord". The chord's real END may land on a continuation box (a vamp
             // ends on its last box, which is never the first), so the RIGHT resize handle
             // rides `isChordEnd` wherever it falls — the left handle stays on the first box.
+            //
+            // There is no separate button here, so this single element plays both parts: the
+            // chord-cell appearance AND the flex child of .chart-bar — hence both classes.
             if (!f.isChordStart) {
               return (
-                <span key={`${s.id}-${bar.index}`} {...common} aria-hidden
+                <span key={`${s.id}-${bar.index}`} {...dataAttrs}
+                      className="chord-cell chord-cell__item" aria-hidden
+                      // Runtime geometry ONLY: the fragment's width IS its beat count within
+                      // this bar. It must sit here — this element is the flex child of
+                      // .chart-bar.
+                      style={{ flex: `${f.beats} 1 0` }}
                       onClick={() => {
                         // Same guard as the button: swallow the click the browser fires after a
                         // pointer drag that began on this box's resize handle (a vamp's right
@@ -283,39 +287,45 @@ export default function Timeline({
             }
 
             return (
-              // aria-current, not aria-pressed: the element's role is "listitem" (so a vamp is
-              // one list entry), and aria-pressed is only valid on role="button". aria-current
-              // is the valid way to expose "this is the selected chord" on a list item.
-              <button key={`${s.id}-${bar.index}`} {...common} type="button" role="listitem"
-                aria-current={selected ? "true" : undefined} aria-label={label}
-                onClick={() => {
-                  if (suppressClick.current) { suppressClick.current = false; return; }
-                  onSelect(s.id);
-                  onSeek?.(s.start_time);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" && e.key !== " ") return;
-                  e.preventDefault(); // Space scrolls the page otherwise
-                  onSelect(s.id);
-                  onSeek?.(s.start_time);
-                }}
-              >
-                {onResizeCommit && (
-                  <span className="chord-cell__resize chord-cell__resize--left"
-                    aria-label={`Resize start of ${chordLabel(s.chord_root, s.chord_quality)}`}
-                    draggable={false}
-                    onPointerDown={(e) => startResize(i, "left", e)}
-                    onClick={(e) => e.stopPropagation()} />
-                )}
-                {body}
-                {onResizeCommit && f.isChordEnd && (
-                  <span className="chord-cell__resize chord-cell__resize--right"
-                    aria-label={`Resize end of ${chordLabel(s.chord_root, s.chord_quality)}`}
-                    draggable={false}
-                    onPointerDown={(e) => startResize(i, "right", e)}
-                    onClick={(e) => e.stopPropagation()} />
-                )}
-              </button>
+              // The chord is ONE list entry (role="listitem") wrapping a real <button> — a
+              // vamp spanning eight bars must still be one item, but the button's NATIVE role
+              // must survive so assistive tech announces an activatable control, not a plain
+              // list row. role="listitem" therefore sits on the outer <span>, which also
+              // carries the flex geometry (it is the flex child of .chart-bar); the inner
+              // <button> carries the interaction and the label.
+              <span key={`${s.id}-${bar.index}`} role="listitem" className="chord-cell__item"
+                style={{ flex: `${f.beats} 1 0` }}>
+                <button type="button" className="chord-cell" {...dataAttrs}
+                  aria-pressed={selected} aria-label={label}
+                  onClick={() => {
+                    if (suppressClick.current) { suppressClick.current = false; return; }
+                    onSelect(s.id);
+                    onSeek?.(s.start_time);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault(); // Space scrolls the page otherwise
+                    onSelect(s.id);
+                    onSeek?.(s.start_time);
+                  }}
+                >
+                  {onResizeCommit && (
+                    <span className="chord-cell__resize chord-cell__resize--left"
+                      aria-label={`Resize start of ${chordLabel(s.chord_root, s.chord_quality)}`}
+                      draggable={false}
+                      onPointerDown={(e) => startResize(i, "left", e)}
+                      onClick={(e) => e.stopPropagation()} />
+                  )}
+                  {body}
+                  {onResizeCommit && f.isChordEnd && (
+                    <span className="chord-cell__resize chord-cell__resize--right"
+                      aria-label={`Resize end of ${chordLabel(s.chord_root, s.chord_quality)}`}
+                      draggable={false}
+                      onPointerDown={(e) => startResize(i, "right", e)}
+                      onClick={(e) => e.stopPropagation()} />
+                  )}
+                </button>
+              </span>
             );
           })}
         </li>

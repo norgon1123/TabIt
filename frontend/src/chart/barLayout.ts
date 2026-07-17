@@ -49,6 +49,10 @@ export function buildBars(
   // A chart ends where its chords end — NOT at the recording's total_beats. Trailing audio
   // with no detected chords must not render as empty bars.
   const chartEnd = ordered[ordered.length - 1].end_beat;
+  // A non-finite end_beat (NaN or Infinity) would never satisfy `edge >= chartEnd - EPS`
+  // below, spinning the edge loop forever and hanging the UI thread. No current input
+  // produces one, but a hang is too bad a failure mode for a one-line guard to skip.
+  if (!Number.isFinite(chartEnd)) return [];
 
   // Bar edges: beat 0, every bar line at offset + k*span, then the chart's end. With
   // offset > 0 the leading [0, offset) span becomes a short pickup bar. `offset + k * span`

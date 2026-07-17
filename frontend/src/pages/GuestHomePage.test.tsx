@@ -255,7 +255,7 @@ test("a guest can practise: the chords are hidden until they name one", async ()
   expect(screen.queryByLabelText("Resize end of C")).toBeNull(); // read-only while practising
 
   // s1 is C major.
-  fireEvent.click(screen.getAllByRole("listitem", { name: /hidden chord/i })[0]);
+  fireEvent.click(screen.getAllByRole("button", { name: /hidden chord/i })[0]);
   fireEvent.change(await screen.findByLabelText("Root"), { target: { value: "C" } });
   fireEvent.change(screen.getByLabelText("Quality"), { target: { value: "maj" } });
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));

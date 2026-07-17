@@ -264,12 +264,21 @@ a { color: var(--accent); }
   border-top: 1px solid var(--bar-line-h);
 }
 
+/* The flex CHILD of .chart-bar, carrying the beat-derived ratio set inline (Timeline.tsx).
+   For a chord's first box this wraps a real <button class="chord-cell">, so the geometry and
+   the button's role="listitem"-adjacent semantics don't collide on one element; a continuation
+   box has no separate button, so it carries this class alongside .chord-cell itself. */
+.chord-cell__item { display: flex; min-width: 0; overflow: hidden; }
+
 /* Chord cells are real <button>s (Timeline.tsx) so a keyboard user can Tab to one and press
    Enter/Space to open the segment editor — that focusability is what makes cutting
    drag-to-resize safe. A continuation box is a <span> with the same class: same look, no
    focus, no announcement. */
 .chord-cell {
   position: relative;
+  width: 100%;      /* fills its flex item (.chord-cell__item); a bare <button> sizes to its
+                        content otherwise, and the beat-derived ratio on the wrapper would
+                        stop reaching the box the player actually sees and clicks. */
   min-width: 0;
   height: 64px;
   display: flex;
@@ -289,8 +298,12 @@ a { color: var(--accent); }
 }
 
 /* The divider between two chords sharing a bar. Lighter than the bar line by BOTH colour and
-   width, and dashed as a third channel: solid means "bar", dashed means "chord". */
-.chord-cell + .chord-cell { border-left: 1px dashed var(--line); }
+   width, and dashed as a third channel: solid means "bar", dashed means "chord". This has to
+   target .chord-cell__item, not .chord-cell: for a chord's first box the visible .chord-cell
+   is nested inside the .chord-cell__item wrapper (so it is not a direct sibling of its
+   neighbour), while .chord-cell__item — the flex child of .chart-bar — always is, for both
+   chord-start and continuation boxes alike. */
+.chord-cell__item + .chord-cell__item { border-left: 1px dashed var(--line); }
 
 .chord-cell[data-selected="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
 
