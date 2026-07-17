@@ -33,3 +33,6 @@ vendor/btc/weights/
 
 # Local Claude worktrees
 .claude/worktrees/
+
+# Visual brainstorming companion mockups
+.superpowers/
