@@ -60,6 +60,29 @@ precisely the ones you cannot see. A fresh reviewer has uncorrelated blind spots
 already paid for itself here: a review pass caught three tests in this repo that *could not
 fail*, and another caught a critical bug where a correct answer was silently discarded.
 
+If your change **adds or modifies any test**, also dispatch the **`tabit-test-reviewer`**
+subagent before the PR, and act on what it finds. It is a *different* review from
+`tabit-reviewer`: that one asks whether a test is correct and can fail; this one asks
+whether the test should exist at all or belongs inside one that already does. Both are
+required when tests change (see *Definition of done*).
+
+## Adding tests: enhance before you add
+
+A test suite is documentation — a reader should be able to learn what a unit is *supposed
+to do* from the tests covering it. Every redundant test dilutes that signal and costs
+maintenance. So **adding a test is a decision, not a reflex.** Before you write a new one,
+the burden is on proving it cannot instead be an extra assertion, or an extra case
+(`@pytest.mark.parametrize` / `it.each`) on a test that already exists. Reach for a new
+test only when it carries intent the suite does not already cover — and when you do, name
+it for the *behaviour*, not the function.
+
+This is a judgement call — intent, setup cost, readability, failure isolation — and it is
+easy to get wrong in the direction of "just add another test". The **`/tabit-test-review`**
+skill holds the decision procedure; run it whenever you are about to add tests, and see the
+mandatory review under *Definition of done*. (Fewer tests is a means, not the goal: don't
+cram unrelated behaviours into one test to cut the count — a failure must still name its
+cause.)
+
 ## Rules that bite (enforce in any chart/analysis change)
 
 - A chart's total length must **never exceed the recording's duration**. `end_beat` is
@@ -121,6 +144,10 @@ for it. Don't contort a model to stay backward-compatible with rows already on d
   `*.test.ts(x)`).
 - **Every new test has been watched failing** — against the un-fixed code, or with the new
   behavior reverted. A test you have only reasoned about is not yet a test.
+- **If the change adds or modifies tests, the `tabit-test-reviewer` subagent has reviewed
+  them and its findings are addressed** — a new test that should have been a parametrized
+  case or an added assertion is a finding, not a nit. See *Adding tests: enhance before you
+  add*.
 - The `tabit-reviewer` subagent has reviewed the change and its findings are addressed.
 - Rebased on the base branch, conflict-free (see *Shipping a change*).
 - Env/config changes are reflected in `app/config.py` and documented in `README.md`.
