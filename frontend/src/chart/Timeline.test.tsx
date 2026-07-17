@@ -302,21 +302,15 @@ describe("bar-native layout", () => {
   const renderVamp = (props: Partial<React.ComponentProps<typeof Timeline>> = {}) =>
     renderTimeline({ segments: VAMP, duration: 16, grid: VAMP_GRID, ...props });
 
-  it("splits a vamping chord into one box per bar", () => {
+  it("a vamping chord renders one box per bar but stays ONE listitem and ONE tab stop", () => {
+    // A chord spanning 8 bars is still ONE chord. Eight boxes is a layout artefact — the same
+    // kind the old .chart-line wrapper was hidden for. If the listitem count regresses, a
+    // screen-reader user hears "C, bar 1... C, bar 2..." eight times for a chord that never
+    // changed. If the button count regresses, tabbing through the chart stops eight times on
+    // one chord.
     renderVamp();
     expect(document.querySelectorAll(".chart-bar")).toHaveLength(8);
-  });
-
-  it("announces a vamping chord ONCE, not once per bar", () => {
-    // A chord spanning 8 bars is still ONE chord. Eight boxes is a layout artefact — the same
-    // kind the old .chart-line wrapper was hidden for. If this regresses, a screen-reader user
-    // hears "C, bar 1... C, bar 2..." eight times for a chord that never changed.
-    renderVamp();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
-  });
-
-  it("gives a vamping chord ONE tab stop, not eight", () => {
-    renderVamp();
     expect(document.querySelectorAll("button[data-segment-id]")).toHaveLength(1);
   });
 

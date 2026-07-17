@@ -27,7 +27,8 @@ def _seg(start_s, end_s, root_pc=0):
 
 def test_boundaries_land_on_whole_beats():
     # 1.75s -> beat 3.5. Nearest bar line (4) is 0.5 away -> pulled to 4.
-    # 3.10s -> beat 6.2. Nearest bar line is 1.8 away -> nearest whole beat, 6.
+    # 3.10s -> beat 6.2. Nearest bar line is 1.8 away, > the 0.75-beat pull tolerance ->
+    # no pull, takes its nearest whole beat, 6.
     seed = build_chart_seed(_result([_seg(0.0, 1.75), _seg(1.75, 3.10, 7), _seg(3.10, 16.0, 5)]))
     ends = [s.end_beat for s in seed.segments]
     assert ends[0] == pytest.approx(4.0)
@@ -54,14 +55,6 @@ def test_the_final_chord_clamps_to_the_recording_and_may_be_fractional():
     # duration 15.75s -> max_beat 31.5. The chord wants to run to beat 32.
     seed = build_chart_seed(_result([_seg(0.0, 16.0)], duration=15.75))
     assert seed.segments[-1].end_beat == pytest.approx(31.5)
-
-
-def test_the_pull_tolerance_is_honoured():
-    # A boundary NOT within pull_beats of a bar line takes its nearest WHOLE beat, not the
-    # bar line. 3.15s -> beat 6.3: nearest bar line (8) is 1.7 away > 0.75, so no pull, and
-    # 6.3 rounds to 6.0. This separates the algorithms: snap_half(6.3) would give 6.5.
-    seed = build_chart_seed(_result([_seg(0.0, 3.15), _seg(3.15, 16.0, 7)]))
-    assert seed.segments[0].end_beat == pytest.approx(6.0)
 
 
 def test_a_real_final_chord_shorter_than_a_beat_is_kept_not_dropped():

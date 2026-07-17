@@ -4,18 +4,14 @@ import { buildBars } from "./barLayout";
 const seg = (id: string, start_beat: number, end_beat: number) => ({ id, start_beat, end_beat });
 
 describe("buildBars", () => {
-  it("splits a vamping chord into one fragment per bar", () => {
-    // The whole point: 8 bars of C is EIGHT cells, not one enormous one.
+  it("splits a vamping chord into one fragment per bar, flagged only at its real boundaries", () => {
+    // The whole point: 8 bars of C is EIGHT cells, not one enormous one. Resize handles hang
+    // off isChordStart/isChordEnd fragments, so a vamp must NOT grow 8 pairs of handles.
     const bars = buildBars([seg("s1", 0, 32)], 4, 0);
     expect(bars).toHaveLength(8);
     expect(bars.every((b) => b.fragments.length === 1)).toBe(true);
     expect(bars.every((b) => b.fragments[0].segmentId === "s1")).toBe(true);
     expect(bars.every((b) => b.fragments[0].beats === 4)).toBe(true);
-  });
-
-  it("marks only the first and last fragment of a chord as its boundaries", () => {
-    // Resize handles hang off these. A vamp must NOT grow 8 pairs of handles.
-    const bars = buildBars([seg("s1", 0, 32)], 4, 0);
     expect(bars.map((b) => b.fragments[0].isChordStart)).toEqual(
       [true, false, false, false, false, false, false, false],
     );
@@ -60,10 +56,12 @@ describe("buildBars", () => {
     expect(bars[1].fragments[0].beats).toBe(2);
   });
 
-  it("stops at the last chord, not at the end of the audio", () => {
-    // Trailing audio with no detected chords must not render as empty bars.
+  it("spans only to the last segment's end_beat, with no trailing empty bars", () => {
+    // buildBars has no duration input of its own; the chart's extent is entirely
+    // governed by the last segment's end_beat, so it must not overrun it.
     const bars = buildBars([seg("s1", 0, 4)], 4, 0);
     expect(bars).toHaveLength(1);
+    expect(bars[0].endBeat).toBe(4);
   });
 
   it("returns no bars for an empty chart", () => {

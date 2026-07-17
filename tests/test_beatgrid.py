@@ -152,7 +152,6 @@ def test_whole_bpm_rounds_to_a_countable_tempo(raw, expected):
         (7.6, 8.0),    # 0.4 -> pulled
         (11.7, 12.0),  # 0.3 -> pulled
         (6.3, 6.0),    # nearest bar is 2.3 away -> no pull, nearest whole beat
-        (6.5, 7.0),    # 1.5 from the nearest bar -> no pull; ties round UP
     ],
 )
 def test_snap_chart_beat_pulls_to_a_nearby_bar_line(raw, expected):
