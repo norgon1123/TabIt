@@ -23,9 +23,15 @@
                        the shadow are what make a card visible at all, not its fill.
      --control-border  the boundary of an input, select or button. A real UI component
                        boundary, so WCAG 1.4.11 applies: 3:1, enforced.
-     --bar-line        the measure rule on the chart. A graphical object that says "a bar
-                       starts here": 3:1, enforced, and heavier than --line by BOTH colour
-                       and width. Two channels, never hue alone.
+     --bar-line        the measure rule on the chart — the VERTICAL edge of a bar box. A
+                       graphical object that says "a bar starts here": 3:1, enforced, and
+                       heavier than --line by colour AND width.
+     --bar-line-h      the HORIZONTAL edge of a bar box (its top and bottom). NOT
+                       WCAG-governed, for the same reason --line is not: it is not a
+                       component boundary and it carries no meaning of its own — the
+                       vertical rule is what says "a bar starts here"; this only keeps one
+                       row of bars from bleeding into the next, which is a card's-edge job.
+                       Kept perceptible at ~1.8:1, like --line.
 
    Every value below has been checked — all 30 governed pairs clear AA in both themes. */
 
@@ -38,7 +44,8 @@
   --muted: #635a50;           /*                                    6.4:1 on bg */
   --line: #c4b8a6;            /* decorative hairline                1.9:1 — see above */
   --control-border: #958b7e;  /* input/button boundary              3.2:1 on bg, 3.4:1 on surface */
-  --bar-line: #7d7060;        /* the measure rule                   4.6:1 on bg */
+  --bar-line: #998E80;        /* bar box, vertical            3.06:1 on bg, 3.21:1 on surface */
+  --bar-line-h: #C3BBB1;      /* bar box, horizontal          1.81:1 — decorative, see above */
   --accent: #b8480f;          /* "now / active". Nothing else may borrow it.  5.0:1 on bg */
   --on-accent: #ffffff;       /* label on an accent fill            5.3:1 on accent */
   --danger: #b3261e;          /*                                    6.2:1 on bg */
@@ -54,7 +61,8 @@
   --muted: #a89d8d;           /*                                    6.7:1 on bg */
   --line: #4a443b;            /* decorative hairline                1.9:1 */
   --control-border: #787063;  /* input/button boundary              3.7:1 on bg, 3.3:1 on surface */
-  --bar-line: #9c9280;        /* the measure rule                   5.8:1 on bg */
+  --bar-line: #7F7768;        /* bar box, vertical            4.03:1 on bg, 3.67:1 on surface */
+  --bar-line-h: #544E45;      /* bar box, horizontal          2.17:1 — decorative, see above */
   --accent: #ff9d4d;          /*                                    8.7:1 on bg */
   --on-accent: #241505;       /*                                    8.6:1 on accent */
   --danger: #ff8a80;          /*                                    7.8:1 on bg */

@@ -104,9 +104,10 @@ describe.each(Object.entries(THEMES))("%s theme", (themeName, tokens) => {
   });
 
   it("makes the measure rule out-weigh the ordinary chord divider", () => {
-    // Two channels, not one: the bar line is heavier than --line by COLOUR (this test)
-    // and by WIDTH (3px vs 1px, in the CSS). A user who cannot see the colour difference
-    // still sees the weight difference. Hue is never the only channel.
+    // Two channels, not one: the bar line is heavier than --line by COLOUR (this test) and by
+    // WIDTH (2px vs 1px, in the CSS). A user who cannot see the colour difference still sees
+    // the weight difference. Hue is never the only channel — and since the bar became a boxed
+    // grid there is a third: the box is an enclosed shape, not a hue.
     const bar = contrastRatio(tokens["--bar-line"], tokens["--bg"]);
     const line = contrastRatio(tokens["--line"], tokens["--bg"]);
     expect(bar).toBeGreaterThan(line);
@@ -118,6 +119,14 @@ describe.each(Object.entries(THEMES))("%s theme", (themeName, tokens) => {
     // WCAG threshold — it is a floor we set ourselves, and it is why --line was split from
     // --control-border rather than simply darkened.
     expect(contrastRatio(tokens["--line"], tokens["--bg"])).toBeGreaterThanOrEqual(1.6);
+  });
+
+  it("keeps the bar box's horizontal edge perceptible without governing it", () => {
+    // --bar-line-h is the top/bottom edge of a bar box. It is NOT WCAG-governed, and that is
+    // a deliberate call: the VERTICAL rule (--bar-line) is the graphical object that says "a
+    // bar starts here", while the horizontal edge only separates one row of bars from the
+    // next — a card's-edge job. Same reasoning, and the same self-imposed floor, as --line.
+    expect(contrastRatio(tokens["--bar-line-h"], tokens["--bg"])).toBeGreaterThanOrEqual(1.6);
   });
 
   it("has no leftover --panel token (renamed to --surface)", () => {
