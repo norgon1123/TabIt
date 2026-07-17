@@ -76,8 +76,11 @@ def test_a_real_final_chord_shorter_than_a_beat_is_kept_not_dropped():
     assert seed.segments[-1].start_beat == pytest.approx(30.0)
 
 
-def test_a_tail_sliver_under_half_a_beat_is_still_dropped():
-    # duration 15.15s -> max_beat 30.3. A tail change at beat 30.0 leaves only 0.3 beats —
-    # a sliver (ring-out), below the 0.5 floor, so it is dropped and the prior chord holds.
+def test_a_tail_change_inside_the_final_partial_beat_is_not_its_own_chord():
+    # duration 15.15s -> max_beat 30.3. A tail change at raw beat 30.3 snaps to the nearest
+    # whole beat (30.0), landing on the cursor: a zero-length span, dropped. (The 0.5 tail
+    # floor is not what excludes it — with a whole-beat cursor a positive tail reaching
+    # max_beat is always >= 0.5, so a sub-0.5 tail cannot occur; see the spec. What this
+    # pins is that a chord change buried in the closing partial beat does not seed a chord.)
     seed = build_chart_seed(_result([_seg(0.0, 15.0), _seg(15.0, 15.15, 7)], duration=15.15))
     assert [s.chord_root for s in seed.segments] == ["C"]
