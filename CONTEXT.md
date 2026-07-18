@@ -41,12 +41,15 @@ beat grid; wall-clock times are *derived*, never stored.
 - The **beat grid** (`Analysis.beat_times` → copied to `ChordChart.beat_times`) is an
   ascending list of detected beat-onset times in seconds; index *i* is beat *i*.
 - `app/audio/beatgrid.py` is the only place beat↔time conversion lives
-  (`time_for_beat`, `beat_for_time`, `total_beats`, `snap_half`, `ensure_grid`).
-  Positions between/beyond onsets are linearly interpolated/extrapolated.
+  (`time_for_beat`, `beat_for_time`, `total_beats`, `snap_half`, `snap_chart_beat`,
+  `ensure_grid`, `rescale_grid`/`rescale_windows` for tempo changes). Positions
+  between/beyond onsets are linearly interpolated/extrapolated.
 - The API accepts **beats** on write (`start_beat`/`end_beat`) and returns **both** beats
   and derived `start_time`/`end_time` seconds on read (`SegmentOut`).
 - Editing quantizes to the **half-beat** (eighth): `snap_half` on the backend,
   `snapHalfBeat` in `frontend/src/chart/beatMath.ts`; minimum segment length 0.5 beats.
+  Seeding a chart from analysis is a separate, coarser rule — see *Analysis pipeline*
+  step 7 and `snap_chart_beat`.
 - Derived times are **displayed** centisecond-quantized (`roundCs` / `formatTimeCs` in
   `frontend/src/chart/timeMath.ts`).
 
@@ -160,8 +163,15 @@ Common flow:
 5. Chords — engine-specific (template+Viterbi / Chordino / BTC). Segments shorter than
    `TABIT_ANALYSIS_MIN_SEGMENT_SECONDS` (0.75) are dropped as false positives.
 6. Write the immutable `Analysis` (bpm, key, engine_version, beat_times).
-7. `_seed_chart` — build the grid, convert each segment's end to beats, `snap_half`,
-   clamp to `total_beats(grid, duration)`, and lay chords out contiguously from beat 0.
+7. `_seed_chart` (`app/chart_seed.py`) — build the grid, convert each segment's end to a
+   beat, and snap it with `snap_chart_beat`: to the nearest **whole** beat, pulled onto a
+   nearby bar line first (within `TABIT_CHART_BAR_PULL_BEATS`, default 0.75 — must stay
+   < 1.0 or the pull swallows beats 2 and 4 of every 4/4 bar). This is a seed-only rule;
+   the engine emits far more spurious half-beat boundaries than real ones, so seeding is
+   coarser than a manual edit (`snap_half`). Segments are clamped to
+   `total_beats(grid, duration)` and laid out contiguously from beat 0; the final chord is
+   the one exception allowed to be sub-beat, down to the half-beat floor, so a genuine
+   tail chord isn't dropped.
 
 Status lifecycle, polled via `GET /api/recordings/{id}/analysis`:
 `pending → running → done | failed` (on failure, `Analysis.error` carries the reason).
@@ -234,6 +244,18 @@ finished and the file has been deleted).
     correction: re-reads the same chords' roman numerals against a new tonic/mode, never
     moves a chord — `PATCH /charts/{id}/settings`), `TransposeControl`, `TempoControl`,
     `TimeSignatureControl`.
+  - **The sheet is a grid of bars, not a row of chords.** `barLayout.ts` (`buildBars`)
+    turns the chart's segments + time signature into `Bar[]`, each holding the `Fragment`s
+    that sound in it — a chord vamping across eight bars is still **one** `ChordSegment` in
+    the database, split into eight rendered boxes only at display time. `Timeline.tsx` lays
+    bars out as a CSS grid fixed at `--bars-per-line` columns per row (`index.css`; 4 on
+    wide viewports, 2 on narrow), so bar lines stay aligned down the page — this replaced
+    an earlier beats-per-line flex-wrap approach. Only a fragment's first box is a real
+    `<button>`; continuation boxes are `aria-hidden` but stay clickable, so a vamp is one
+    screen-reader item and one tab stop. `chartLayout.ts` is unrelated to this grid — it is
+    resize math only (`boundaryUpdates` for dragging the boundary between two chords,
+    `redistributeLength` for resizing one chord and rippling the change into its
+    followers).
   - Zone 3 — `ControlDeck`, pinned to the bottom: play/pause, `ScrubBar`, the clock, and
     whatever the sheet hands it as children (tempo/key summary, `WhereAmI`). Deliberately
     silent — no live regions — because during playback the user is listening, and speech
@@ -248,10 +270,10 @@ finished and the file has been deleted).
   - `musicalPosition` — bar/beat-from-seconds math off the beat grid; what `WhereAmI` and
     the scrubber's `aria-valuetext` both read from.
   - `chordProgress` (paints the active chord's fill bar as a CSS transition timed to its
-    remaining real time), `chartLayout` (wrapping/layout), `beatGrid` + `beatMath` (beat
-    math, half-beat snapping), `timeMath` (pixel↔time, centisecond formatting), `useChart`
-    (query/mutation hook), `useRecording`, `useReanalyze`, `useMediaClock` (the underlying
-    playback clock `PlaybackContext` wraps).
+    remaining real time), `beatGrid` + `beatMath` (beat math, half-beat snapping),
+    `timeMath` (pixel↔time, centisecond formatting), `useChart` (query/mutation hook),
+    `useRecording`, `useReanalyze`, `useMediaClock` (the underlying playback clock
+    `PlaybackContext` wraps).
 - `guest/` — `useGuestSong`: holds the visitor's File for playback (the server deleted its
   copy) and for re-analysis (which re-uploads it).
 - `library/` — `useRecordings`, `uploadRecording` (the one upload path, guest or not),
