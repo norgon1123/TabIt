@@ -248,20 +248,23 @@ a { color: var(--accent); }
   list-style: none;
   margin: 0;
   padding: 0;
-  /* Closes the right-hand end of every row: the grid spans the full width, so its right edge
-     IS each row's final bar line. */
-  border-right: 2px solid var(--bar-line);
-  border-bottom: 1px solid var(--bar-line-h);
+  /* The frame's top and left only — the two outer edges no single bar can draw for itself.
+     Each bar closes its own bottom and right (below), so a PARTIAL final row still rules off
+     the row above it and the last chord: closure never waits on a neighbour that a short row
+     removed. Putting the far edges here instead would leave both gaps. */
+  border-top: 1px solid var(--bar-line-h);
+  border-left: 2px solid var(--bar-line);
 }
 
 .chart-bar {
   display: flex;
   min-width: 0;     /* never widen to fit content — see the minmax() note above */
   overflow: hidden;
-  border-left: 2px solid var(--bar-line);
-  /* Top only; the grid carries the last row's bottom edge. Otherwise adjacent rows would
-     stack two 1px edges into a 2px seam. */
-  border-top: 1px solid var(--bar-line-h);
+  /* Trailing edges only: a bar rules off its OWN bottom and right so it stays closed with no
+     bar below or beside it (a partial last row). The container owns the top and left, so no
+     boundary is drawn twice — adjacent rows/bars still meet on a single 1px/2px seam. */
+  border-right: 2px solid var(--bar-line);
+  border-bottom: 1px solid var(--bar-line-h);
 }
 
 /* The flex CHILD of .chart-bar, carrying the beat-derived ratio set inline (Timeline.tsx).
