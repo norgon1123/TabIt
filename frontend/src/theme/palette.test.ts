@@ -113,20 +113,15 @@ describe.each(Object.entries(THEMES))("%s theme", (themeName, tokens) => {
     expect(bar).toBeGreaterThan(line);
   });
 
-  it("keeps the decorative hairline perceptible even though WCAG does not govern it", () => {
-    // A card differs from the page by only ~1.05:1, so the border and the shadow are what
-    // make a card visible at all. A hairline at 1.4:1 is not doing that job. This is not a
-    // WCAG threshold — it is a floor we set ourselves, and it is why --line was split from
-    // --control-border rather than simply darkened.
-    expect(contrastRatio(tokens["--line"], tokens["--bg"])).toBeGreaterThanOrEqual(1.6);
-  });
-
-  it("keeps the bar box's horizontal edge perceptible without governing it", () => {
-    // --bar-line-h is the top/bottom edge of a bar box. It is NOT WCAG-governed, and that is
-    // a deliberate call: the VERTICAL rule (--bar-line) is the graphical object that says "a
-    // bar starts here", while the horizontal edge only separates one row of bars from the
-    // next — a card's-edge job. Same reasoning, and the same self-imposed floor, as --line.
-    expect(contrastRatio(tokens["--bar-line-h"], tokens["--bg"])).toBeGreaterThanOrEqual(1.6);
+  // Decorative edges WCAG does NOT govern, held to a self-imposed 1.6:1 floor rather than the
+  // 3:1 of the PAIRS table — a card differs from the page by only ~1.05:1, so these edges (and
+  // the shadow) are what make a card, or a row of bars, visible at all. This is why --line was
+  // split from --control-border rather than simply darkened. [token, why it is decorative]
+  it.each([
+    ["--line", "the hairline around a card and between two chords in the same bar"],
+    ["--bar-line-h", "the top/bottom edge of a bar box — separates one row of bars from the next, a card's-edge job (the VERTICAL --bar-line is the WCAG-governed graphical object)"],
+  ])("keeps the decorative edge %s perceptible even though WCAG does not govern it", (token, _why) => {
+    expect(contrastRatio(tokens[token], tokens["--bg"])).toBeGreaterThanOrEqual(1.6);
   });
 
   it("has no leftover --panel token (renamed to --surface)", () => {
