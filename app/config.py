@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Round 2 #1: chord segments shorter than this are treated as false positives and
     # absorbed into a neighbour. Easily tuned via TABIT_ANALYSIS_MIN_SEGMENT_SECONDS.
     analysis_min_segment_seconds: float = 0.75
+    # Seed-time chord-boundary snapping. A detected boundary within this many beats of a bar
+    # line takes the bar line; otherwise it takes its nearest whole beat. MUST be < 1.0 — at
+    # 1.0 the pull swallows beats 2 and 4 of every 4/4 bar (they sit exactly 1.0 from a bar
+    # line) and a one-chord-per-beat bar collapses into a single chord.
+    chart_bar_pull_beats: float = 0.75
     # Tier 1: Viterbi self-stay bias. Higher = steadier labels, absorbs more playing
     # mistakes; too high merges genuinely distinct chords.
     analysis_change_penalty: float = 1.0

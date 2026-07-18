@@ -26,12 +26,12 @@ describe.each(Object.entries(THEMES))("stateful contrast — %s theme", (_name, 
     // The spotlight desaturates but must NOT drop the chart's text contrast: the masked '?'
     // is the very thing a player reads to make a guess. Since the fix desaturates instead of
     // dimming, the effective colour IS the raw token — full contrast. If someone reintroduces
-    // an opacity dim on .chart-lines, this fails.
+    // an opacity dim on .chart-bars, this fails.
     expect(contrastRatio(t["--muted"], t["--bg"])).toBeGreaterThanOrEqual(AA_TEXT);
     expect(contrastRatio(t["--bar-line"], t["--bg"])).toBeGreaterThanOrEqual(AA_UI);
-    // Guard the mechanism: .chart-lines under practice must not carry an `opacity` (which
+    // Guard the mechanism: .chart-bars under practice must not carry an `opacity` (which
     // would crush contrast); desaturation is the only allowed dim.
-    const rule = /\.chart-workspace\[data-practice="true"\]\s+\.chart-lines\s*\{([^}]*)\}/.exec(css);
+    const rule = /\.chart-workspace\[data-practice="true"\]\s+\.chart-bars\s*\{([^}]*)\}/.exec(css);
     expect(rule, "spotlight rule present").not.toBeNull();
     expect(rule![1]).not.toMatch(/opacity\s*:/);
     expect(rule![1]).toMatch(/filter\s*:\s*saturate/);

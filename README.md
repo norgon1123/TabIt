@@ -33,6 +33,10 @@ API docs at http://localhost:8000/docs
 - `TABIT_COOKIE_SECURE` (`true` behind HTTPS)
 - `TABIT_ANALYSIS_SAMPLE_RATE` (default `22050` Hz; audio resample target for analysis)
 - `TABIT_ANALYSIS_MAX_WORKERS` (default `1`; background analysis worker threads)
+- `TABIT_CHART_BAR_PULL_BEATS` (default `0.75`) — when seeding a chart, a detected chord
+  boundary within this many beats of a bar line snaps to the bar line; otherwise it snaps to
+  its nearest whole beat. **Must be less than 1.0**: at 1.0 the pull swallows beats 2 and 4
+  of every 4/4 bar. Manual edits are unaffected — they still snap to the half beat.
 - `TABIT_MAX_RECORDING_SECONDS` (default `600`, i.e. 10 minutes; longer uploads are
   rejected with `413`)
 - `TABIT_GUEST_COOKIE_NAME` (default `tabit_guest`; names a logged-out visitor's in-memory
